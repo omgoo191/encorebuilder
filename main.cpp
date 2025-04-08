@@ -4,7 +4,6 @@
 #include "QQmlContext"
 #include "stdlib.h"
 #include <iostream>
-#include "AppController.h"
 int main(int argc, char *argv[])
 {
 	qputenv("QML_XHR_ALLOW_FILE_WRITE", "1");
@@ -12,13 +11,9 @@ int main(int argc, char *argv[])
 
     QGuiApplication app(argc, argv);
 	FileHandler::registerType();
-	AppController controller;
 	QQmlApplicationEngine engine;
-//		engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml");
-
 
 	engine.rootContext()->setContextProperty("fileHandler", new FileHandler());
-	engine.rootContext()->setContextProperty("appController", &controller);
     const QUrl url(QStringLiteral("qrc:/Generator/Main.qml"));
     QObject::connect(
         &engine,
