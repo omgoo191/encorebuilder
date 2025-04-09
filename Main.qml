@@ -18,6 +18,7 @@ ApplicationWindow {
     property string stateFileName: "app_state.json"
     property bool loadingState: false
     property bool closeapp: false
+    property string currentType: "Входные сигналы"
     // Dialog {
     //     id: ethConfigDialog
     //     title: "Настройки ETH"
@@ -276,17 +277,24 @@ ApplicationWindow {
         standardButtons: Dialog.NoButton
         anchors.centerIn: parent
 
-        ColumnLayout {
-            spacing: 10
+        GridLayout {
+            columns: 1
+            columnSpacing: 10
+            rowSpacing: 10
+
             Button {
                 text: "Создать новую конфигурацию"
+                Layout.fillWidth: true
                 onClicked: {
                     dataModel.clear()
                     startDialog.close()
                 }
             }
+
             Button {
                 text: "Открыть существующую"
+                Layout.fillWidth: true
+                Layout.preferredWidth: parent.width
                 onClicked: {
                     fileDialog.open()
                     startDialog.close()
@@ -294,6 +302,7 @@ ApplicationWindow {
             }
         }
     }
+
 
     // Диалог открытия файла
     Platform.FileDialog {
@@ -432,385 +441,14 @@ ApplicationWindow {
         id: dataModel
     }
 
-    Dialog {
-        id: entryDialog
-        title: "Новый сигнал"
-        width: 600
-        height: 600
-        x: (parent.width - width) / 2
-        y: (parent.height - height) / 2
-        topPadding: 15
-        bottomPadding: 15
-        property bool hasDuplicateIndex: false
-        property bool hasDuplicateName: false
-        property bool hasDuplicateCodeName: false
-        property string currentType: "Входные сигналы"
-        property int ioIndexValue: 0
-        onAboutToShow: {
-            ioIndex.text = ioIndexValue
-            scrollView.contentItem.contentY = 0
-        }
-
-        ScrollView {
-            id: scrollView
-            anchors.fill: parent
-            clip: true
-            contentWidth: parent.width
-            contentHeight: contentLayout.implicitHeight
-
-            GridLayout {
-                id: contentLayout
-                width: parent.width
-                columns: 2
-                columnSpacing: 20
-                rowSpacing: 15
-                anchors.margins: 10
-
-                Label {
-                    text: "Источник:"
-                }
-                TextField {
-                    id: source
-                    Layout.fillWidth: true
-                }
-
-                Label {
-                    text: "Io index:"
-                }
-                TextField {
-                    id: ioIndex
-                    Layout.fillWidth: true
-                    text: rootwindow.ioIndex
-                    onTextChanged: {
-                        entryDialog.hasDuplicateIndex = checkDuplicateIndex(ioIndex.text)
-                        Material.foreground = entryDialog.hasDuplicateIndex ? Material.Orange : Material.LightGrey
-                    }
-                    ToolTip {
-                        visible: entryDialog.hasDuplicateIndex&& ioIndex.hovered
-                        text: "Этот индекс уже используется"
-                        delay: 500
-                    }
-                }
-
-                Label {
-                    text: "Наименование:"
-                }
-                TextField {
-                    id: nameField
-                    Layout.fillWidth: true
-                    onTextChanged: {
-                        entryDialog.hasDuplicateName = checkDuplicateName(nameField.text)
-                        Material.foreground = entryDialog.hasDuplicateName ? Material.Red : Material.LightGrey
-
-                    }
-                    ToolTip {
-                        visible: entryDialog.hasDuplicateName && nameField.hovered
-                        text: "Это наименование уже используется"
-                        delay: 500
-                    }
-
-                }
-
-                Label {
-                    text: "Наименование на английском:"
-                }
-                TextField {
-                    id: codeNameField
-                    Layout.fillWidth: true
-                    onTextChanged: {
-                        entryDialog.hasDuplicateCodeName = checkDuplicateCodeName(codeNameField.text)
-                        Material.foreground = entryDialog.hasDuplicateCodeName ? Material.Red : Material.LightGrey
-
-                    }
-                    ToolTip {
-                        visible: entryDialog.hasDuplicateCodeName && codeNameField.hovered
-                        text: "Это наименование на английском уже используется"
-                        delay: 500
-                    }
-
-                }
-
-                Label {
-                    text: "Тип данных:"
-                }
-                ComboBox {
-                    id: typeCombo
-                    model: ["bool", "float", "unsigned int", "unsigned short", "unsigned char"]
-                    Layout.fillWidth: true
-
-                }
-
-                Label {
-                    text: "Исп. в логике:"
-                }
-                ComboBox {
-                    id: logicusageCombo
-                    model: ["Да", "Нет"]
-                    Layout.fillWidth: true
-                }
-                Label {
-                    text: "Сохранение:"
-                }
-                ComboBox {
-                    id: savingCombo
-                    model: ["Да", "Нет"]
-                    Layout.fillWidth: true
-                }
-
-                Label {
-                    text: "Уст. апертуры:"
-                    enabled: isAnalogInput() || enrtyDialog.currentType === "Уставки"
-                    opacity: enabled ? 1.0 : 0.5
-                }
-                TextField {
-                    id: apertureField
-                    Layout.fillWidth: true
-                    enabled: isAnalogInput() || enrtyDialog.currentType === "Уставки"
-                    placeholderText: enabled ? "" : "Только для аналоговых входов"
-                }
-
-                Label {
-                    text: "Коэффициент трансформации:"
-                    enabled: isAnalogInput() || enrtyDialog.currentType === "Уставки"
-                    opacity: enabled ? 1.0 : 0.5
-                }
-                TextField {
-                    id: kttField
-                    Layout.fillWidth: true
-                    enabled: isAnalogInput() || enrtyDialog.currentType === "Уставки"
-                    placeholderText: enabled ? "" : "Только для аналоговых входов"
-                }
-
-                Label {
-                    text: "Значение по умолчанию:"
-                    enabled: entryDialog.currentType !== "Входные сигналы"
-                    opacity: enabled ? 1.0 : 0.5
-                }
-                TextField {
-                    id: defaultField
-                    Layout.fillWidth: true
-                    enabled: entryDialog.currentType !== "Входные сигналы"
-                    placeholderText: enabled ? "" : "Не для входных сигналов"
-                }
-
-                Label {
-                    text: "Антидребезг:"
-                    enabled: isDiscreteInput()
-                    opacity: enabled ? 1.0 : 0.5
-                }
-                TextField {
-                    id: adField
-                    Layout.fillWidth: true
-                    enabled: isDiscreteInput()
-                    placeholderText: enabled ? "" : "Только для дискретных входов"
-                }
-
-                Label {
-                    text: "Состояние выхода:"
-                }
-                TextField {
-                    id: ocField
-                    Layout.fillWidth: true
-                }
-
-                Label {
-                    text: "Длительность кор. импульса:"
-                    enabled: entryDialog.currentType === "Выходные сигналы"
-                    opacity: enabled ? 1.0 : 0.5
-
-                }
-                TextField {
-                    id: shortPulseField
-                    Layout.fillWidth: true
-                    enabled: entryDialog.currentType === "Выходные сигналы"
-                    placeholderText: enabled ? "" : "Только для выходных сигналов"
-                }
-
-                Label {
-                    text: "Длительность длинного импульса:"
-                    enabled: entryDialog.currentType === "Выходные сигналы"
-                    opacity: enabled ? 1.0 : 0.5
-                }
-                TextField {
-                    id: longPulseField
-                    Layout.fillWidth: true
-                    enabled: entryDialog.currentType === "Выходные сигналы"
-                    placeholderText: enabled ? "" : "Только для выходных сигналов"
-                }
-            }
-        }
-
-        standardButtons: Dialog.Ok | Dialog.Cancel
-
-        Rectangle {
-            anchors.left: parent.left
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            width: 5
-            color: "transparent"
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.SizeHorCursor
-                onPressed: mouse.accepted = true
-                onPositionChanged: {
-                    let dx = mouse.x
-                    if (entryDialog.width - dx > entryDialog.minimumWidth) {
-                        entryDialog.x += dx
-                        entryDialog.width -= dx
-                    }
-                }
-            }
-        }
-
-        Rectangle {
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            width: 5
-            color: "transparent"
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.SizeHorCursor
-                onPositionChanged: {
-                    let dx = mouse.x
-                    if (entryDialog.width + dx > entryDialog.minimumWidth)
-                        entryDialog.width += dx
-                }
-            }
-        }
-
-        Rectangle {
-            id: edgeResizeAreaTop
-            height: 5
-            anchors.top: parent.top
-            anchors.left: parent.left
-            anchors.right: parent.right
-            color: "transparent"
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.SizeVerCursor
-                drag.target: entryDialog
-                drag.axis: Drag.YAxis
-                onPositionChanged: entryDialog.height -= mouse.y
-            }
-        }
-
-        Rectangle {
-            id: edgeResizeAreaBottom
-            height: 5
-            anchors.bottom: parent.bottom
-            anchors.left: parent.left
-            anchors.right: parent.right
-            color: "transparent"
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.SizeVerCursor
-                drag.target: entryDialog
-                drag.axis: Drag.YAxis
-                onPositionChanged: entryDialog.height += mouse.y
-            }
-        }
-
-        onAccepted: {
-            var isOutputSignal = currentType === "Выходные сигналы";
-            var isSettingBool = currentType === "Уставка" && typeCombo.currentText === "bool";
-            if (entryDialog.hasDuplicateName || entryDialog.hasDuplicateCodeName) {
-                duplicateWarning.open();
-                return;
-            }
-            rootwindow.nextIoIndex++
-            var newSignal = {
-                "source": source.text,
-                "paramType": currentType,
-                "ioIndex": ioIndex.text,
-                "name": nameField.text,
-                "codeName": codeNameField.text,
-                "type": typeCombo.currentText,
-                "logicuse": logicusageCombo.currentText,
-                "saving": savingCombo.currentText,
-                "aperture": apertureField.text,
-                "ktt": kttField.text,
-                "def_value": defaultField.text,
-                "ad": adField.text,
-                "oc": ocField.text,
-                "tosp": shortPulseField.text,
-                "tolp": longPulseField.text,
-                "address": "",
-                "blockName": "",
-                "ioa_address": "",
-                "asdu_address": "",
-                "second_class_num": "",
-
-                "type_spont": "",
-                "type_back": "",
-                "type_percyc": "",
-                "type_def": "",
-                oi_c_sc_na_1: isOutputSignal || isSettingBool,
-                oi_c_se_na_1: currentType === "Уставка" &&
-                    (typeCombo.currentText === "unsigned short" ||
-                        typeCombo.currentText === "unsigned int"),
-                oi_c_se_nb_1: currentType === "Уставка" &&
-                    typeCombo.currentText === "float",
-                oi_c_dc_na_1: false,
-                oi_c_bo_na_1: false,
-                "use_in_spont_101": false,
-                "use_in_back_101": false,
-                "use_in_percyc_101": false,
-                "allow_address_101": false,
-                "survey_group_101": "",
-                "use_in_spont_104": false,
-                "use_in_back_104": false,
-                "use_in_percyc_104": false,
-                "allow_address_104": false,
-                "survey_group_104": ""
-            };
-            dataModel.append(newSignal);
-            source.text = ""
-            ioIndex.text = ""
-            nameField.text = ""
-            codeNameField.text = ""
-            typeCombo.currentIndex = 0
-            adField.text = ""
-            ocField.text = ""
-            shortPulseField.text = ""
-            longPulseField.text = ""
-            logicusageCombo.currentIndex = 0
-            savingCombo.currentIndex = 0
-            apertureField.text = ""
-            kttField.text = ""
-            defaultField.text = ""
-        }
-    }
-
-    Dialog {
-        id: duplicateWarning
-        title: "Ошибка дублирования"
-        width: 400
-        standardButtons: Dialog.Ok
-
-        Label {
-            width: parent.width
-            wrapMode: Text.Wrap
-            text: {
-                var parts = []
-                if (checkDuplicateName(nameField.text)) parts.push("• Наименование: '" + nameField.text + "'")
-                if (checkDuplicateCodeName(codeNameField.text)) parts.push("• Английское наименование: '" + codeNameField.text + "'")
-                return parts.length > 0
-                    ? "Обнаружены дубликаты:\n" +"С индексом "+ ioIndex.text +"\n" + parts.join("\n") + "\n\nПожалуйста, измените значения."
-                    : ""
-            }
-        }
-    }
-
-
     Component {
         id: parameterPageComponent
+
 
         ColumnLayout {
             id: pageRoot
             property string paramType: "Входной сигнал"
             signal addClicked
-
             ScrollView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -818,83 +456,46 @@ ApplicationWindow {
                 padding: 10
                 leftPadding: 15
                 rightPadding: 10
-
                 ListView {
                     id: listView
                     width: parent.width - 25
                     height: contentHeight
                     model: dataModel
                     spacing: 5
-                    interactive: false
+                    interactive: true
                     clip: true
                     headerPositioning: ListView.OverlayHeader
                     header: RowLayout {
                         width: listView.width
                         spacing: 10
                         Item {
-                            Layout.preferredWidth: 12 // Ширина scrollbar
+                            Layout.preferredWidth: 12
                             visible: false
                         }
+                        Label { text: "IO"; Layout.preferredWidth: 50 }
+                        Label { text: "Наименование"; Layout.preferredWidth: 200 }
+                        Label { text: "Англ.название"; Layout.preferredWidth: 200 }
+                        Label { text: "Тип"; Layout.preferredWidth: 200 }
+                        Label { text: "Логика"; Layout.preferredWidth: 80 }
+                        Label { text: "Сохран."; Layout.preferredWidth: 80 }
+                        Label { text: "Апертура"; Layout.preferredWidth: 100 }
+                        Label { text: "КТТ"; Layout.preferredWidth: 80 }
+                        Label { text: "Умолч."; Layout.preferredWidth: 80 }
+                        Label { text: "АД"; Layout.preferredWidth: 60 }
+                        Label { text: "Выход"; Layout.preferredWidth: 80 }
+                        Label { text: "Кор.имп"; Layout.preferredWidth: 80 }
+                        Label { text: "Дл.имп"; Layout.preferredWidth: 80 }
                         Label {
-                            text: "IO"
-                            Layout.preferredWidth: 50
-                        }
-                        Label {
-                            text: "Наименование"
-                            Layout.preferredWidth: 200
-                        }
-                        Label {
-                            text: "Англ.название"
-                            Layout.preferredWidth: 200
-                        }
-                        Label {
-                            text: "Тип"
-                            Layout.preferredWidth: 200
-                        }
-                        Label {
-                            text: "Логика"
-                            Layout.preferredWidth: 80
-                        }
-                        Label {
-                            text: "Сохран."
-                            Layout.preferredWidth: 80
-                        }
-                        Label {
-                            text: "Апертура"
-                            Layout.preferredWidth: 100
-                        }
-                        Label {
-                            text: "КТТ"
-                            Layout.preferredWidth: 80
-                        }
-                        Label {
-                            text: "Умолч."
-                            Layout.preferredWidth: 80
-                        }
-                        Label {
-                            text: "АД"
-                            Layout.preferredWidth: 60
-                        }
-                        Label {
-                            text: "Выход"
-                            Layout.preferredWidth: 80
-                        }
-                        Label {
-                            text: "Кор.имп"
-                            Layout.preferredWidth: 80
-                        }
-                        Label {
-                            text: "Дл.имп"
-                            Layout.preferredWidth: 80
-                        }
-                        Label {
-                            text: ""   // пустой заголовок для колонки с кнопкой удаления
+                            text: ""
                             Layout.preferredWidth: 160
                             Layout.alignment: Qt.AlignHCenter
                         }
                     }
 
                     delegate: RowLayout {
+                        property bool hasDuplicateName: false
+                        property bool hasDuplicateCodeName: false
+
                         required property int index
                         required property string ioIndex
                         required property string paramType
@@ -915,131 +516,203 @@ ApplicationWindow {
                         spacing: 10
                         height: visible ? implicitHeight : 0
                         visible: paramType === pageRoot.paramType
+
                         Item {
                             Layout.preferredWidth: 12
                             visible: false
                         }
+
                         TextField {
-                            text: dataModel.get(index).ioIndex
+                            text: ioIndex
                             Layout.preferredWidth: 50
                             Layout.preferredHeight: 30
-                            wrapMode: Text.NoWrap
-                            verticalAlignment: Text.AlignVCenter
-
-                            color: "black" // Цвет текста
                             onTextChanged: dataModel.setProperty(index, "ioIndex", text)
                         }
                         TextField {
-                            text: dataModel.get(index).name
+                            id: nameField
+                            text: name
                             Layout.preferredWidth: 200
                             Layout.preferredHeight: 30
-                            wrapMode: Text.NoWrap
-                            verticalAlignment: Text.AlignVCenter
-                            color: "black" // Цвет текста
-                            onTextChanged: dataModel.setProperty(index, "name", text)
-                            ToolTip.visible: hovered && !activeFocus
-                            ToolTip.text: text
+                            property color normalTextColor: Material.Black
+                            property bool isDuplicate: false
+
+                            function updateName(newText) {
+                                isDuplicate = rootwindow.checkDuplicateName(newText);
+                                if (!isDuplicate) {
+                                    dataModel.setProperty(index, "name", newText);
+                                }
+                                return isDuplicate;
+                            }
+
+                            onTextChanged: {
+                                if (updateName(text) && text !== "") {
+                                    duplicateAnimation.stop();
+                                    duplicateAnimation.start();
+                                }
+                            }
+
+                            SequentialAnimation {
+                                id: duplicateAnimation
+                                running: false
+                                ColorAnimation {
+                                    target: nameField
+                                    property: "normalTextColor"
+                                    to: Material.Red
+                                    duration: 150
+                                }
+                                ColorAnimation {
+                                    target: nameField
+                                    property: "normalTextColor"
+                                    to: Material.Black
+                                    duration: 150
+                                }
+                                loops: 2
+                            }
+
+                            Binding {
+                                target: nameField
+                                property: "Material.foreground"
+                                value: nameField.isDuplicate ? Material.Red : nameField.normalTextColor
+                            }
+
+                            ToolTip {
+                                visible: parent.hovered
+                                delay: 300
+                                text: parent.isDuplicate ? "Это наименование уже используется!" : parent.text
+                                Material.theme: parent.isDuplicate ? Material.Dark : Material.Light
+                                Material.background: parent.isDuplicate ? Material.Red : Material.Grey
+                            }
                         }
+
                         TextField {
-                            text: dataModel.get(index).codeName
+                            id: codeNameField
+                            text: codeName
                             Layout.preferredWidth: 200
                             Layout.preferredHeight: 30
-                            wrapMode: Text.NoWrap
-                            verticalAlignment: Text.AlignVCenter
-                            color: "black" // Цвет текста
-                            onTextChanged: dataModel.setProperty(index, "codeName", text)
-                            ToolTip.visible: hovered && !activeFocus
-                            ToolTip.text: text
+                            property color normalTextColor: Material.Black
+                            property bool isDuplicate: false
+
+                            function updateName(newText) {
+                                isDuplicate = rootwindow.checkDuplicateCodeName(newText);
+                                if (!isDuplicate) {
+                                    dataModel.setProperty(index, "codeName", newText);
+                                }
+                                return isDuplicate;
+                            }
+
+                            onTextChanged: {
+                                if (updateName(text) && text !== "") {
+                                    duplicateAnimation.stop();
+                                    duplicateAnimation.start();
+                                }
+                            }
+
+                            SequentialAnimation {
+                                id: duplicatecodeAnimation
+                                running: false
+                                ColorAnimation {
+                                    target: codeNameField
+                                    property: "normalTextColor"
+                                    to: Material.Red
+                                    duration: 150
+                                }
+                                ColorAnimation {
+                                    target: codeNameField
+                                    property: "normalTextColor"
+                                    to: Material.Black
+                                    duration: 150
+                                }
+                                loops: 2
+                            }
+
+                            Binding {
+                                target: codeNameField
+                                property: "Material.foreground"
+                                value: codeNameField.isDuplicate ? Material.Red : nameField.normalTextColor
+                            }
+
+                            ToolTip {
+                                visible: parent.hovered
+                                delay: 300
+                                text: parent.isDuplicate ? "Это наименование на английском уже используется!" : parent.text
+                                Material.theme: parent.isDuplicate ? Material.Dark : Material.Light
+                                Material.background: parent.isDuplicate ? Material.Red : Material.Grey
+                            }
                         }
                         ComboBox {
                             model: ["bool", "float", "unsigned int", "unsigned short", "unsigned char"]
-                            currentIndex: model.indexOf(dataModel.get(index).type || "bool")
-                            onCurrentIndexChanged: {
-                                dataModel.setProperty(index, "type", model[currentIndex]);
-                            }
+                            currentIndex: model.indexOf(type || "bool")
+                            onCurrentTextChanged: dataModel.setProperty(index, "type", currentText)
                             Layout.preferredWidth: 200
                             Layout.preferredHeight: 30
                         }
                         ComboBox {
                             model: ["Да", "Нет"]
-                            currentIndex: model.indexOf(dataModel.get(index).logicuse || "Да")
-                            onCurrentIndexChanged: {
-                                dataModel.setProperty(index, "logicuse", model[currentIndex]);
-                            }
+                            currentIndex: model.indexOf(logicuse || "Да")
+                            onCurrentTextChanged: dataModel.setProperty(index, "logicuse", currentText)
                             Layout.preferredWidth: 80
                             Layout.preferredHeight: 30
                         }
                         ComboBox {
                             model: ["Да", "Нет"]
-                            currentIndex: model.indexOf(dataModel.get(index).saving|| "Да")
-                            onCurrentIndexChanged: {
-                                dataModel.setProperty(index, "saving", model[currentIndex]);
-                            }
+                            currentIndex: model.indexOf(saving || "Да")
+                            onCurrentTextChanged: dataModel.setProperty(index, "saving", currentText)
                             Layout.preferredWidth: 80
                             Layout.preferredHeight: 30
                         }
                         TextField {
-                            text: dataModel.get(index).aperture
+                            text: aperture
                             Layout.preferredWidth: 100
                             Layout.preferredHeight: 30
-                            wrapMode: Text.NoWrap
-                            verticalAlignment: Text.AlignVCenter
-                            color: "black" // Цвет текста
                             onTextChanged: dataModel.setProperty(index, "aperture", text)
+                            enabled: rootwindow.isAnalogInput(dataModel.get(index)) || paramType=== "Уставка"
+                            opacity: enabled ? 1.0 : 0.5
                         }
                         TextField {
-                            text: dataModel.get(index).ktt
+                            text: ktt
                             Layout.preferredWidth: 80
                             Layout.preferredHeight: 30
-                            wrapMode: Text.NoWrap
-                            verticalAlignment: Text.AlignVCenter
-                            color: "black" // Цвет текста
                             onTextChanged: dataModel.setProperty(index, "ktt", text)
+                            enabled: rootwindow.isAnalogInput(dataModel.get(index)) || paramType === "Уставка"
+                            opacity: enabled ? 1.0 : 0.5
                         }
                         TextField {
-                            text: dataModel.get(index).def_value
+                            text: def_value
                             Layout.preferredWidth: 80
                             Layout.preferredHeight: 30
-                            wrapMode: Text.NoWrap
-                            verticalAlignment: Text.AlignVCenter
-                            color: "black" // Цвет текста
                             onTextChanged: dataModel.setProperty(index, "def_value", text)
+                            enabled: paramType !== "Входные сигналы"
+                            opacity: enabled ? 1.0 : 0.5
                         }
                         TextField {
-                            text: dataModel.get(index).ad
+                            text: ad
                             Layout.preferredWidth: 60
                             Layout.preferredHeight: 30
-                            wrapMode: Text.NoWrap
-                            verticalAlignment: Text.AlignVCenter
-                            color: "black" // Цвет текста
                             onTextChanged: dataModel.setProperty(index, "ad", text)
+                            enabled: rootwindow.isDiscreteInput(dataModel.get(index))
+                            opacity: enabled ? 1.0 : 0.5
                         }
                         TextField {
-                            text: dataModel.get(index).oc
+                            text: oc
                             Layout.preferredWidth: 80
                             Layout.preferredHeight: 30
-                            wrapMode: Text.NoWrap
-                            verticalAlignment: Text.AlignVCenter
-                            color: "black" // Цвет текста
                             onTextChanged: dataModel.setProperty(index, "oc", text)
                         }
                         TextField {
-                            text: dataModel.get(index).tosp
+                            text: tosp
                             Layout.preferredWidth: 80
                             Layout.preferredHeight: 30
-                            wrapMode: Text.NoWrap
-                            verticalAlignment: Text.AlignVCenter
-                            color: "black" // Цвет текста
                             onTextChanged: dataModel.setProperty(index, "tosp", text)
+                            enabled: paramType === "Выходные сигналы"
+                            opacity: enabled ? 1.0 : 0.5
                         }
                         TextField {
-                            text: dataModel.get(index).tolp
+                            text: tolp
                             Layout.preferredWidth: 80
                             Layout.preferredHeight: 30
-                            wrapMode: Text.NoWrap
-                            verticalAlignment: Text.AlignVCenter
-                            color: "black" // Цвет текста
                             onTextChanged: dataModel.setProperty(index, "tolp", text)
+                            enabled: paramType === "Выходные сигналы"
+                            opacity: enabled ? 1.0 : 0.5
                         }
                         Button {
                             text: "Удалить"
@@ -1053,16 +726,60 @@ ApplicationWindow {
 
             Button {
                 Layout.alignment: Qt.AlignCenter
-                text: "Добавить новый " + paramType
-                onClicked: {
-                    entryDialog.ioIndexValue = rootwindow.nextIoIndex
-                    addClicked()
-                }
-                Material.background: Material.Purple
+                text: "+"
+
+                Material.background: Material.Green
                 Material.foreground: "white"
+                onClicked: {
+                    addClicked()
+                    var newSignal = {
+                        "source": "",
+                        "paramType": pageRoot.paramType,
+                        "ioIndex": rootwindow.nextIoIndex.toString(),
+                        "name": "",
+                        "codeName": "",
+                        "type": "bool",
+                        "logicuse": "Да",
+                        "saving": "Да",
+                        "aperture": "",
+                        "ktt": "",
+                        "def_value": "",
+                        "ad": "",
+                        "oc": "",
+                        "tosp": "",
+                        "tolp": "",
+                        "address": "",
+                        "blockName": "",
+                        "ioa_address": "",
+                        "asdu_address": "",
+                        "second_class_num": "",
+                        "type_spont": "",
+                        "type_back": "",
+                        "type_percyc": "",
+                        "type_def": "",
+                        "oi_c_sc_na_1": false,
+                        "oi_c_se_na_1": false,
+                        "oi_c_se_nb_1": false,
+                        "oi_c_dc_na_1": false,
+                        "oi_c_bo_na_1": false,
+                        "use_in_spont_101": false,
+                        "use_in_back_101": false,
+                        "use_in_percyc_101": false,
+                        "allow_address_101": false,
+                        "survey_group_101": "",
+                        "use_in_spont_104": false,
+                        "use_in_back_104": false,
+                        "use_in_percyc_104": false,
+                        "allow_address_104": false,
+                        "survey_group_104": ""
+                    };
+                    dataModel.append(newSignal);
+                    rootwindow.nextIoIndex++;
+                }
             }
         }
     }
+
 
     ColumnLayout {
         anchors.fill: parent
@@ -1142,20 +859,17 @@ ApplicationWindow {
                 onLoaded: {
                     item.paramType = "Входные сигналы"
                         item.addClicked.connect(() => {
-                        entryDialog.currentType = "Входные сигналы"
-                        entryDialog.open()
+                        currentType = "Входные сигналы"
                     })
                 }
             }
 
-            // Output Signals
             Loader {
                 sourceComponent: parameterPageComponent
                 onLoaded: {
                     item.paramType = "Выходные сигналы"
                         item.addClicked.connect(() => {
-                        entryDialog.currentType = "Выходные сигналы"
-                        entryDialog.open()
+                        currentType = "Выходные сигналы"
                     })
                 }
             }
@@ -1165,20 +879,17 @@ ApplicationWindow {
                 onLoaded: {
                     item.paramType = "Признаки"
                         item.addClicked.connect(() => {
-                        entryDialog.currentType = "Признаки"
-                        entryDialog.open()
+                        currentType = "Признаки"
                     })
                 }
             }
 
-            // Settings
             Loader {
                 sourceComponent: parameterPageComponent
                 onLoaded: {
                     item.paramType = "Уставка"
                         item.addClicked.connect(() => {
-                        entryDialog.currentType = "Уставка"
-                        entryDialog.open()
+                        currentType = "Уставка"
                     })
                 }
             }
@@ -2178,14 +1889,14 @@ ApplicationWindow {
         return result
     }
 
-    function isAnalogInput() {
-        return entryDialog.currentType === "Входные сигналы" &&
-            typeCombo.currentText !== "bool"
+    function isAnalogInput(item) {
+        return item.paramType === "Входные сигналы" && item.type !== "bool"
     }
-    function isDiscreteInput() {
-        return entryDialog.currentType === "Входные сигналы" &&
-            typeCombo.currentText === "bool"
+
+    function isDiscreteInput(item) {
+        return item.paramType === "Входные сигналы" && item.type === "bool"
     }
+
 
     function assignIndexByType(type) {
         let count = 1;
