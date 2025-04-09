@@ -7,17 +7,15 @@ FileHandler::FileHandler(QObject *parent) : QObject(parent) {}
 
 QString FileHandler::getAppDirectory() const {
 	QDir projectDir(QCoreApplication::applicationDirPath());
-	projectDir.cdUp(); // Goes from cmake-build-debug to project root
+	projectDir.cdUp();
 	return projectDir.absolutePath();
 }
 
 QString FileHandler::cleanPath(const QString &path) const {
 	QString cleaned = path;
-	// Удаляем протокол file:// если есть
 	cleaned.replace("file://", "");
 
-	// Нормализуем разделители пути
-	if (cleaned.startsWith("/") && cleaned	[2] == ':') { // Исправляем /C:/path
+	if (cleaned.startsWith("/") && cleaned	[2] == ':') {
 		cleaned = cleaned.mid(1);
 	}
 
@@ -26,8 +24,6 @@ QString FileHandler::cleanPath(const QString &path) const {
 
 bool FileHandler::saveToFile(const QString &filePath, const QVariant &data) {
 	QString absolutePath = cleanPath(filePath);
-
-	// Создаем директорию если ее нет
 
 	QFile file(absolutePath);
 	if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {

@@ -18,93 +18,254 @@ ApplicationWindow {
     property string stateFileName: "app_state.json"
     property bool loadingState: false
     property bool closeapp: false
-    Dialog {
-        id: ethConfigDialog
-        title: "Настройка Ethernet"
-        width: 600
-        height: 400
-
-        // Привязываемся к основной модели
-        property var dataModel
-
-        // Шаблон для создания уставки
-        function createEthSetting(name, value, type) {
-            return {
-                "paramType": "Уставки",
-                "name": name,
-                "codeName": name.toUpperCase().replace(" ", "_"),
-                "type": type,
-                "def_value": value,
-                "saving": "Да"
-            }
-        }
-
-        ColumnLayout {
-            anchors.fill: parent
-            spacing: 10
-
-            // Базовые настройки
-            GridLayout {
-                columns: 2
-                columnSpacing: 10
-                rowSpacing: 5
-
-                Label { text: "IP адрес:" }
-                TextField { id: ipField; text: "192.168.1.100" }
-
-                Label { text: "Маска:" }
-                TextField { id: maskField; text: "255.255.255.0" }
-
-                Label { text: "Шлюз:" }
-                TextField { id: gatewayField; text: "192.168.1.1" }
-
-                Label { text: "MAC:" }
-                TextField { id: macField; text: "00:15:5D:00:00:01" }
-            }
-
-            // Порты
-            GroupBox {
-                title: "Порты"
-                Layout.fillWidth: true
-
-                GridLayout {
-                    columns: 2
-                    columnSpacing: 10
-                    rowSpacing: 5
-
-                    Label { text: "Порт 1:" }
-                    SpinBox { id: port1Field; from: 1; to: 65535; value: 2404 }
-
-                    Label { text: "Порт 2:" }
-                    SpinBox { id: port2Field; from: 1; to: 65535; value: 2405 }
-
-                    Label { text: "Порт 3:" }
-                    SpinBox { id: port3Field; from: 1; to: 65535; value: 2406 }
-
-                    Label { text: "Порт 4:" }
-                    SpinBox { id: port4Field; from: 1; to: 65535; value: 2407 }
-                }
-            }
-
-            Button {
-                text: "Сохранить"
-                onClicked: {
-                    // Добавляем все параметры в dataModel
-                    ethConfigDialog.dataModel.append(ethConfigDialog.createEthSetting("ETH IP", ipField.text, "unsigned_short"))
-                    ethConfigDialog.dataModel.append(ethConfigDialog.createEthSetting("ETH Маска", maskField.text, "unsigned_short"))
-                    ethConfigDialog.dataModel.append(ethConfigDialog.createEthSetting("ETH Шлюз", gatewayField.text, "unsigned_short"))
-                    ethConfigDialog.dataModel.append(ethConfigDialog.createEthSetting("ETH MAC", macField.text, "unsigned_short"))
-                    ethConfigDialog.dataModel.append(ethConfigDialog.createEthSetting("ETH Порт 1", port1Field.value, "unsigned_short"))
-                    ethConfigDialog.dataModel.append(ethConfigDialog.createEthSetting("ETH Порт 2", port2Field.value, "unsigned_short"))
-                    ethConfigDialog.dataModel.append(ethConfigDialog.createEthSetting("ETH Порт 3", port3Field.value, "unsigned_short"))
-                    ethConfigDialog.dataModel.append(ethConfigDialog.createEthSetting("ETH Порт 4", port4Field.value, "unsigned_short"))
-
-                    ethConfigDialog.close()
-                }
-                Layout.alignment: Qt.AlignRight
-            }
-        }
-    }
+    // Dialog {
+    //     id: ethConfigDialog
+    //     title: "Настройки ETH"
+    //     modal: true
+    //     width: 600
+    //     height: 700
+    //
+    //     // Локальная модель для хранения настроек ETH-интерфейсов.
+    //     // В каждом объекте хранятся значения, введённые пользователем.
+    //     property var ethInterfaces: [
+    //         {
+    //             name: "ETH1",
+    //             ipAddress: "192.168.0.100",
+    //             subnetMask: "255.255.255.0",
+    //             gateway: "192.168.0.1",
+    //             macFirst3: "00:11:22",
+    //             macLast3: "33:44:55",
+    //             clientIP1: "192.168.0.101",
+    //             clientIP2: "",
+    //             clientIP3: "",
+    //             clientIP4: "",
+    //             deviceAddress: "Device1",
+    //             ethPort1: 2404,  // значение для порта
+    //             ethPort2: 0,
+    //             ethPort3: 0,
+    //             ethPort4: 0,
+    //             expanded: true
+    //         }
+    //     ]
+    //
+    //
+    //     ColumnLayout {
+    //         anchors.fill: parent
+    //         spacing: 10
+    //
+    //         ScrollView {
+    //             Layout.fillWidth: true
+    //             Layout.fillHeight: true
+    //
+    //             ColumnLayout {
+    //                 id: ethListLayout
+    //                 spacing: 10
+    //
+    //                 // Вывод списка ETH-интерфейсов
+    //                 Repeater {
+    //                     id: ethRepeater
+    //                     model: ethInterfaces
+    //                     delegate: Rectangle {
+    //                         width: parent.width
+    //                         color: "#f5f5f5"
+    //                         border.color: "#cccccc"
+    //                         radius: 4
+    //                         Layout.margins: 5
+    //
+    //                         ColumnLayout {
+    //                             anchors.fill: parent
+    //                             spacing: 5
+    //
+    //                             RowLayout {
+    //                                 spacing: 10
+    //                                 Label {
+    //                                     text: modelData.name
+    //                                     font.bold: true
+    //                                 }
+    //                                 Button {
+    //                                     text: modelData.expanded ? "Скрыть" : "Показать"
+    //                                     onClicked: modelData.expanded = !modelData.expanded
+    //                                 }
+    //                                 Button {
+    //                                     text: "Удалить"
+    //                                     onClicked: {
+    //                                         ethInterfaces.splice(index, 1)
+    //                                     }
+    //                                 }
+    //                             }
+    //
+    //                             // Настройки для ETH-интерфейса (видимы, если expanded == true)
+    //                             ColumnLayout {
+    //                                 visible: modelData.expanded
+    //                                 spacing: 5
+    //
+    //                                 RowLayout {
+    //                                     spacing: 10
+    //                                     Label { text: "IP адрес:"; Layout.preferredWidth: 150 }
+    //                                     TextField {
+    //                                         text: modelData.ipAddress
+    //                                         Layout.fillWidth: true
+    //                                         onTextChanged: modelData.ipAddress = text
+    //                                     }
+    //                                 }
+    //                                 RowLayout {
+    //                                     spacing: 10
+    //                                     Label { text: "Маска подсети:"; Layout.preferredWidth: 150 }
+    //                                     TextField {
+    //                                         text: modelData.subnetMask
+    //                                         Layout.fillWidth: true
+    //                                         onTextChanged: modelData.subnetMask = text
+    //                                     }
+    //                                 }
+    //                                 RowLayout {
+    //                                     spacing: 10
+    //                                     Label { text: "Шлюз:"; Layout.preferredWidth: 150 }
+    //                                     TextField {
+    //                                         text: modelData.gateway
+    //                                         Layout.fillWidth: true
+    //                                         onTextChanged: modelData.gateway = text
+    //                                     }
+    //                                 }
+    //                                 RowLayout {
+    //                                     spacing: 10
+    //                                     Label { text: "MAC (старшие 3 байта):"; Layout.preferredWidth: 150 }
+    //                                     TextField {
+    //                                         text: modelData.macFirst3
+    //                                         Layout.fillWidth: true
+    //                                         onTextChanged: modelData.macFirst3 = text
+    //                                     }
+    //                                 }
+    //                                 RowLayout {
+    //                                     spacing: 10
+    //                                     Label { text: "MAC (младшие 3 байта):"; Layout.preferredWidth: 150 }
+    //                                     TextField {
+    //                                         text: modelData.macLast3
+    //                                         Layout.fillWidth: true
+    //                                         onTextChanged: modelData.macLast3 = text
+    //                                     }
+    //                                 }
+    //                                 RowLayout {
+    //                                     spacing: 10
+    //                                     Label { text: "IP клиента 1:"; Layout.preferredWidth: 150 }
+    //                                     TextField {
+    //                                         text: modelData.clientIP1
+    //                                         Layout.fillWidth: true
+    //                                         onTextChanged: modelData.clientIP1 = text
+    //                                     }
+    //                                 }
+    //                                 RowLayout {
+    //                                     spacing: 10
+    //                                     Label { text: "Адрес устройства:"; Layout.preferredWidth: 150 }
+    //                                     TextField {
+    //                                         text: modelData.deviceAddress
+    //                                         Layout.fillWidth: true
+    //                                         onTextChanged: modelData.deviceAddress = text
+    //                                     }
+    //                                 }
+    //                                 RowLayout {
+    //                                     spacing: 10
+    //                                     Label { text: "ETH Порт 1:"; Layout.preferredWidth: 150 }
+    //                                     SpinBox {
+    //                                         from: 0; to: 65535
+    //                                         value: modelData.ethPort1
+    //                                         onValueChanged: modelData.ethPort1 = value
+    //                                     }
+    //                                 }
+    //                             }
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //
+    //         // Кнопки для добавления нового ETH-интерфейса и сохранения настроек
+    //         RowLayout {
+    //             Layout.fillWidth: true
+    //             spacing: 20
+    //
+    //             Button {
+    //                 text: "Добавить ETH"
+    //                 onClicked: {
+    //                     var newInterface = {
+    //                         name: "ETH" + (ethConfigDialog.ethInterfaces.length + 1),
+    //                         ipAddress: "",
+    //                         subnetMask: "",
+    //                         gateway: "",
+    //                         macFirst3: "",
+    //                         macLast3: "",
+    //                         clientIP1: "",
+    //                         clientIP2: "",
+    //                         clientIP3: "",
+    //                         clientIP4: "",
+    //                         deviceAddress: "",
+    //                         ethPort1: 2404,
+    //                         ethPort2: 0,
+    //                         ethPort3: 0,
+    //                         ethPort4: 0,
+    //                         expanded: true
+    //                     };
+    //                     ethConfigDialog.ethInterfaces.push(newInterface);
+    //                 }
+    //             }
+    //
+    //             Button {
+    //                 text: "Сохранить настройки ETH"
+    //                 onClicked: {
+    //                     // Для каждого ETH-интерфейса создаем новый сигнал с ТАКОЙ ЖЕ структурой,
+    //                     // как у любого сигнала. Если поле не заполнено, оно будет пустым.
+    //                     for (var i = 0; i < ethConfigDialog.ethInterfaces.length; i++) {
+    //                         var eth = ethConfigDialog.ethInterfaces[i];
+    //
+    //                         var newSignal = {
+    //                             "source": eth.name,               // источник (можно использовать имя интерфейса)
+    //                             "paramType": "ETH",               // тип параметра (можно менять по необходимости)
+    //                             "ioIndex": "",                    // индекс ввода/вывода (оставляем пустым)
+    //                             "name": "Порт eth" + (i + 1),       // жёстко заданное имя
+    //                             "codeName": "ETH PORT" + (i + 1),   // жёстко заданное кодовое имя
+    //                             "type": "unsigned_short",         // тип данных
+    //                             "logicuse": "",                   // логическое назначение
+    //                             "saving": "true",                 // признак сохранения (строкой или булевым значением)
+    //                             "aperture": "",                   // aperture
+    //                             "ktt": "",                        // ktt
+    //                             "def_value": eth.ethPort1,        // дефолтное значение из настроек ETH Порт 1
+    //                             "ad": "",                         // ad
+    //                             "oc": "",                         // oc
+    //                             "tosp": "",                       // tosp (короткий импульс)
+    //                             "tolp": "",                       // tolp (длинный импульс)
+    //                             "address": "",                    // адрес (пусто)
+    //                             "blockName": "",                  // имя блока (пусто)
+    //                             "ioa_address": "",                // адрес ioa (пусто)
+    //                             "asdu_address": "",               // адрес asdu (пусто)
+    //                             "second_class_num": "",           // номер второго класса (пусто)
+    //                             "type_spont": "",                 // тип spont
+    //                             "type_back": "",                  // тип back
+    //                             "type_percyc": "",                // тип percyc
+    //                             "type_def": "",                   // тип def
+    //                             oi_c_sc_na_1: false,              // логическое поле
+    //                             oi_c_se_na_1: false,              // для уставок с числовым типом (false, если не применимо)
+    //                             oi_c_se_nb_1: false,              // для уставок с float (false, если не применимо)
+    //                             oi_c_dc_na_1: false,
+    //                             oi_c_bo_na_1: false,
+    //                             "use_in_spont_101": false,
+    //                             "use_in_back_101": false,
+    //                             "use_in_percyc_101": false,
+    //                             "allow_address_101": false,
+    //                             "survey_group_101": "",
+    //                             "use_in_spont_104": false,
+    //                             "use_in_back_104": false,
+    //                             "use_in_percyc_104": false,
+    //                             "allow_address_104": false,
+    //                             "survey_group_104": ""
+    //                         };
+    //
+    //                         dataModel.append(newSignal);
+    //                     }
+    //                     console.log("Новые ETH сигналы добавлены в dataModel. Всего элементов:", dataModel.count);
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
 
 
     // Стартовый диалог
@@ -287,8 +448,11 @@ ApplicationWindow {
         property int ioIndexValue: 0
         onAboutToShow: {
             ioIndex.text = ioIndexValue
+            scrollView.contentItem.contentY = 0
         }
+
         ScrollView {
+            id: scrollView
             anchors.fill: parent
             clip: true
             contentWidth: parent.width
@@ -478,6 +642,75 @@ ApplicationWindow {
 
         standardButtons: Dialog.Ok | Dialog.Cancel
 
+        Rectangle {
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            width: 5
+            color: "transparent"
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.SizeHorCursor
+                onPressed: mouse.accepted = true
+                onPositionChanged: {
+                    let dx = mouse.x
+                    if (entryDialog.width - dx > entryDialog.minimumWidth) {
+                        entryDialog.x += dx
+                        entryDialog.width -= dx
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            width: 5
+            color: "transparent"
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.SizeHorCursor
+                onPositionChanged: {
+                    let dx = mouse.x
+                    if (entryDialog.width + dx > entryDialog.minimumWidth)
+                        entryDialog.width += dx
+                }
+            }
+        }
+
+        Rectangle {
+            id: edgeResizeAreaTop
+            height: 5
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            color: "transparent"
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.SizeVerCursor
+                drag.target: entryDialog
+                drag.axis: Drag.YAxis
+                onPositionChanged: entryDialog.height -= mouse.y
+            }
+        }
+
+        Rectangle {
+            id: edgeResizeAreaBottom
+            height: 5
+            anchors.bottom: parent.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            color: "transparent"
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.SizeVerCursor
+                drag.target: entryDialog
+                drag.axis: Drag.YAxis
+                onPositionChanged: entryDialog.height += mouse.y
+            }
+        }
+
         onAccepted: {
             var isOutputSignal = currentType === "Выходные сигналы";
             var isSettingBool = currentType === "Уставка" && typeCombo.currentText === "bool";
@@ -582,25 +815,25 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
-                contentWidth: listView.width
-                contentHeight: listView.height
-                leftPadding: 15 // Add left padding
-                rightPadding: 15
+                padding: 10
+                leftPadding: 15
+                rightPadding: 10
 
                 ListView {
                     id: listView
-                    width: parent.width - 30
-                    height: parent.height
+                    width: parent.width - 25
+                    height: contentHeight
                     model: dataModel
                     spacing: 5
-                    interactive: true
+                    interactive: false
                     clip: true
+                    headerPositioning: ListView.OverlayHeader
                     header: RowLayout {
                         width: listView.width
                         spacing: 10
-                        Label {
-                            text: "Источник"
-                            Layout.preferredWidth: 100
+                        Item {
+                            Layout.preferredWidth: 12 // Ширина scrollbar
+                            visible: false
                         }
                         Label {
                             text: "IO"
@@ -616,7 +849,7 @@ ApplicationWindow {
                         }
                         Label {
                             text: "Тип"
-                            Layout.preferredWidth: 100
+                            Layout.preferredWidth: 200
                         }
                         Label {
                             text: "Логика"
@@ -663,7 +896,6 @@ ApplicationWindow {
 
                     delegate: RowLayout {
                         required property int index
-                        required property string source
                         required property string ioIndex
                         required property string paramType
                         required property string name
@@ -683,135 +915,131 @@ ApplicationWindow {
                         spacing: 10
                         height: visible ? implicitHeight : 0
                         visible: paramType === pageRoot.paramType
-                        Text{
-                            text: source
-                            Layout.preferredWidth: 100
-                            wrapMode: Text.NoWrap
-                            maximumLineCount: 1
-                            elide: Text.ElideRight
-                            verticalAlignment: Text.AlignVCenter
+                        Item {
+                            Layout.preferredWidth: 12
+                            visible: false
                         }
-                        Text {
-                            text: ioIndex
+                        TextField {
+                            text: dataModel.get(index).ioIndex
                             Layout.preferredWidth: 50
+                            Layout.preferredHeight: 30
                             wrapMode: Text.NoWrap
-                            maximumLineCount: 1
-                            elide: Text.ElideRight
                             verticalAlignment: Text.AlignVCenter
+
+                            color: "black" // Цвет текста
+                            onTextChanged: dataModel.setProperty(index, "ioIndex", text)
                         }
-                        Text {
-                            text: name
-                            elide: Text.ElideRight
+                        TextField {
+                            text: dataModel.get(index).name
                             Layout.preferredWidth: 200
+                            Layout.preferredHeight: 30
                             wrapMode: Text.NoWrap
-                            maximumLineCount: 1
                             verticalAlignment: Text.AlignVCenter
-                            MouseArea {
-                                id: mouseArea
-                                anchors.fill: parent
-                                hoverEnabled: true
-                            }
-                            ToolTip {
-                                visible: mouseArea.containsMouse
-                                text: name
-                            }
+                            color: "black" // Цвет текста
+                            onTextChanged: dataModel.setProperty(index, "name", text)
+                            ToolTip.visible: hovered && !activeFocus
+                            ToolTip.text: text
                         }
-                        Text {
-                            text: codeName
+                        TextField {
+                            text: dataModel.get(index).codeName
                             Layout.preferredWidth: 200
+                            Layout.preferredHeight: 30
                             wrapMode: Text.NoWrap
-                            maximumLineCount: 1
-                            elide: Text.ElideRight
                             verticalAlignment: Text.AlignVCenter
-                            MouseArea {
-                                id: mouseArea1
-                                anchors.fill: parent
-                                hoverEnabled: true
+                            color: "black" // Цвет текста
+                            onTextChanged: dataModel.setProperty(index, "codeName", text)
+                            ToolTip.visible: hovered && !activeFocus
+                            ToolTip.text: text
+                        }
+                        ComboBox {
+                            model: ["bool", "float", "unsigned int", "unsigned short", "unsigned char"]
+                            currentIndex: model.indexOf(dataModel.get(index).type || "bool")
+                            onCurrentIndexChanged: {
+                                dataModel.setProperty(index, "type", model[currentIndex]);
                             }
-                            ToolTip {
-                                visible: mouseArea1.containsMouse
-                                text: name
+                            Layout.preferredWidth: 200
+                            Layout.preferredHeight: 30
+                        }
+                        ComboBox {
+                            model: ["Да", "Нет"]
+                            currentIndex: model.indexOf(dataModel.get(index).logicuse || "Да")
+                            onCurrentIndexChanged: {
+                                dataModel.setProperty(index, "logicuse", model[currentIndex]);
                             }
+                            Layout.preferredWidth: 80
+                            Layout.preferredHeight: 30
                         }
-                        Text {
-                            text: type
+                        ComboBox {
+                            model: ["Да", "Нет"]
+                            currentIndex: model.indexOf(dataModel.get(index).saving|| "Да")
+                            onCurrentIndexChanged: {
+                                dataModel.setProperty(index, "saving", model[currentIndex]);
+                            }
+                            Layout.preferredWidth: 80
+                            Layout.preferredHeight: 30
+                        }
+                        TextField {
+                            text: dataModel.get(index).aperture
                             Layout.preferredWidth: 100
+                            Layout.preferredHeight: 30
                             wrapMode: Text.NoWrap
-                            maximumLineCount: 1
-                            elide: Text.ElideRight
                             verticalAlignment: Text.AlignVCenter
+                            color: "black" // Цвет текста
+                            onTextChanged: dataModel.setProperty(index, "aperture", text)
                         }
-                        Text {
-                            text: logicuse
+                        TextField {
+                            text: dataModel.get(index).ktt
                             Layout.preferredWidth: 80
+                            Layout.preferredHeight: 30
                             wrapMode: Text.NoWrap
-                            maximumLineCount: 1
-                            elide: Text.ElideRight
                             verticalAlignment: Text.AlignVCenter
+                            color: "black" // Цвет текста
+                            onTextChanged: dataModel.setProperty(index, "ktt", text)
                         }
-                        Text {
-                            text: saving
+                        TextField {
+                            text: dataModel.get(index).def_value
                             Layout.preferredWidth: 80
+                            Layout.preferredHeight: 30
                             wrapMode: Text.NoWrap
-                            maximumLineCount: 1
-                            elide: Text.ElideRight
                             verticalAlignment: Text.AlignVCenter
+                            color: "black" // Цвет текста
+                            onTextChanged: dataModel.setProperty(index, "def_value", text)
                         }
-                        Text {
-                            text: aperture
-                            Layout.preferredWidth: 100
-                            wrapMode: Text.NoWrap
-                            maximumLineCount: 1
-                            elide: Text.ElideRight
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        Text {
-                            text: ktt
-                            Layout.preferredWidth: 80
-                            wrapMode: Text.NoWrap
-                            maximumLineCount: 1
-                            elide: Text.ElideRight
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        Text {
-                            text: def_value
-                            Layout.preferredWidth: 80
-                            wrapMode: Text.NoWrap
-                            maximumLineCount: 1
-                            elide: Text.ElideRight
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        Text {
-                            text: ad
+                        TextField {
+                            text: dataModel.get(index).ad
                             Layout.preferredWidth: 60
+                            Layout.preferredHeight: 30
                             wrapMode: Text.NoWrap
-                            maximumLineCount: 1
-                            elide: Text.ElideRight
                             verticalAlignment: Text.AlignVCenter
+                            color: "black" // Цвет текста
+                            onTextChanged: dataModel.setProperty(index, "ad", text)
                         }
-                        Text {
-                            text: oc
+                        TextField {
+                            text: dataModel.get(index).oc
                             Layout.preferredWidth: 80
+                            Layout.preferredHeight: 30
                             wrapMode: Text.NoWrap
-                            maximumLineCount: 1
-                            elide: Text.ElideRight
                             verticalAlignment: Text.AlignVCenter
+                            color: "black" // Цвет текста
+                            onTextChanged: dataModel.setProperty(index, "oc", text)
                         }
-                        Text {
-                            text: tosp
+                        TextField {
+                            text: dataModel.get(index).tosp
                             Layout.preferredWidth: 80
+                            Layout.preferredHeight: 30
                             wrapMode: Text.NoWrap
-                            maximumLineCount: 1
-                            elide: Text.ElideRight
                             verticalAlignment: Text.AlignVCenter
+                            color: "black" // Цвет текста
+                            onTextChanged: dataModel.setProperty(index, "tosp", text)
                         }
-                        Text {
-                            text: tolp
+                        TextField {
+                            text: dataModel.get(index).tolp
                             Layout.preferredWidth: 80
+                            Layout.preferredHeight: 30
                             wrapMode: Text.NoWrap
-                            maximumLineCount: 1
-                            elide: Text.ElideRight
                             verticalAlignment: Text.AlignVCenter
+                            color: "black" // Цвет текста
+                            onTextChanged: dataModel.setProperty(index, "tolp", text)
                         }
                         Button {
                             text: "Удалить"
@@ -1761,7 +1989,6 @@ ApplicationWindow {
             Button {
                 text: "Настроить ETH"
                 onClicked: {
-                    ethConfigDialog.dataModel = dataModel
                     ethConfigDialog.open()
                 }
             }
