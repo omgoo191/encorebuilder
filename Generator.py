@@ -26,7 +26,7 @@ def main():
         print(f"Ошибка: Файл '{file_name}' содержит некорректный JSON")
         input("Нажмите Enter для выхода...")
         return
-    # Маппинг типов для info_objects.cpp
+
     type_mapping_info = {
         "bool": "Bool",
         "float": "Float",

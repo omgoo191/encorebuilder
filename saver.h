@@ -23,7 +23,6 @@ Q_OBJECT
 public:
 	explicit FileHandler(QObject *parent = nullptr);
 
-	// Get the application directory path
 	Q_INVOKABLE QString getAppDirectory() const;
 
 	/**
@@ -44,11 +43,9 @@ public:
 	Q_INVOKABLE void runPythonScript();
 
 	Q_INVOKABLE QString cleanPath(const QString &path) const;
-	// Register the type with QML
 	static void registerType();
 
 private:
-	// Helper method to ensure output directory exists
 	bool ensureOutputDirectory() const;
 
 	QVariant loadFromRelativePath(const QString &relativePath);
