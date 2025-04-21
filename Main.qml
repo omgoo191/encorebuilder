@@ -184,11 +184,15 @@ ApplicationWindow {
     }
 
 
-
+    ListModel{
+        id:testModel
+    }
     ListModel {
         id: dataModel
+        dynamicRoles: false
         onCountChanged: {
             updateNextIoIndex();
+
         }
     }
     Component {
@@ -214,7 +218,7 @@ ApplicationWindow {
                     width: parent.width - 30
                     height: parent.height
                     model: dataModel
-                    spacing: 5
+                    spacing: 0
                     interactive: true
                     clip: true
                     headerPositioning: ListView.OverlayHeader
@@ -272,7 +276,7 @@ ApplicationWindow {
                         required property string tolp
 
                         width: listView.width
-                        spacing: 10
+                        spacing: 0
                         height: visible ? implicitHeight : 0
                         visible: paramType === pageRoot.paramType
 
@@ -491,7 +495,11 @@ ApplicationWindow {
                 Material.foreground: "white"
                 onClicked: {
                     addClicked()
-                    var newSignal = {
+                    testModel.append({
+                        "source": "",
+                    "paramType": pageRoot.paramType,
+                    "ioIndex": rootwindow.nextIoIndex.toString()});
+                    dataModel.append( {
                         "source": "",
                         "paramType": pageRoot.paramType,
                         "ioIndex": rootwindow.nextIoIndex.toString(),
@@ -531,147 +539,37 @@ ApplicationWindow {
                         "use_in_percyc_104": false,
                         "allow_address_104": false,
                         "survey_group_104": ""
-                    };
-                    dataModel.append(newSignal);
-                    listVies.forceLayout();
+                    });
                 }
             }
         }
     }
 
-
-    ColumnLayout {
-        anchors.fill: parent
-        spacing: 0
-        anchors.bottomMargin: 70
-        TabBar {
-            id: tabBar
-            Layout.fillWidth: true
-            currentIndex: 0
-            property int tabWidth: 225
-            // Основные статические вкладки
-            TabButton { text: "Входные сигналы"}
-            TabButton { text: "Выходные сигналы" }
-            TabButton { text: "Признаки" }
-            TabButton { text: "Уставки" }
-
-            TabButton {
-                visible: modbus
-                text: "Modbus"
-                width: visible ? tabBar.tabWidth : 0
-            }
-            TabButton {
-                visible: mek
-                text: "MEK"
-                width: visible ? tabBar.tabWidth : 0
-            }
-            TabButton {
-                visible: mek && mek_101
-                text: "MEK_101"
-                width: visible ? tabBar.tabWidth : 0
-            }
-            TabButton {
-                visible: mek && mek_104
-                text: "MEK_104"
-                width: visible ? tabBar.tabWidth : 0
-            }
-
-            function activateTab(tabName) {
-                for (var i = 0; i < count; i++) {
-                    if (itemAt(i).text === tabName && itemAt(i).visible) {
-                        currentIndex = i;
-                        return true;
-                    }
-                }
-                return false;
-            }
-
-            function updateFocus() {
-                if (mek && mek_104 && activateTab("MEK_104")) return;
-                if (mek && mek_101 && activateTab("MEK_101")) return;
-                if (mek && activateTab("MEK")) return;
-                if (modbus && activateTab("Modbus")) return;
-
-                // Фолбэк на первую вкладку если ничего не активно
-                currentIndex = 0;
-            }
-
-            onCurrentIndexChanged: {
-                if (currentIndex >= 0) {
-                    swipeView.currentIndex = currentIndex;
-                }
-            }
-        }
-
-        SwipeView {
-            id: swipeView
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            currentIndex: tabBar.currentIndex
-            anchors.margins: 10
-            interactive:false
-            Loader {
-                sourceComponent: parameterPageComponent
-                onLoaded: {
-                    item.paramType = "Входные сигналы"
-                        item.addClicked.connect(() => {
-                        currentType = "Входные сигналы"
-                    })
-                }
-            }
-
-            Loader {
-                sourceComponent: parameterPageComponent
-                onLoaded: {
-                    item.paramType = "Выходные сигналы"
-                        item.addClicked.connect(() => {
-                        currentType = "Выходные сигналы"
-                    })
-                }
-            }
-
-            Loader {
-                sourceComponent: parameterPageComponent
-                onLoaded: {
-                    item.paramType = "Признаки"
-                        item.addClicked.connect(() => {
-                        currentType = "Признаки"
-                    })
-                }
-            }
-
-            Loader {
-                sourceComponent: parameterPageComponent
-                onLoaded: {
-                    item.paramType = "Уставка"
-                        item.addClicked.connect(() => {
-                        currentType = "Уставка"
-                    })
-                }
-            }
-
-            // ModBus Settings
-            ScrollView {
-                clip: true
-                contentWidth: grid.implicitWidth
-                contentHeight: grid.implicitHeight
-                leftPadding: 15
-                rightPadding: 15
-                visible: modbus
-                ScrollBar.horizontal.policy: ScrollBar.AsNeeded
-                ScrollBar.vertical.policy: ScrollBar.AsNeeded
+    Component {
+        id: modbusPageComponent
+        ScrollView {
+            clip: true
+            contentWidth: grid.implicitWidth
+            contentHeight: grid.implicitHeight
+            leftPadding: 15
+            rightPadding: 15
+            visible: modbus
+            ScrollBar.horizontal.policy: ScrollBar.AsNeeded
+            ScrollBar.vertical.policy: ScrollBar.AsNeeded
+            Item {
+                anchors.fill: parent
                 property var typeIndexMap: {
-                        "Coil": 0,
-                        "Discrete input": 0,
-                        "Input register": 0,
-                        "Holding register": 0
+                    "Coil": 0,
+                    "Discrete input": 0,
+                    "Input register": 0,
+                    "Holding register": 0
                 }
                 ColumnLayout {
                     id: grid
                     width: parent.width - 30
                     spacing: 5
                     anchors.fill: parent
-
+                    Layout.preferredHeight: 30
                     // Header Row
                     RowLayout {
                         spacing: 5
@@ -789,559 +687,220 @@ ApplicationWindow {
                     }
                 }
             }
+        }
+    }
 
-            // MEK settings
-            ScrollView {
-                clip: true
-                contentWidth: gridmek.implicitWidth
-                contentHeight: gridmek.implicitHeight
-                ScrollBar.horizontal.policy: ScrollBar.AsNeeded
-                ScrollBar.vertical.policy: ScrollBar.AsNeeded
-                leftPadding: 15
-                rightPadding: 15
-                visible: mek
+    Component {
+        id: mekPageComponent
 
-                ColumnLayout {
-                    id: gridmek
-                    width: parent.width - 30
+        Item {
+            anchors.fill: parent
+            function set(i,role, value) {
+                dataModel.setProperty(i, role, value)
+            }
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 8
+
+                // Header Row
+                RowLayout {
                     spacing: 8
-                    anchors.fill: parent
+                    Label { text: "IO"; Layout.preferredWidth: 50 }
+                    Label { text: "Тип"; Layout.preferredWidth: 100 }
+                    Label { text: "Наименование"; Layout.preferredWidth: 200 }
+                    Label { text: "Тип данных"; Layout.preferredWidth: 100 }
+                    Label { text: "Адрес ОИ"; Layout.preferredWidth: 100 }
+                    Label { text: "Адрес АСДУ"; Layout.preferredWidth: 100 }
+                    Label { text: "Номер буфера"; Layout.preferredWidth: 130 }
+                    Label { text: "Тип при спорадике"; Layout.preferredWidth: 130 }
+                    Label { text: "Тип при фоновом"; Layout.preferredWidth: 130 }
+                    Label { text: "тип при пер/цик"; Layout.preferredWidth: 130 }
+                    Label { text: "тип при общем"; Layout.preferredWidth: 130 }
+                    Label { text: ""; Layout.preferredWidth: 100 }
+                }
 
-                    GridLayout {
-                        id: headerGrid
-                        columns: 12
-                        columnSpacing: 5
-                        rowSpacing: 5
-                        width: parent.width
+                ListView {
+                    id: mekList
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    cacheBuffer: 1000
+                    spacing: 4
+                    model: dataModel
 
-                        Label {
-                            text: "IO"
-                            Layout.preferredWidth: 50
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Тип"
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Наименование"
-                            Layout.preferredWidth: 200
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Тип данных"
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Адрес ОИ"
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Адрес АСДУ"
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Номер буфера"
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Тип при спорадике"
-                            Layout.preferredWidth: 130
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Тип при фоновом"
-                            Layout.preferredWidth: 130
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Тип при пер/цик"
-                            Layout.preferredWidth: 130
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Тип при общем"
-                            Layout.preferredWidth: 130
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: ""
-                            Layout.preferredWidth: 160
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                    }
+                    delegate: Item {
+                        width: mekList.width
+                        height: 40
 
-                    Repeater {
-                        model: dataModel
-                        delegate: GridLayout {
-                            columns: 12
-                            columnSpacing: 5
-                            rowSpacing: 5
-                            width: parent.width
+                        RowLayout {
+                            anchors.fill: parent
+                            spacing: 8
 
+                            // IO
                             Text {
-                                text: ioIndex
+                                text: model.ioIndex
                                 Layout.preferredWidth: 50
-                                Layout.alignment: Qt.AlignHCenter
                             }
+
+                            // Тип
                             Text {
-                                text: paramType
+                                text: model.paramType
                                 Layout.preferredWidth: 100
-                                Layout.alignment: Qt.AlignHCenter
+                                horizontalAlignment: Text.AlignHCenter
                             }
+
+                            // Наименование
                             Text {
-                                text: name
+                                text: model.name
                                 Layout.preferredWidth: 200
-                                Layout.alignment: Qt.AlignHCenter
                                 elide: Text.ElideRight
+                                ToolTip.visible: containsMouse
+                                ToolTip.text: model.name
                                 MouseArea {
                                     anchors.fill: parent
                                     hoverEnabled: true
-                                    ToolTip.visible: containsMouse
-                                    ToolTip.text: name
                                 }
                             }
+
+                            // Тип данных
                             Text {
-                                text: type
+                                text: model.type
                                 Layout.preferredWidth: 100
-                                Layout.alignment: Qt.AlignHCenter
-                            }
-                            TextField {
-                                text: ioa_address || ""
-                                Layout.preferredWidth: 100
-                                Layout.preferredHeight: 30
                                 horizontalAlignment: Text.AlignHCenter
+                            }
+
+                            // Адрес ОИ
+                            TextField {
+                                text: model.ioa_address || ""
+                                Layout.preferredWidth: 100
                                 onTextChanged: dataModel.setProperty(index, "ioa_address", text)
                             }
+
+                            // Адрес АСДУ
                             TextField {
-                                text: asdu_address || ""
+                                text: model.asdu_address || ""
                                 Layout.preferredWidth: 100
                                 Layout.preferredHeight: 30
                                 horizontalAlignment: Text.AlignHCenter
                                 onTextChanged: dataModel.setProperty(index, "asdu_address", text)
                             }
-                            ComboBox {
-                                model: ["NOT_USE", "SECOND_CLASS_1", "SECOND_CLASS_2", "SECOND_CLASS_3", "SECOND_CLASS_4", "SECOND_CLASS_5", "SECOND_CLASS_6", "SECOND_CLASS_7", "SECOND_CLASS_8"]
-                                currentIndex: {
-                                    if (!second_class_num) return 0;
-                                    var idx = model.indexOf(second_class_num);
-                                    return idx >= 0 ? idx : 0;
-                                }
 
-                                onCurrentIndexChanged: {
-                                    if (!loadingState && currentIndex >= 0) {
-                                        dataModel.setProperty(index, "second_class_num", model[currentIndex]);
-                                    }
-                                }
-                                Layout.preferredWidth: 100
-                                Layout.preferredHeight: 30
-                            }
-                            ComboBox {
-                                model: ["NOT_USE", "M_SP_NA_1", "M_SP_TA1", "M_DP_NA_1", "M_DP_TA_1", "M_BO_NA_1", "M_BO_TA_1", "M_ME_NA_1", "M_ME_TA_1", "M_ME_NB1", "M_ME_TB_1", "M_ME_NC_1", "M_ME_TC_1", "M_ME_ND_1", "M_SP_TB_1", "M_DP_TB_1", "M_BO_TB_1", "M_ME_TD_1", "M_ME_TF_1"]
-                                currentIndex: {
-                                    if (!type_spont) return 0;
-                                    var idx = model.indexOf(type_spont);
-                                    return idx >= 0 ? idx : 0;
-                                }
-
-                                onCurrentIndexChanged: {
-                                    if (!loadingState && currentIndex >= 0) {
-                                        dataModel.setProperty(index, "type_spont", model[currentIndex]);
-                                    }
-                                }
+                            // Номер буфера
+                            Button {
+                                id: bufferBtn
+                                text: model.second_class_num || "Выбрать"
                                 Layout.preferredWidth: 130
-                                Layout.preferredHeight: 30
+                                onClicked: bufferMenu.open()
                             }
-                            ComboBox {
-                                model: ["NOT_USE", "M_SP_NA_1", "M_DP_NA_1", "M_BO_NA_1", "M_ME_NA_1", "M_ME_NB_1", "M_ME_NC_1", "M_ME_ND_1"]
-                                currentIndex: {
-                                    if (!type_back) return 0;
-                                    var idx = model.indexOf(type_back);
-                                    return idx >= 0 ? idx : 0;
-                                }
+                            Menu {
+                                id: bufferMenu
+                                y: bufferBtn.height
+                                MenuItem { text: "NOT_USE"; onTriggered: set(index,"second_class_num", text) }
+                                MenuItem { text: "SECOND_CLASS_1"; onTriggered: set(index,"second_class_num", text) }
+                                MenuItem { text: "SECOND_CLASS_2"; onTriggered: set(index,"second_class_num", text) }
+                                MenuItem { text: "SECOND_CLASS_3"; onTriggered: set(index,"second_class_num", text) }
+                                MenuItem { text: "SECOND_CLASS_4"; onTriggered: set(index,"second_class_num", text) }
+                                MenuItem { text: "SECOND_CLASS_5"; onTriggered: set(index,"second_class_num", text) }
+                                MenuItem { text: "SECOND_CLASS_6"; onTriggered: set(index,"second_class_num", text) }
+                                MenuItem { text: "SECOND_CLASS_7"; onTriggered: set(index,"second_class_num", text) }
+                                MenuItem { text: "SECOND_CLASS_8"; onTriggered: set(index,"second_class_num", text) }
+                            }
 
-                                onCurrentIndexChanged: {
-                                    if (!loadingState && currentIndex >= 0) {
-                                        dataModel.setProperty(index, "type_back", model[currentIndex]);
+                            // Тип при спорадике
+                            Button {
+                                id: spontBtn
+                                text: model.type_spont || "Выбрать"
+                                Layout.preferredWidth: 130
+                                onClicked: spontMenu.open()
+                            }
+
+                            Menu {
+                                id: spontMenu
+                                y: spontBtn.height
+                                Repeater {
+                                    model: [
+                                        "NOT_USE", "M_SP_NA_1", "M_SP_TA1", "M_DP_NA_1", "M_DP_TA_1", "M_BO_NA_1",
+                                        "M_BO_TA_1", "M_ME_NA_1", "M_ME_TA_1", "M_ME_NB1", "M_ME_TB_1", "M_ME_NC_1",
+                                        "M_ME_TC_1", "M_ME_ND_1", "M_SP_TB_1", "M_DP_TB_1", "M_BO_TB_1", "M_ME_TD_1", "M_ME_TF_1"
+                                    ]
+                                    delegate: MenuItem {
+                                        text: modelData
+                                        onTriggered: set(index,"type_spont", modelData)
                                     }
                                 }
-                                Layout.preferredWidth: 130
-                                Layout.preferredHeight: 30
                             }
-                            ComboBox {
-                                id: typepercyc
-                                model: ["NOT_USE", "M_ME_NA_1", "M_ME_NB_1", "M_ME_NC_1", "M_ME_ND_1"]
-                                currentIndex: {
-                                    if (!type_percyc) return 0;
-                                    var idx = model.indexOf(type_percyc);
-                                    return idx >= 0 ? idx : 0;
-                                }
 
-                                onCurrentIndexChanged: {
-                                    if (!loadingState && currentIndex >= 0) {
-                                        dataModel.setProperty(index, "type_percyc", model[currentIndex]);
+                            // Тип при фоновом
+                            Button {
+                                id: backBtn
+                                text: model.type_back || "Выбрать"
+                                Layout.preferredWidth: 130
+                                onClicked: backMenu.open()
+                            }
+
+                            Menu {
+                                id: backMenu
+                                y: backBtn.height
+                                Repeater {
+                                    model: [
+                                        "NOT_USE", "M_SP_NA_1", "M_DP_NA_1", "M_BO_NA_1", "M_ME_NA_1",
+                                        "M_ME_NB_1", "M_ME_NC_1", "M_ME_ND_1"
+                                    ]
+                                    delegate: MenuItem {
+                                        text: modelData
+                                        onTriggered: set(index,"type_back", modelData)
                                     }
                                 }
-                                Layout.preferredWidth: 130
-                                Layout.preferredHeight: 30
                             }
-                            ComboBox {
-                                id:typedef
-                                model: ["NOT_USE", "M_SP_NA_1", "M_SP_TA1", "M_DP_NA_1", "M_DP_TA_1", "M_BO_NA_1", "M_BO_TA_1", "M_ME_NA_1", "M_ME_TA_1", "M_ME_NB1", "M_ME_TB_1", "M_ME_NC_1", "M_ME_TC_1", "M_ME_ND_1", "M_SP_TB_1", "M_DP_TB_1", "M_BO_TB_1", "M_ME_TD_1", "M_ME_TF_1"]
-                                currentIndex: {
-                                    if (!type_def) return 0;
-                                    var idx = model.indexOf(type_def);
-                                    return idx >= 0 ? idx : 0;
-                                }
 
-                                onCurrentIndexChanged: {
-                                    if (!loadingState && currentIndex >= 0) {
-                                        dataModel.setProperty(index, "type_def", model[currentIndex]);
+                            // Тип при пер/цик
+                            Button {
+                                id: percycBtn
+                                text: model.type_percyc || "Выбрать"
+                                Layout.preferredWidth: 130
+                                onClicked: percycMenu.open()
+                            }
+
+                            Menu {
+                                id: percycMenu
+                                y: percycBtn.height
+                                Repeater {
+                                    model: ["NOT_USE", "M_ME_NA_1", "M_ME_NB_1", "M_ME_NC_1", "M_ME_ND_1"]
+                                    delegate: MenuItem {
+                                        text: modelData
+                                        onTriggered: set(index,"type_percyc", modelData)
                                     }
                                 }
-                                Layout.preferredWidth: 130
-                                Layout.preferredHeight: 30
                             }
+
+                            // Тип при общем
+                            Button {
+                                id: defBtn
+                                text: model.type_def || "Выбрать"
+                                Layout.preferredWidth: 130
+                                onClicked: defMenu.open()
+                            }
+
+                            Menu {
+                                id: defMenu
+                                y: defBtn.height
+                                Repeater {
+                                    model: [
+                                        "NOT_USE", "M_SP_NA_1", "M_SP_TA1", "M_DP_NA_1", "M_DP_TA_1", "M_BO_NA_1",
+                                        "M_BO_TA_1", "M_ME_NA_1", "M_ME_TA_1", "M_ME_NB1", "M_ME_TB_1", "M_ME_NC_1",
+                                        "M_ME_TC_1", "M_ME_ND_1", "M_SP_TB_1", "M_DP_TB_1", "M_BO_TB_1", "M_ME_TD_1", "M_ME_TF_1"
+                                    ]
+                                    delegate: MenuItem {
+                                        text: modelData
+                                        onTriggered: set(index,"type_def", modelData)
+                                    }
+                                }
+                            }
+
+                            // Delete Button
                             Button {
                                 text: "Удалить"
-                                Layout.preferredWidth: 160
-                                onClicked: dataModel.remove(index)
-                                Material.background: Material.Red
-                            }
-                        }
-                    }
-                }
-            }
-
-            ScrollView {
-                clip: true
-                contentWidth: mek_101_grid.implicitWidth
-                contentHeight: mek_101_grid.implicitHeight
-                ScrollBar.horizontal.policy: ScrollBar.AsNeeded
-                ScrollBar.vertical.policy: ScrollBar.AsNeeded
-                leftPadding: 15
-                rightPadding: 15
-                visible: mek_101 && mek
-
-                ColumnLayout {
-                    id: mek_101_grid
-                    width: parent.width - 30
-                    spacing: 8
-                    anchors.fill: parent
-
-                    GridLayout {
-                        id: headerGrid_101
-                        columns: 11
-                        columnSpacing: 5
-                        rowSpacing: 5
-
-                        Label {
-                            text: "IO"
-                            Layout.preferredWidth: 50
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Тип"
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Наименование"
-                            Layout.preferredWidth: 200
-                            Layout.alignment: Qt.AlignHCenter
-                            elide: Text.ElideRight
-                        }
-                        Label {
-                            text: "Адрес ОИ"
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Адрес АСДУ"
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Исп. в спорадике"
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Исп. в цикл/период"
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Исп. в фон. сканир"
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Разреш. адрес"
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Группа опроса"
-                            Layout.preferredWidth: 150
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: ""
-                            Layout.preferredWidth: 160
-                        }
-                    }
-
-                    Repeater {
-                        model: dataModel
-                        delegate: GridLayout {
-                            columns: 11
-                            columnSpacing: 5
-                            rowSpacing: 5
-
-                            Text {
-                                text: ioIndex
-                                Layout.preferredWidth: 50
-                                Layout.alignment: Qt.AlignHCenter
-                            }
-                            Text {
-                                text: paramType
                                 Layout.preferredWidth: 100
-                                Layout.alignment: Qt.AlignHCenter
-                            }
-                            Text {
-                                text: name
-                                Layout.preferredWidth: 200
-                                Layout.alignment: Qt.AlignHCenter
-                                elide: Text.ElideRight
-                                MouseArea {
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    ToolTip.visible: containsMouse
-                                    ToolTip.text: name
-                                }
-                            }
-                            Text {
-                                text: ioa_address
-                                Layout.preferredWidth: 100
-                                Layout.alignment: Qt.AlignHCenter
-                            }
-                            Text {
-                                text: asdu_address
-                                Layout.preferredWidth: 100
-                                Layout.alignment: Qt.AlignHCenter
-                            }
-                            Switch {
-                                checked: model.use_in_spont_101 || false
-                                Layout.preferredWidth: 100
-                                onCheckedChanged: dataModel.setProperty(index, "use_in_spont_101", checked)
-                            }
-                            Switch {
-                                checked: model.use_in_back_101 || false
-                                Layout.preferredWidth: 100
-                                onCheckedChanged: dataModel.setProperty(index, "use_in_back_101", checked)
-                            }
-                            Switch {
-                                checked: model.use_in_percyc_101 || false
-                                Layout.preferredWidth: 100
-                                onCheckedChanged: dataModel.setProperty(index, "use_in_percyc_101", checked)
-                            }
-                            Switch {
-                                checked: model.allow_address_101 || false
-                                Layout.preferredWidth: 100
-                                onCheckedChanged: dataModel.setProperty(index, "allow_address_101", checked)
-                            }
-                            ComboBox {
-                                id: surveyGroupCombo
-                                model: ["GENERAL_SURVEY", "GROUP_1", "GROUP_2", "GROUP_3", "GROUP_4", "GROUP_5", "GROUP_6", "GROUP_7", "GROUP_8"]
-                                Layout.preferredWidth: 150
-                                Layout.preferredHeight: 30
-
-                                currentIndex: {
-                                    if (!survey_group_101) return 0;
-                                    var idx = model.indexOf(survey_group_101);
-                                    return idx >= 0 ? idx : 0;
-                                }
-
-                                onCurrentIndexChanged: {
-                                    if (!loadingState && currentIndex >= 0) {
-                                        dataModel.setProperty(index, "survey_group_101", model[currentIndex]);
-                                    }
-                                }
-                            }
-                            Button {
-                                text: "Удалить"
-                                Layout.preferredWidth: 160
-                                onClicked: dataModel.remove(index)
-                                Material.background: Material.Red
-                            }
-                        }
-                    }
-                }
-            }
-
-            ScrollView {
-                clip: true
-                contentWidth: mek_104_grid.implicitWidth
-                contentHeight: mek_104_grid.implicitHeight
-                ScrollBar.horizontal.policy: ScrollBar.AsNeeded
-                ScrollBar.vertical.policy: ScrollBar.AsNeeded
-                leftPadding: 15
-                rightPadding: 15
-                visible: mek_104 && mek
-
-                ColumnLayout {
-                    id: mek_104_grid
-                    width: parent.width - 30
-                    spacing: 8
-                    anchors.fill: parent
-
-                    GridLayout {
-                        id: headerGrid_104
-                        columns: 11
-                        columnSpacing: 5
-                        rowSpacing: 5
-
-                        Label {
-                            text: "IO"
-                            Layout.preferredWidth: 50
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Тип"
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Наименование"
-                            Layout.preferredWidth: 200
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Адрес ОИ"
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Адрес АСДУ"
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Исп. в спорадике"
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Исп. в цикл/период"
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Исп. в фон. сканир"
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Разреш. адрес"
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: "Группа опроса"
-                            Layout.preferredWidth: 150
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                        Label {
-                            text: ""
-                            Layout.preferredWidth: 160
-                        }
-                    }
-
-                    Repeater {
-                        model: dataModel
-                        delegate: GridLayout {
-                            columns: 11
-                            columnSpacing: 5
-                            rowSpacing: 5
-
-                            Text {
-                                text: ioIndex
-                                Layout.preferredWidth: 50
-                                Layout.alignment: Qt.AlignHCenter
-                            }
-                            Text {
-                                text: paramType
-                                Layout.preferredWidth: 100
-                                Layout.alignment: Qt.AlignHCenter
-                            }
-                            Text {
-                                text: name
-                                Layout.preferredWidth: 200
-                                Layout.alignment: Qt.AlignHCenter
-                                elide: Text.ElideRight
-                                MouseArea {
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    ToolTip.visible: containsMouse
-                                    ToolTip.text: name
-                                }
-                            }
-                            Text {
-                                text: ioa_address
-                                Layout.preferredWidth: 100
-                                Layout.alignment: Qt.AlignHCenter
-                            }
-                            Text {
-                                text: asdu_address
-                                Layout.preferredWidth: 100
-                                Layout.alignment: Qt.AlignHCenter
-                            }
-                            Switch {
-                                checked: model.use_in_spont_104 || false
-                                Layout.preferredWidth: 100
-                                onCheckedChanged: dataModel.setProperty(index, "use_in_spont_104", checked)
-                            }
-                            Switch {
-                                checked: model.use_in_back_104 || false
-                                Layout.preferredWidth: 100
-                                onCheckedChanged: dataModel.setProperty(index, "use_in_back_104", checked)
-                            }
-                            Switch {
-                                checked: model.use_in_percyc_104 || false
-                                Layout.preferredWidth: 100
-                                onCheckedChanged: dataModel.setProperty(index, "use_in_percyc_104", checked)
-                            }
-                            Switch {
-                                checked: model.allow_address_104 || false
-                                Layout.preferredWidth: 100
-                                onCheckedChanged: dataModel.setProperty(index, "allow_address_104", checked)
-                            }
-                            ComboBox {
-                                id: surveyGroupCombo104
-                                model: ["GENERAL_SURVEY", "GROUP_1", "GROUP_2", "GROUP_3", "GROUP_4", "GROUP_5", "GROUP_6", "GROUP_7", "GROUP_8"]
-                                Layout.preferredWidth: 150
-                                Layout.preferredHeight: 30
-                                currentIndex: {
-                                    if (!survey_group_104) return 0;
-                                    var idx = model.indexOf(survey_group_104);
-                                    return idx >= 0 ? idx : 0;
-                                }
-
-                                onCurrentIndexChanged: {
-                                    if (!loadingState && currentIndex >= 0) {
-                                        dataModel.setProperty(index, "survey_group_104", model[currentIndex]);
-                                    }
-                                }
-                            }
-                            Button {
-                                text: "Удалить"
-                                Layout.preferredWidth: 160
                                 onClicked: dataModel.remove(index)
                                 Material.background: Material.Red
                             }
@@ -1351,6 +910,1340 @@ ApplicationWindow {
             }
         }
     }
+
+    Component {
+        id: mek101PageComponent
+        Item {
+            anchors.fill: parent
+            ColumnLayout {
+                id: mek_101_grid
+                width: parent.width - 30
+                spacing: 8
+                anchors.fill: parent
+
+                GridLayout {
+                    id: headerGrid_101
+                    columns: 11
+                    columnSpacing: 5
+                    rowSpacing: 5
+
+                    Label {
+                        text: "IO"
+                        Layout.preferredWidth: 50
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    Label {
+                        text: "Тип"
+                        Layout.preferredWidth: 100
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    Label {
+                        text: "Наименование"
+                        Layout.preferredWidth: 200
+                        horizontalAlignment: Text.AlignHCenter
+                        elide: Text.ElideRight
+                    }
+                    Label {
+                        text: "Адрес ОИ"
+                        Layout.preferredWidth: 100
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    Label {
+                        text: "Адрес АСДУ"
+                        Layout.preferredWidth: 100
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    Label {
+                        text: "Исп. в спорадике"
+                        Layout.preferredWidth: 100
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    Label {
+                        text: "Исп. в цикл/период"
+                        Layout.preferredWidth: 100
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    Label {
+                        text: "Исп. в фон. сканир"
+                        Layout.preferredWidth: 100
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    Label {
+                        text: "Разреш. адрес"
+                        Layout.preferredWidth: 100
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    Label {
+                        text: "Группа опроса"
+                        Layout.preferredWidth: 150
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    Label {
+                        text: ""
+                        Layout.preferredWidth: 160
+                    }
+                }
+
+                Repeater {
+                    model: dataModel
+                    delegate: GridLayout {
+                        columns: 11
+                        columnSpacing: 5
+                        rowSpacing: 5
+                        Text {
+                            text: ioIndex
+                            Layout.preferredWidth: 50
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                        Text {
+                            text: paramType
+                            Layout.preferredWidth: 100
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                        Text {
+                            text: name
+                            Layout.preferredWidth: 200
+                            horizontalAlignment: Text.AlignHCenter
+                            elide: Text.ElideRight
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                ToolTip.visible: containsMouse
+                                ToolTip.text: name
+                            }
+                        }
+                        Text {
+                            text: ioa_address
+                            Layout.preferredWidth: 100
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                        Text {
+                            text: asdu_address
+                            Layout.preferredWidth: 100
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                        Switch {
+                            checked: model.use_in_spont_101 || false
+                            Layout.preferredWidth: 100
+                            onCheckedChanged: dataModel.setProperty(index, "use_in_spont_101", checked)
+                        }
+                        Switch {
+                            checked: model.use_in_back_101 || false
+                            Layout.preferredWidth: 100
+                            onCheckedChanged: dataModel.setProperty(index, "use_in_back_101", checked)
+                        }
+                        Switch {
+                            checked: model.use_in_percyc_101 || false
+                            Layout.preferredWidth: 100
+                            onCheckedChanged: dataModel.setProperty(index, "use_in_percyc_101", checked)
+                        }
+                        Switch {
+                            checked: model.allow_address_101 || false
+                            Layout.preferredWidth: 100
+                            onCheckedChanged: dataModel.setProperty(index, "allow_address_101", checked)
+                        }
+                        ComboBox {
+                            id: surveyGroupCombo
+                            model: ["GENERAL_SURVEY", "GROUP_1", "GROUP_2", "GROUP_3", "GROUP_4",
+                                "GROUP_5", "GROUP_6", "GROUP_7", "GROUP_8"]
+                            Layout.preferredWidth: 150
+                            Layout.preferredHeight: 30
+
+                            property string _currentValue: survey_group_101 || ""
+                            property bool _initialized: false
+
+                            Component.onCompleted: {
+                                if (_currentValue) {
+                                    var idx = model.indexOf(_currentValue);
+                                    currentIndex = idx >= 0 ? idx : 0;
+                                } else {
+                                    currentIndex = 0;
+                                }
+                                _initialized = true;
+                            }
+
+                            on_CurrentValueChanged: {
+                                if (_initialized && _currentValue) {
+                                    var idx = model.indexOf(_currentValue);
+                                    currentIndex = idx >= 0 ? idx : 0;
+                                }
+                            }
+
+                            onCurrentIndexChanged: {
+                                if (_initialized && !loadingState && currentIndex >= 0) {
+                                    dataModel.setProperty(index, "survey_group_101", model[currentIndex]);
+                                }
+                            }
+                        }
+                        Button {
+                            text: "Удалить"
+                            Layout.preferredWidth: 160
+                            onClicked: dataModel.remove(index)
+                            Material.background: Material.Red
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: mek104PageComponent
+        Item {
+            anchors.fill: parent
+            ColumnLayout {
+                id: mek_104_grid
+                width: parent.width - 30
+                spacing: 8
+                anchors.fill: parent
+
+                GridLayout {
+                    id: headerGrid_104
+                    columns: 11
+                    columnSpacing: 5
+                    rowSpacing: 5
+
+                    Label {
+                        text: "IO"
+                        Layout.preferredWidth: 50
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    Label {
+                        text: "Тип"
+                        Layout.preferredWidth: 100
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    Label {
+                        text: "Наименование"
+                        Layout.preferredWidth: 200
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    Label {
+                        text: "Адрес ОИ"
+                        Layout.preferredWidth: 100
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    Label {
+                        text: "Адрес АСДУ"
+                        Layout.preferredWidth: 100
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    Label {
+                        text: "Исп. в спорадике"
+                        Layout.preferredWidth: 100
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    Label {
+                        text: "Исп. в цикл/период"
+                        Layout.preferredWidth: 100
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    Label {
+                        text: "Исп. в фон. сканир"
+                        Layout.preferredWidth: 100
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    Label {
+                        text: "Разреш. адрес"
+                        Layout.preferredWidth: 100
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    Label {
+                        text: "Группа опроса"
+                        Layout.preferredWidth: 150
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    Label {
+                        text: ""
+                        Layout.preferredWidth: 160
+                    }
+                }
+
+                Repeater {
+                    model: dataModel
+                    delegate: GridLayout {
+                        columns: 11
+                        columnSpacing: 5
+                        rowSpacing: 5
+
+                        Text {
+                            text: ioIndex
+                            Layout.preferredWidth: 50
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                        Text {
+                            text: paramType
+                            Layout.preferredWidth: 100
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                        Text {
+                            text: name
+                            Layout.preferredWidth: 200
+                            horizontalAlignment: Text.AlignHCenter
+                            elide: Text.ElideRight
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                ToolTip.visible: containsMouse
+                                ToolTip.text: name
+                            }
+                        }
+                        Text {
+                            text: ioa_address
+                            Layout.preferredWidth: 100
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                        Text {
+                            text: asdu_address
+                            Layout.preferredWidth: 100
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                        Switch {
+                            checked: model.use_in_spont_104 || false
+                            Layout.preferredWidth: 100
+                            onCheckedChanged: dataModel.setProperty(index, "use_in_spont_104", checked)
+                        }
+                        Switch {
+                            checked: model.use_in_back_104 || false
+                            Layout.preferredWidth: 100
+                            onCheckedChanged: dataModel.setProperty(index, "use_in_back_104", checked)
+                        }
+                        Switch {
+                            checked: model.use_in_percyc_104 || false
+                            Layout.preferredWidth: 100
+                            onCheckedChanged: dataModel.setProperty(index, "use_in_percyc_104", checked)
+                        }
+                        Switch {
+                            checked: model.allow_address_104 || false
+                            Layout.preferredWidth: 100
+                            onCheckedChanged: dataModel.setProperty(index, "allow_address_104", checked)
+                        }
+                        ComboBox {
+                            id: surveyGroupCombo104
+                            model: ["GENERAL_SURVEY", "GROUP_1", "GROUP_2", "GROUP_3", "GROUP_4",
+                                "GROUP_5", "GROUP_6", "GROUP_7", "GROUP_8"]
+                            Layout.preferredWidth: 150
+                            Layout.preferredHeight: 30
+
+                            property string _currentValue: survey_group_104 || ""
+                            property bool _initialized: false
+
+                            Component.onCompleted: {
+                                if (_currentValue) {
+                                    var idx = model.indexOf(_currentValue);
+                                    currentIndex = idx >= 0 ? idx : 0;
+                                } else {
+                                    currentIndex = 0;
+                                }
+                                _initialized = true;
+                            }
+
+                            on_CurrentValueChanged: {
+                                if (_initialized && _currentValue) {
+                                    var idx = model.indexOf(_currentValue);
+                                    currentIndex = idx >= 0 ? idx : 0;
+                                }
+                            }
+
+                            onCurrentIndexChanged: {
+                                if (_initialized && !loadingState && currentIndex >= 0) {
+                                    dataModel.setProperty(index, "survey_group_104", model[currentIndex]);
+                                }
+                            }
+                        }
+
+                        Button {
+                            text: "Удалить"
+                            Layout.preferredWidth: 160
+                            onClicked: dataModel.remove(index)
+                            Material.background: Material.Red
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    ColumnLayout {
+        anchors.fill: parent
+        spacing: 0
+        anchors.bottomMargin: 70
+        TabBar {
+            id: tabBar
+            Layout.fillWidth: true
+            currentIndex: 0
+            property int tabWidth: 225
+            // Основные статические вкладки
+            TabButton { text: "Входные сигналы"}
+            TabButton { text: "Выходные сигналы" }
+            TabButton { text: "Признаки" }
+            TabButton { text: "Уставки" }
+
+            TabButton {
+                visible: modbus
+                text: "Modbus"
+                width: visible ? tabBar.tabWidth : 0
+            }
+            TabButton {
+                visible: mek
+                text: "MEK"
+                width: visible ? tabBar.tabWidth : 0
+            }
+            TabButton {
+                visible: mek && mek_101
+                text: "MEK_101"
+                width: visible ? tabBar.tabWidth : 0
+            }
+            TabButton {
+                visible: mek && mek_104
+                text: "MEK_104"
+                width: visible ? tabBar.tabWidth : 0
+            }
+
+            function activateTab(tabName) {
+                for (var i = 0; i < count; i++) {
+                    if (itemAt(i).text === tabName && itemAt(i).visible) {
+                        currentIndex = i;
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            function updateFocus() {
+                if (mek && mek_104 && activateTab("MEK_104")) return;
+                if (mek && mek_101 && activateTab("MEK_101")) return;
+                if (mek && activateTab("MEK")) return;
+                if (modbus && activateTab("Modbus")) return;
+
+                // Фолбэк на первую вкладку если ничего не активно
+                currentIndex = 0;
+            }
+
+            onCurrentIndexChanged: {
+                if (currentIndex >= 0) {
+                    swipeView.currentIndex = currentIndex;
+                }
+            }
+        }
+
+        StackLayout {
+            id: swipeView
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            currentIndex: tabBar.currentIndex
+            anchors.margins: 10
+            onCurrentIndexChanged: {
+                currentType = ["Входные сигналы", "Выходные сигналы", "Признаки", "Уставка"][currentIndex]
+                console.log(loader1.active)
+
+                // Принудительное обновление всех ListView
+                for (var i = 0; i < count; i++) {
+                    var item = itemAt(i)
+                    if (item && item.hasOwnProperty("listView")) {
+                        item.listView.model = 0  // Временно обнуляем
+                        item.listView.model = dataModel
+                        item.listView.forceLayout()
+                    }
+                }
+            }
+            Loader {
+                id: loader1
+                active: tabBar.currentIndex === 0
+                sourceComponent: parameterPageComponent
+                asynchronous: true
+                // onActiveChanged: if (!active) sourceComponent = null
+                onLoaded: {
+                    item.paramType = "Входные сигналы"
+                    item.listView = listView
+                        item.addClicked.connect(() => {
+                        currentType = "Входные сигналы"
+
+                    })
+                }
+            }
+
+            Loader {
+                id: loader2
+                active: tabBar.currentIndex === 1
+                sourceComponent: parameterPageComponent
+                // onActiveChanged: if (!active) sourceComponent = null
+                asynchronous: true
+                onLoaded: {
+                    item.paramType = "Выходные сигналы"
+                    item.listView = listView
+                        item.addClicked.connect(() => {
+                        currentType = "Выходные сигналы"
+
+                    })
+                }
+            }
+
+            Loader {
+                id: loader3
+                active: tabBar.currentIndex === 2
+                sourceComponent: parameterPageComponent
+                // onActiveChanged: if (!active) sourceComponent = null
+                asynchronous: true
+                onLoaded: {
+                    item.paramType = "Признаки"
+                    item.listView = listView
+                        item.addClicked.connect(() => {
+                        currentType = "Признаки"
+
+                    })
+                }
+            }
+
+            Loader {
+                id: loader4
+                active: tabBar.currentIndex === 3
+                sourceComponent: parameterPageComponent
+                // onActiveChanged: if (!active) sourceComponent = null
+                asynchronous: true
+                onLoaded: {
+                    item.paramType = "Уставка"
+                    item.listView = listView
+                        item.addClicked.connect(() => {
+                        currentType = "Уставка"
+
+                    })
+                }
+            }
+            Loader {
+                id: mekLoader
+                active: tabBar.currentIndex === 4 && modbus
+                sourceComponent: modbusPageComponent
+                asynchronous: true
+
+                 // onActiveChanged: if (!active) sourceComponent = null  // Optional unload
+            }
+            Loader {
+                active: tabBar.currentIndex === 5 && mek
+                sourceComponent: mekPageComponent
+                asynchronous: true
+
+                // onActiveChanged: if (!active) sourceComponent = null  // Optional unload
+            }
+            Loader {
+                active: tabBar.currentIndex === 6
+                sourceComponent: mek101PageComponent
+                asynchronous: true
+
+                // onActiveChanged: if (!active) sourceComponent = null  // Optional unload
+            }
+            Loader {
+                active: tabBar.currentIndex === 7
+                sourceComponent: mek104PageComponent
+                asynchronous: true
+                // onActiveChanged: if (!active) sourceComponent = null  // Optional unload
+            }
+
+          //  ModBus Settings
+    //         ScrollView {
+    //             clip: true
+    //             contentWidth: grid.implicitWidth
+    //             contentHeight: grid.implicitHeight
+    //             leftPadding: 15
+    //             rightPadding: 15
+    //             visible: modbus
+    //             ScrollBar.horizontal.policy: ScrollBar.AsNeeded
+    //             ScrollBar.vertical.policy: ScrollBar.AsNeeded
+    //             property var typeIndexMap: {
+    //                     "Coil": 0,
+    //                     "Discrete input": 0,
+    //                     "Input register": 0,
+    //                     "Holding register": 0
+    //             }
+    //             ColumnLayout {
+    //                 id: grid
+    //                 width: parent.width - 30
+    //                 spacing: 5
+    //                 anchors.fill: parent
+    //                 Layout.preferredHeight: 30
+    //                 // Header Row
+    //                 RowLayout {
+    //                     spacing: 5
+    //                     Label {
+    //                         text: "IO"
+    //                         Layout.preferredWidth: 50
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Тип"
+    //                         Layout.preferredWidth: 100
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Наименование"
+    //                         Layout.preferredWidth: 200
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Тип данных"
+    //                         Layout.preferredWidth: 100
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Адрес"
+    //                         Layout.preferredWidth: 100
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Блок"
+    //                         Layout.preferredWidth: 100
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Item {
+    //                         Layout.preferredWidth: 160
+    //                     }
+    //                 }
+    //
+    //                 Repeater {
+    //                     model: dataModel
+    //                     delegate: RowLayout {
+    //                         spacing: 5
+    //                         Text {
+    //                             text: ioIndex
+    //                             Layout.preferredWidth: 50
+    //                             horizontalAlignment: Text.AlignHCenter
+    //                             elide: Text.ElideRight
+    //                         }
+    //                         Text {
+    //                             text: paramType
+    //                             Layout.preferredWidth: 100
+    //                             horizontalAlignment: Text.AlignHCenter
+    //                             elide: Text.ElideRight
+    //                         }
+    //                         Text {
+    //                             text: name
+    //                             Layout.preferredWidth: 200
+    //                             horizontalAlignment: Text.AlignHCenter
+    //                             MouseArea {
+    //                                 id: mouseArea
+    //                                 anchors.fill: parent
+    //                                 hoverEnabled: true
+    //                                 ToolTip {
+    //                                     visible: mouseArea.containsMouse
+    //                                     text: name
+    //                                 }
+    //                             }
+    //                             elide: Text.ElideRight
+    //                         }
+    //                         Text {
+    //                             text: type
+    //                             Layout.preferredWidth: 100
+    //                             horizontalAlignment: Text.AlignHCenter
+    //                             elide: Text.ElideRight
+    //                         }
+    //                         TextField {
+    //                             id: mbaddress
+    //                             text: dataModel.get(index).address
+    //                             Layout.preferredWidth: 100
+    //                             Layout.preferredHeight: 30
+    //                             horizontalAlignment: Text.AlignHCenter
+    //                             onTextChanged: dataModel.setProperty(index,
+    //                                 "address",
+    //                                 text)
+    //                         }
+    //                         ComboBox {
+    //                             id: combo
+    //                             model: ["Coil", "Discrete input", "Input register", "Holding register"]
+    //
+    //                             displayText: currentIndex === -1 ? "" : model[currentIndex]
+    //
+    //                             currentIndex: {
+    //                                 if (!blockName) return -1;
+    //                                 var idx = model.indexOf(blockName);
+    //                                 return idx >= 0 ? idx : -1;
+    //                             }
+    //
+    //                             onCurrentIndexChanged: {
+    //                                 if (!loadingState && currentIndex >= 0) {
+    //                                     dataModel.setProperty(index, "blockName", model[currentIndex])
+    //                                     assignIndexByType(model[currentIndex])
+    //                                 }
+    //                             }
+    //
+    //                             Layout.preferredWidth: 100
+    //                             Layout.preferredHeight: 30
+    //                         }
+    //                         Button {
+    //                             text: "Удалить"
+    //                             Layout.preferredWidth: 160
+    //                             onClicked: dataModel.remove(index)
+    //                             Material.background: Material.Red
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //
+    //       //  MEK settings
+    //         ScrollView {
+    //             clip: true
+    //             contentWidth: gridmek.implicitWidth
+    //             contentHeight: gridmek.implicitHeight
+    //             ScrollBar.horizontal.policy: ScrollBar.AsNeeded
+    //             ScrollBar.vertical.policy: ScrollBar.AsNeeded
+    //             leftPadding: 15
+    //             rightPadding: 15
+    //             visible: mek
+    //
+    //             ColumnLayout {
+    //                 id: gridmek
+    //                 width: parent.width - 30
+    //                 spacing: 8
+    //                 anchors.fill: parent
+    //                 Layout.preferredHeight: 30
+    //
+    //                 RowLayout {
+    //                     spacing: 8
+    //
+    //                     Label {
+    //                         text: "IO"
+    //                         Layout.preferredWidth: 50
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Тип"
+    //                         Layout.preferredWidth: 100
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Наименование"
+    //                         Layout.preferredWidth: 200
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Тип данных"
+    //                         Layout.preferredWidth: 100
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Адрес ОИ"
+    //                         Layout.preferredWidth: 100
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Адрес АСДУ"
+    //                         Layout.preferredWidth: 100
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Номер буфера"
+    //                         Layout.preferredWidth: 100
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Тип при спорадике"
+    //                         Layout.preferredWidth: 130
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Тип при фоновом"
+    //                         Layout.preferredWidth: 130
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Тип при пер/цик"
+    //                         Layout.preferredWidth: 130
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Тип при общем"
+    //                         Layout.preferredWidth: 130
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: ""
+    //                         Layout.preferredWidth: 160
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                 }
+    //
+    //                 Repeater {
+    //                     model: dataModel
+    //                     delegate: RowLayout {
+    //                         spacing: 8
+    //
+    //                         Text {
+    //                             text: ioIndex
+    //                             Layout.preferredWidth: 50
+    //                             horizontalAlignment: Text.AlignHCenter
+    //                         }
+    //                         Text {
+    //                             text: paramType
+    //                             Layout.preferredWidth: 100
+    //                             horizontalAlignment: Text.AlignHCenter
+    //                         }
+    //                         Text {
+    //                             text: name
+    //                             Layout.preferredWidth: 200
+    //                             horizontalAlignment: Text.AlignHCenter
+    //                             elide: Text.ElideRight
+    //                             MouseArea {
+    //                                 anchors.fill: parent
+    //                                 hoverEnabled: true
+    //                                 ToolTip.visible: containsMouse
+    //                                 ToolTip.text: name
+    //                             }
+    //                         }
+    //                         Text {
+    //                             text: type
+    //                             Layout.preferredWidth: 100
+    //                             horizontalAlignment: Text.AlignHCenter
+    //                         }
+    //                         TextField {
+    //                             text: ioa_address || ""
+    //                             Layout.preferredWidth: 100
+    //                             Layout.preferredHeight: 30
+    //                             horizontalAlignment: Text.AlignHCenter
+    //                             onTextChanged: dataModel.setProperty(index, "ioa_address", text)
+    //                         }
+    //                         TextField {
+    //                             text: asdu_address || ""
+    //                             Layout.preferredWidth: 100
+    //                             Layout.preferredHeight: 30
+    //                             horizontalAlignment: Text.AlignHCenter
+    //                             onTextChanged: dataModel.setProperty(index, "asdu_address", text)
+    //                         }
+    //                         ComboBox {
+    //                             id: secondClassCombo
+    //                             model: ["NOT_USE", "SECOND_CLASS_1", "SECOND_CLASS_2", "SECOND_CLASS_3", "SECOND_CLASS_4",
+    //                                 "SECOND_CLASS_5", "SECOND_CLASS_6", "SECOND_CLASS_7", "SECOND_CLASS_8"]
+    //                             property string _currentValue: second_class_num || ""
+    //                             property bool _initialized: false
+    //
+    //                             Component.onCompleted: {
+    //                                 if (_currentValue) {
+    //                                     var idx = model.indexOf(_currentValue);
+    //                                     currentIndex = idx >= 0 ? idx : 0;
+    //                                 } else {
+    //                                     currentIndex = 0;
+    //                                 }
+    //                                 _initialized = true;
+    //                             }
+    //
+    //                             on_CurrentValueChanged: {
+    //                                 if (_initialized && _currentValue) {
+    //                                     var idx = model.indexOf(_currentValue);
+    //                                     currentIndex = idx >= 0 ? idx : 0;
+    //                                 }
+    //                             }
+    //
+    //                             onCurrentIndexChanged: {
+    //                                 if (_initialized && !loadingState && currentIndex >= 0) {
+    //                                     dataModel.setProperty(index, "second_class_num", model[currentIndex]);
+    //                                 }
+    //                             }
+    //                             Layout.preferredWidth: 100
+    //                             Layout.preferredHeight: 30
+    //                         }
+    //
+    //                         ComboBox {
+    //                             id: typeSpontCombo
+    //                             model: ["NOT_USE", "M_SP_NA_1", "M_SP_TA1", "M_DP_NA_1", "M_DP_TA_1", "M_BO_NA_1",
+    //                                 "M_BO_TA_1", "M_ME_NA_1", "M_ME_TA_1", "M_ME_NB1", "M_ME_TB_1", "M_ME_NC_1",
+    //                                 "M_ME_TC_1", "M_ME_ND_1", "M_SP_TB_1", "M_DP_TB_1", "M_BO_TB_1", "M_ME_TD_1", "M_ME_TF_1"]
+    //
+    //                             property string _currentValue: type_spont || ""
+    //                             property bool _initialized: false
+    //                             Component.onCompleted: {
+    //                                 if (_currentValue) {
+    //                                     var idx = model.indexOf(_currentValue);
+    //                                     currentIndex = idx >= 0 ? idx : 0;
+    //                                 } else {
+    //                                     currentIndex = 0;
+    //                                 }
+    //                                 _initialized = true;
+    //                             }
+    //
+    //                             on_CurrentValueChanged: {
+    //                                 if (_initialized && _currentValue) {
+    //                                     var idx = model.indexOf(_currentValue);
+    //                                     currentIndex = idx >= 0 ? idx : 0;
+    //                                 }
+    //                             }
+    //
+    //                             onCurrentIndexChanged: {
+    //                                 if (_initialized && !loadingState && currentIndex >= 0) {
+    //                                     dataModel.setProperty(index, "type_spont", model[currentIndex]);
+    //                                 }
+    //                             }
+    //                             Layout.preferredWidth: 130
+    //                             Layout.preferredHeight: 30
+    //                         }
+    //                         ComboBox {
+    //                             id: typeBackCombo
+    //                             model: ["NOT_USE", "M_SP_NA_1", "M_DP_NA_1", "M_BO_NA_1", "M_ME_NA_1",
+    //                                 "M_ME_NB_1", "M_ME_NC_1", "M_ME_ND_1"]
+    //                             property string _currentValue: type_back || ""
+    //                             property bool _initialized: false
+    //                             Component.onCompleted: {
+    //                                 if (_currentValue) {
+    //                                     var idx = model.indexOf(_currentValue);
+    //                                     currentIndex = idx >= 0 ? idx : 0;
+    //                                 } else {
+    //                                     currentIndex = 0;
+    //                                 }
+    //                                 _initialized = true;
+    //                             }
+    //
+    //                             on_CurrentValueChanged: {
+    //                                 if (_initialized && _currentValue) {
+    //                                     var idx = model.indexOf(_currentValue);
+    //                                     currentIndex = idx >= 0 ? idx : 0;
+    //                                 }
+    //                             }
+    //
+    //                             onCurrentIndexChanged: {
+    //                                 if (_initialized && !loadingState && currentIndex >= 0) {
+    //                                     dataModel.setProperty(index, "type_back", model[currentIndex]);
+    //                                 }
+    //                             }
+    //
+    //                             Layout.preferredWidth: 130
+    //                             Layout.preferredHeight: 30
+    //                         }
+    //
+    //                         ComboBox {
+    //                             id: typepercyc
+    //                             model: ["NOT_USE", "M_ME_NA_1", "M_ME_NB_1", "M_ME_NC_1", "M_ME_ND_1"]
+    //                             property string _currentValue: type_percyc || ""
+    //                             property bool _initialized: false
+    //                             Component.onCompleted: {
+    //                                 if (_currentValue) {
+    //                                     var idx = model.indexOf(_currentValue);
+    //                                     currentIndex = idx >= 0 ? idx : 0;
+    //                                 } else {
+    //                                     currentIndex = 0;
+    //                                 }
+    //                                 _initialized = true;
+    //                             }
+    //
+    //                             on_CurrentValueChanged: {
+    //                                 if (_initialized && _currentValue) {
+    //                                     var idx = model.indexOf(_currentValue);
+    //                                     currentIndex = idx >= 0 ? idx : 0;
+    //                                 }
+    //                             }
+    //
+    //                             onCurrentIndexChanged: {
+    //                                 if (_initialized && !loadingState && currentIndex >= 0) {
+    //                                     dataModel.setProperty(index, "type_percyc", model[currentIndex]);
+    //                                 }
+    //                             }
+    //                             Layout.preferredWidth: 130
+    //                             Layout.preferredHeight: 30
+    //                         }
+    //                         ComboBox {
+    //                             id: typedef
+    //                             model: ["NOT_USE", "M_SP_NA_1", "M_SP_TA1", "M_DP_NA_1", "M_DP_TA_1", "M_BO_NA_1",
+    //                                 "M_BO_TA_1", "M_ME_NA_1", "M_ME_TA_1", "M_ME_NB1", "M_ME_TB_1", "M_ME_NC_1",
+    //                                 "M_ME_TC_1", "M_ME_ND_1", "M_SP_TB_1", "M_DP_TB_1", "M_BO_TB_1", "M_ME_TD_1", "M_ME_TF_1"]
+    //                             property string _currentValue: type_def || ""
+    //                             property bool _initialized: false
+    //                             Component.onCompleted: {
+    //                                 if (_currentValue) {
+    //                                     var idx = model.indexOf(_currentValue);
+    //                                     currentIndex = idx >= 0 ? idx : 0;
+    //                                 } else {
+    //                                     currentIndex = 0;
+    //                                 }
+    //                                 _initialized = true;
+    //                             }
+    //
+    //                             on_CurrentValueChanged: {
+    //                                 if (_initialized && _currentValue) {
+    //                                     var idx = model.indexOf(_currentValue);
+    //                                     currentIndex = idx >= 0 ? idx : 0;
+    //                                 }
+    //                             }
+    //
+    //                             onCurrentIndexChanged: {
+    //                                 if (_initialized && !loadingState && currentIndex >= 0) {
+    //                                     dataModel.setProperty(index, "type_def", model[currentIndex]);
+    //                                 }
+    //                             }
+    //                             Layout.preferredWidth: 130
+    //                             Layout.preferredHeight: 30
+    //                         }
+    //                         Button {
+    //                             text: "Удалить"
+    //                             Layout.preferredWidth: 160
+    //                             onClicked: dataModel.remove(index)
+    //                             Material.background: Material.Red
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //
+    //         ScrollView {
+    //             clip: true
+    //             contentWidth: Math.min(2000, mekGrid.implicitWidth)
+    //             contentHeight: mek_101_grid.implicitHeight
+    //             ScrollBar.horizontal.policy: ScrollBar.AsNeeded
+    //             ScrollBar.vertical.policy: ScrollBar.AsNeeded
+    //             leftPadding: 15
+    //             rightPadding: 15
+    //             visible: mek_101 && mek
+    //
+    //             ColumnLayout {
+    //                 id: mek_101_grid
+    //                 width: parent.width - 30
+    //                 spacing: 8
+    //                 anchors.fill: parent
+    //
+    //                 GridLayout {
+    //                     id: headerGrid_101
+    //                     columns: 11
+    //                     columnSpacing: 5
+    //                     rowSpacing: 5
+    //
+    //                     Label {
+    //                         text: "IO"
+    //                         Layout.preferredWidth: 50
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Тип"
+    //                         Layout.preferredWidth: 100
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Наименование"
+    //                         Layout.preferredWidth: 200
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                         elide: Text.ElideRight
+    //                     }
+    //                     Label {
+    //                         text: "Адрес ОИ"
+    //                         Layout.preferredWidth: 100
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Адрес АСДУ"
+    //                         Layout.preferredWidth: 100
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Исп. в спорадике"
+    //                         Layout.preferredWidth: 100
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Исп. в цикл/период"
+    //                         Layout.preferredWidth: 100
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Исп. в фон. сканир"
+    //                         Layout.preferredWidth: 100
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Разреш. адрес"
+    //                         Layout.preferredWidth: 100
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Группа опроса"
+    //                         Layout.preferredWidth: 150
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: ""
+    //                         Layout.preferredWidth: 160
+    //                     }
+    //                 }
+    //
+    //                 Repeater {
+    //                     model: dataModel
+    //                     delegate: GridLayout {
+    //                         columns: 11
+    //                         columnSpacing: 5
+    //                         rowSpacing: 5
+    //                         Text {
+    //                             text: ioIndex
+    //                             Layout.preferredWidth: 50
+    //                             horizontalAlignment: Text.AlignHCenter
+    //                         }
+    //                         Text {
+    //                             text: paramType
+    //                             Layout.preferredWidth: 100
+    //                             horizontalAlignment: Text.AlignHCenter
+    //                         }
+    //                         Text {
+    //                             text: name
+    //                             Layout.preferredWidth: 200
+    //                             horizontalAlignment: Text.AlignHCenter
+    //                             elide: Text.ElideRight
+    //                             MouseArea {
+    //                                 anchors.fill: parent
+    //                                 hoverEnabled: true
+    //                                 ToolTip.visible: containsMouse
+    //                                 ToolTip.text: name
+    //                             }
+    //                         }
+    //                         Text {
+    //                             text: ioa_address
+    //                             Layout.preferredWidth: 100
+    //                             horizontalAlignment: Text.AlignHCenter
+    //                         }
+    //                         Text {
+    //                             text: asdu_address
+    //                             Layout.preferredWidth: 100
+    //                             horizontalAlignment: Text.AlignHCenter
+    //                         }
+    //                         Switch {
+    //                             checked: model.use_in_spont_101 || false
+    //                             Layout.preferredWidth: 100
+    //                             onCheckedChanged: dataModel.setProperty(index, "use_in_spont_101", checked)
+    //                         }
+    //                         Switch {
+    //                             checked: model.use_in_back_101 || false
+    //                             Layout.preferredWidth: 100
+    //                             onCheckedChanged: dataModel.setProperty(index, "use_in_back_101", checked)
+    //                         }
+    //                         Switch {
+    //                             checked: model.use_in_percyc_101 || false
+    //                             Layout.preferredWidth: 100
+    //                             onCheckedChanged: dataModel.setProperty(index, "use_in_percyc_101", checked)
+    //                         }
+    //                         Switch {
+    //                             checked: model.allow_address_101 || false
+    //                             Layout.preferredWidth: 100
+    //                             onCheckedChanged: dataModel.setProperty(index, "allow_address_101", checked)
+    //                         }
+    //                         ComboBox {
+    //                             id: surveyGroupCombo
+    //                             model: ["GENERAL_SURVEY", "GROUP_1", "GROUP_2", "GROUP_3", "GROUP_4",
+    //                                 "GROUP_5", "GROUP_6", "GROUP_7", "GROUP_8"]
+    //                             Layout.preferredWidth: 150
+    //                             Layout.preferredHeight: 30
+    //
+    //                             property string _currentValue: survey_group_101 || ""
+    //                             property bool _initialized: false
+    //
+    //                             Component.onCompleted: {
+    //                                 if (_currentValue) {
+    //                                     var idx = model.indexOf(_currentValue);
+    //                                     currentIndex = idx >= 0 ? idx : 0;
+    //                                 } else {
+    //                                     currentIndex = 0;
+    //                                 }
+    //                                 _initialized = true;
+    //                             }
+    //
+    //                             on_CurrentValueChanged: {
+    //                                 if (_initialized && _currentValue) {
+    //                                     var idx = model.indexOf(_currentValue);
+    //                                     currentIndex = idx >= 0 ? idx : 0;
+    //                                 }
+    //                             }
+    //
+    //                             onCurrentIndexChanged: {
+    //                                 if (_initialized && !loadingState && currentIndex >= 0) {
+    //                                     dataModel.setProperty(index, "survey_group_101", model[currentIndex]);
+    //                                 }
+    //                             }
+    //                         }
+    //                         Button {
+    //                             text: "Удалить"
+    //                             Layout.preferredWidth: 160
+    //                             onClicked: dataModel.remove(index)
+    //                             Material.background: Material.Red
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //
+    //         ScrollView {
+    //             clip: true
+    //             contentWidth: mek_104_grid.implicitWidth
+    //             contentHeight: mek_104_grid.implicitHeight
+    //             ScrollBar.horizontal.policy: ScrollBar.AsNeeded
+    //             ScrollBar.vertical.policy: ScrollBar.AsNeeded
+    //             leftPadding: 15
+    //             rightPadding: 15
+    //             visible: mek_104 && mek
+    //
+    //             ColumnLayout {
+    //                 id: mek_104_grid
+    //                 width: parent.width - 30
+    //                 spacing: 8
+    //                 anchors.fill: parent
+    //
+    //                 GridLayout {
+    //                     id: headerGrid_104
+    //                     columns: 11
+    //                     columnSpacing: 5
+    //                     rowSpacing: 5
+    //
+    //                     Label {
+    //                         text: "IO"
+    //                         Layout.preferredWidth: 50
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Тип"
+    //                         Layout.preferredWidth: 100
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Наименование"
+    //                         Layout.preferredWidth: 200
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Адрес ОИ"
+    //                         Layout.preferredWidth: 100
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Адрес АСДУ"
+    //                         Layout.preferredWidth: 100
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Исп. в спорадике"
+    //                         Layout.preferredWidth: 100
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Исп. в цикл/период"
+    //                         Layout.preferredWidth: 100
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Исп. в фон. сканир"
+    //                         Layout.preferredWidth: 100
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Разреш. адрес"
+    //                         Layout.preferredWidth: 100
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: "Группа опроса"
+    //                         Layout.preferredWidth: 150
+    //                         horizontalAlignment: Text.AlignHCenter
+    //                     }
+    //                     Label {
+    //                         text: ""
+    //                         Layout.preferredWidth: 160
+    //                     }
+    //                 }
+    //
+    //                 Repeater {
+    //                     model: dataModel
+    //                     delegate: GridLayout {
+    //                         columns: 11
+    //                         columnSpacing: 5
+    //                         rowSpacing: 5
+    //
+    //                         Text {
+    //                             text: ioIndex
+    //                             Layout.preferredWidth: 50
+    //                             horizontalAlignment: Text.AlignHCenter
+    //                         }
+    //                         Text {
+    //                             text: paramType
+    //                             Layout.preferredWidth: 100
+    //                             horizontalAlignment: Text.AlignHCenter
+    //                         }
+    //                         Text {
+    //                             text: name
+    //                             Layout.preferredWidth: 200
+    //                             horizontalAlignment: Text.AlignHCenter
+    //                             elide: Text.ElideRight
+    //                             MouseArea {
+    //                                 anchors.fill: parent
+    //                                 hoverEnabled: true
+    //                                 ToolTip.visible: containsMouse
+    //                                 ToolTip.text: name
+    //                             }
+    //                         }
+    //                         Text {
+    //                             text: ioa_address
+    //                             Layout.preferredWidth: 100
+    //                             horizontalAlignment: Text.AlignHCenter
+    //                         }
+    //                         Text {
+    //                             text: asdu_address
+    //                             Layout.preferredWidth: 100
+    //                             horizontalAlignment: Text.AlignHCenter
+    //                         }
+    //                         Switch {
+    //                             checked: model.use_in_spont_104 || false
+    //                             Layout.preferredWidth: 100
+    //                             onCheckedChanged: dataModel.setProperty(index, "use_in_spont_104", checked)
+    //                         }
+    //                         Switch {
+    //                             checked: model.use_in_back_104 || false
+    //                             Layout.preferredWidth: 100
+    //                             onCheckedChanged: dataModel.setProperty(index, "use_in_back_104", checked)
+    //                         }
+    //                         Switch {
+    //                             checked: model.use_in_percyc_104 || false
+    //                             Layout.preferredWidth: 100
+    //                             onCheckedChanged: dataModel.setProperty(index, "use_in_percyc_104", checked)
+    //                         }
+    //                         Switch {
+    //                             checked: model.allow_address_104 || false
+    //                             Layout.preferredWidth: 100
+    //                             onCheckedChanged: dataModel.setProperty(index, "allow_address_104", checked)
+    //                         }
+    //                         ComboBox {
+    //                             id: surveyGroupCombo104
+    //                             model: ["GENERAL_SURVEY", "GROUP_1", "GROUP_2", "GROUP_3", "GROUP_4",
+    //                                 "GROUP_5", "GROUP_6", "GROUP_7", "GROUP_8"]
+    //                             Layout.preferredWidth: 150
+    //                             Layout.preferredHeight: 30
+    //
+    //                             property string _currentValue: survey_group_104 || ""
+    //                             property bool _initialized: false
+    //
+    //                             Component.onCompleted: {
+    //                                 if (_currentValue) {
+    //                                     var idx = model.indexOf(_currentValue);
+    //                                     currentIndex = idx >= 0 ? idx : 0;
+    //                                 } else {
+    //                                     currentIndex = 0;
+    //                                 }
+    //                                 _initialized = true;
+    //                             }
+    //
+    //                             on_CurrentValueChanged: {
+    //                                 if (_initialized && _currentValue) {
+    //                                     var idx = model.indexOf(_currentValue);
+    //                                     currentIndex = idx >= 0 ? idx : 0;
+    //                                 }
+    //                             }
+    //
+    //                             onCurrentIndexChanged: {
+    //                                 if (_initialized && !loadingState && currentIndex >= 0) {
+    //                                     dataModel.setProperty(index, "survey_group_104", model[currentIndex]);
+    //                                 }
+    //                             }
+    //                         }
+    //
+    //                         Button {
+    //                             text: "Удалить"
+    //                             Layout.preferredWidth: 160
+    //                             onClicked: dataModel.remove(index)
+    //                             Material.background: Material.Red
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //         }
+         }
+     }
 
     // Панель с кнопками внизу окна
     Rectangle {
@@ -1394,6 +2287,8 @@ ApplicationWindow {
                     } else {
                         mek_101 = false;
                         mek_104 = false;
+                        mekLoader.active = false;
+                        mekLoader.sourceComponent= null;
                     }
                 }
             }
@@ -1422,13 +2317,13 @@ ApplicationWindow {
             Button {
                 text: "Debug Full Model"
                 onClicked: {
-                    if (dataModel.count === 0) {
+                    if (testModel.count === 0) {
                         console.log("Model is empty!")
                         return
                     }
                     console.log("----- FULL MODEL DUMP -----");
-                    for (var i = 0; i < dataModel.count; i++) {
-                        var item = dataModel.get(i);
+                    for (var i = 0; i < testModel.count; i++) {
+                        var item = testModel.get(i);
                         console.log(`\nItem ${i}: ${item.paramType} "${item.name}"`);
                         var props = Object.keys(item);
                         for (var j = 0; j < props.length; j++) {
@@ -1622,7 +2517,7 @@ ApplicationWindow {
                 }
             }
         }
-        existingAddresses.sort((a, b) => a - b);
+            existingAddresses.sort((a, b) => a - b);
 
         let nextAddr = 1;
         for (let addr of existingAddresses) {
