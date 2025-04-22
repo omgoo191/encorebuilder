@@ -18,9 +18,18 @@ ApplicationWindow {
     property string stateFileName: "app_state.json"
     property bool loadingState: false
     property bool closeapp: false
-    property string currentType: "Входные сигналы"
+    property string currentType: "Аналоговые входы"
+    property int ethcounter: 0
+    property int rscounter: 0
 
-    // Стартовый диалог
+    ListModel {
+        id: dataModel
+        dynamicRoles: false
+        onCountChanged: {
+            updateNextIoIndex();
+
+        }
+    }
     Dialog {
         id: startDialog
         title: "Выберите действие"
@@ -54,6 +63,231 @@ ApplicationWindow {
         }
     }
 
+    Dialog {
+        id: rsConfigDialog
+        width: 500
+        height: 600
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 10
+            GridLayout {
+                columns: 2
+                columnSpacing: 10
+                rowSpacing: 10
+                anchors.fill: parent
+
+                Label { text: "Четность" }
+                ComboBox {
+                    id: parityField
+                    model: ["None", "Even", "Odd"]
+                }
+                Label { text: "Скорость" }
+                ComboBox {
+                    id: baudrateField
+                    model: [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200]
+                }
+                Label { text: "Длина слова" }
+                TextField {
+                    id: lenField
+                }
+                Label { text: "Стоп-бит" }
+                ComboBox {
+                    id: stopField
+                    model: ["1", "1.5", "2"]
+                }
+                Label { text: "Адрес устройства"  }
+                TextField {
+                    id: addField
+                }
+            }
+            Button {
+                text: "Сохранить"
+                Layout.alignment: Qt.AlignRight
+                onClicked: {
+                    // Добавляем все параметры в dataModel
+                    rsConfigDialog.addToModel("RS" + rscounter + " четность", parityField.currentText, "PA_" + "RS" + rscounter + "_PARITY", "unsigned short", "Да", "Нет");
+                    rsConfigDialog.addToModel("RS" + rscounter +" скорость", baudrateField.currentText, "PA_" + "RS" + rscounter + "_BAUDRATE", "unsigned short", "Да", "Нет");
+                    rsConfigDialog.addToModel("RS" + rscounter +" длина слова", lenField.text, "PA_" + "RS" + rscounter + "_WORD_LEN", "unsigned short", "Да", "Нет");
+                    rsConfigDialog.addToModel("RS" + rscounter +" стоп-бит", stopField.currentText, "PA_" + "RS" + rscounter + "_STOP_BITS", "unsigned short", "Да", "Нет");
+                    rsConfigDialog.addToModel("RS" + rscounter +" адрес устройства", addField.text, "PA_" + "RS" + rscounter + "_MAC_NIC", "unsigned int", "Да", "Нет");
+                    console.log("Данные сохранены в модель!");
+                    rsConfigDialog.close();  // Закрываем диалог
+                }
+            }
+        }
+        function addToModel(name, value, codename, type, saving, logicuse) {
+            dataModel.append({
+                "paramType": "Уставка",
+                "name": name,
+                "ioIndex": rootwindow.nextIoIndex.toString(),
+                "codeName": codename,
+                "def_value": value,
+                "type": type,
+                "saving": saving,
+                "logicuse": logicuse,
+                "aperture": "",
+                "ktt": "",
+                "ad": "",
+                "oc": "",
+                "tosp": "",
+                "tolp": ""
+            });
+        }
+    }
+
+    Dialog {
+        id: ethConfigDialog
+        width: 500
+        height: 600
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 10
+        GridLayout {
+            columns: 2
+            columnSpacing: 10
+            rowSpacing: 10
+            anchors.fill: parent
+
+            Label { text: "IP адрес" }
+            TextField {
+                id: ipAddressField
+                inputMask: "000.000.000.000;_"
+                placeholderText: "192.168.0.1"
+            }
+
+            Label { text: "Маска подсети" }
+            TextField {
+                id: subnetMaskField
+                inputMask: "000.000.000.000;_"
+                placeholderText: "255.255.255.0"
+            }
+
+            // Шлюз
+            Label { text: "Шлюз" }
+            TextField {
+                id: gatewayField
+                inputMask: "000.000.000.000;_"
+                placeholderText: "192.168.0.254"
+            }
+
+            // Старшие 3 байта MAC
+            Label { text: "Старшие 3 байта MAC адреса" }
+            TextField {
+                id: macHighField
+                inputMask: "HH:HH:HH;_"
+                placeholderText: "00:1A:2B"
+            }
+
+            // Младшие 3 байта MAC
+            Label { text: "Младшие 3 байта MAC адреса" }
+            TextField {
+                id: macLowField
+                inputMask: "HH:HH:HH;_"
+                placeholderText: "3C:4D:5E"
+            }
+
+            // IP клиентов
+            Label { text: "IP адрес клиента 1" }
+            TextField {
+                id: clientIp1Field
+                inputMask: "000.000.000.000;_"
+                placeholderText: "192.168.0.10"
+            }
+
+            Label { text: "IP адрес клиента 2" }
+            TextField {
+                id: clientIp2Field
+                inputMask: "000.000.000.000;_"
+                placeholderText: "192.168.0.11"
+            }
+
+            Label { text: "IP адрес клиента 3" }
+            TextField {
+                id: clientIp3Field
+                inputMask: "000.000.000.000;_"
+                placeholderText: "192.168.0.12"
+            }
+
+            Label { text: "IP адрес клиента 4" }
+            TextField {
+                id: clientIp4Field
+                inputMask: "000.000.000.000;_"
+                placeholderText: "192.168.0.13"
+            }
+            Label { text: "ETH адрес устройства"}
+            TextField {
+                id: addrField
+            }
+            Label { text: "Порт 1" }
+            TextField {
+                id: port1Field
+                validator: IntValidator { bottom: 1; top: 65535 }
+            }
+
+            Label { text: "Порт 2" }
+            TextField {
+                id: port2Field
+                validator: IntValidator { bottom: 1; top: 65535 }
+            }
+
+            Label { text: "Порт 3" }
+            TextField {
+                id: port3Field
+                validator: IntValidator { bottom: 1; top: 65535 }
+            }
+
+            Label { text: "Порт 4" }
+            TextField {
+                id: port4Field
+                validator: IntValidator { bottom: 1; top: 65535 }
+            }
+        }
+            Button {
+                text: "Сохранить"
+                Layout.alignment: Qt.AlignRight
+                onClicked: {
+                    // Добавляем все параметры в dataModel
+                    ethConfigDialog.addToModel("ETH" + ethcounter + " IP адрес", ipAddressField.text, "ETH" + ethcounter + "_IP_ADDR", "unsigned int", "Да", "Нет");
+                    ethConfigDialog.addToModel("ETH" + ethcounter +" Маска подсети", subnetMaskField.text, "ETH" + ethcounter + "_MASK", "unsigned int", "Да", "Нет");
+                    ethConfigDialog.addToModel("ETH" + ethcounter +" Шлюз", gatewayField.text, "ETH" + ethcounter + "_GATEWAY", "unsigned int", "Да", "Нет");
+                    ethConfigDialog.addToModel("ETH" + ethcounter +" Старшие 3 байта MAC", macHighField.text, "ETH" + ethcounter + "_MAC_OUI", "unsigned int", "Да", "Нет");
+                    ethConfigDialog.addToModel("ETH" + ethcounter +" Младшие 3 байта MAC", macLowField.text, "ETH" + ethcounter + "_MAC_NIC", "unsigned int", "Да", "Нет");
+                    ethConfigDialog.addToModel("ETH" + ethcounter +" IP клиента 1", clientIp1Field.text, "ETH" + ethcounter + "_IP_CLIENT1", "unsigned int", "Да", "Нет");
+                    ethConfigDialog.addToModel("ETH" + ethcounter +" IP клиента 2", clientIp2Field.text, "ETH" + ethcounter + "_IP_CLIENT2", "unsigned int", "Да", "Нет");
+                    ethConfigDialog.addToModel("ETH" + ethcounter +" IP клиента 3", clientIp3Field.text, "ETH" + ethcounter + "_IP_CLIENT3", "unsigned int", "Да", "Нет");
+                    ethConfigDialog.addToModel("ETH" + ethcounter +" IP клиента 4", clientIp4Field.text, "ETH" + ethcounter + "_IP_CLIENT4", "unsigned int", "Да", "Нет");
+                    ethConfigDialog.addToModel("ETH" + ethcounter +" адрес устройства", clientIp4Field.text, "ETH" + ethcounter + "_ADDR", "unsigned short", "Да", "Нет");
+                    ethConfigDialog.addToModel("ETH" + ethcounter +" Порт 1", port1Field.text, "ETH" + ethcounter + "_IP_PORT1", "unsigned short", "Да", "Нет");
+                    ethConfigDialog.addToModel("ETH" + ethcounter +" Порт 2", port2Field.text, "ETH" + ethcounter + "_IP_PORT2", "unsigned short", "Да", "Нет");
+                    ethConfigDialog.addToModel("ETH" + ethcounter +" Порт 3", port3Field.text, "ETH" + ethcounter + "_IP_PORT3", "unsigned short", "Да", "Нет");
+                    ethConfigDialog.addToModel("ETH" + ethcounter +" Порт 4", port4Field.text, "ETH" + ethcounter + "_IP_PORT4", "unsigned short", "Да", "Нет");
+
+                    console.log("Данные сохранены в модель!");
+                    ethConfigDialog.close();  // Закрываем диалог
+                }
+            }
+        }
+        function addToModel(name, value, codename, type, saving, logicuse) {
+            dataModel.append({
+                "paramType": "Уставка",
+                "name": name,
+                "ioIndex": rootwindow.nextIoIndex.toString(),
+                "codeName": codename,
+                "def_value": value,
+                "type": type,
+                "saving": saving,
+                "logicuse": logicuse,
+                "aperture": "",
+                "ktt": "",
+                "ad": "",
+                "oc": "",
+                "tosp": "",
+                "tolp": ""
+            });
+        }
+    }
 
     // Диалог открытия файла
     Platform.FileDialog {
@@ -187,21 +421,14 @@ ApplicationWindow {
     ListModel{
         id:testModel
     }
-    ListModel {
-        id: dataModel
-        dynamicRoles: false
-        onCountChanged: {
-            updateNextIoIndex();
 
-        }
-    }
     Component {
         id: parameterPageComponent
 
 
         ColumnLayout {
             id: pageRoot
-            property string paramType: "Входной сигнал"
+            property string paramType: "Аналоговые входы"
             signal addClicked
             ScrollView {
                 Layout.fillWidth: true
@@ -495,12 +722,7 @@ ApplicationWindow {
                 Material.foreground: "white"
                 onClicked: {
                     addClicked()
-                    testModel.append({
-                        "source": "",
-                    "paramType": pageRoot.paramType,
-                    "ioIndex": rootwindow.nextIoIndex.toString()});
                     dataModel.append( {
-                        "source": "",
                         "paramType": pageRoot.paramType,
                         "ioIndex": rootwindow.nextIoIndex.toString(),
                         "name": "",
@@ -735,21 +957,15 @@ ApplicationWindow {
                         RowLayout {
                             anchors.fill: parent
                             spacing: 8
-
-                            // IO
                             Text {
                                 text: model.ioIndex
                                 Layout.preferredWidth: 50
                             }
-
-                            // Тип
                             Text {
                                 text: model.paramType
                                 Layout.preferredWidth: 100
                                 horizontalAlignment: Text.AlignHCenter
                             }
-
-                            // Наименование
                             Text {
                                 text: model.name
                                 Layout.preferredWidth: 200
@@ -761,22 +977,16 @@ ApplicationWindow {
                                     hoverEnabled: true
                                 }
                             }
-
-                            // Тип данных
                             Text {
                                 text: model.type
                                 Layout.preferredWidth: 100
                                 horizontalAlignment: Text.AlignHCenter
                             }
-
-                            // Адрес ОИ
                             TextField {
                                 text: model.ioa_address || ""
                                 Layout.preferredWidth: 100
                                 onTextChanged: dataModel.setProperty(index, "ioa_address", text)
                             }
-
-                            // Адрес АСДУ
                             TextField {
                                 text: model.asdu_address || ""
                                 Layout.preferredWidth: 100
@@ -784,8 +994,6 @@ ApplicationWindow {
                                 horizontalAlignment: Text.AlignHCenter
                                 onTextChanged: dataModel.setProperty(index, "asdu_address", text)
                             }
-
-                            // Номер буфера
                             Button {
                                 id: bufferBtn
                                 text: model.second_class_num || "Выбрать"
@@ -805,15 +1013,12 @@ ApplicationWindow {
                                 MenuItem { text: "SECOND_CLASS_7"; onTriggered: set(index,"second_class_num", text) }
                                 MenuItem { text: "SECOND_CLASS_8"; onTriggered: set(index,"second_class_num", text) }
                             }
-
-                            // Тип при спорадике
                             Button {
                                 id: spontBtn
                                 text: model.type_spont || "Выбрать"
                                 Layout.preferredWidth: 130
                                 onClicked: spontMenu.open()
                             }
-
                             Menu {
                                 id: spontMenu
                                 y: spontBtn.height
@@ -829,15 +1034,12 @@ ApplicationWindow {
                                     }
                                 }
                             }
-
-                            // Тип при фоновом
                             Button {
                                 id: backBtn
                                 text: model.type_back || "Выбрать"
                                 Layout.preferredWidth: 130
                                 onClicked: backMenu.open()
                             }
-
                             Menu {
                                 id: backMenu
                                 y: backBtn.height
@@ -852,8 +1054,6 @@ ApplicationWindow {
                                     }
                                 }
                             }
-
-                            // Тип при пер/цик
                             Button {
                                 id: percycBtn
                                 text: model.type_percyc || "Выбрать"
@@ -872,8 +1072,6 @@ ApplicationWindow {
                                     }
                                 }
                             }
-
-                            // Тип при общем
                             Button {
                                 id: defBtn
                                 text: model.type_def || "Выбрать"
@@ -896,8 +1094,6 @@ ApplicationWindow {
                                     }
                                 }
                             }
-
-                            // Delete Button
                             Button {
                                 text: "Удалить"
                                 Layout.preferredWidth: 100
@@ -1272,10 +1468,11 @@ ApplicationWindow {
             id: tabBar
             Layout.fillWidth: true
             currentIndex: 0
-            property int tabWidth: 225
-            // Основные статические вкладки
-            TabButton { text: "Входные сигналы"}
-            TabButton { text: "Выходные сигналы" }
+            property int tabWidth: 180
+            TabButton { text: "Аналоговые входы"}
+            TabButton { text: "Дискретные входы" }
+            TabButton { text: "Аналоговый выход"}
+            TabButton { text: "Дискретный выход" }
             TabButton { text: "Признаки" }
             TabButton { text: "Уставки" }
 
@@ -1316,7 +1513,6 @@ ApplicationWindow {
                 if (mek && activateTab("MEK")) return;
                 if (modbus && activateTab("Modbus")) return;
 
-                // Фолбэк на первую вкладку если ничего не активно
                 currentIndex = 0;
             }
 
@@ -1334,14 +1530,13 @@ ApplicationWindow {
             currentIndex: tabBar.currentIndex
             anchors.margins: 10
             onCurrentIndexChanged: {
-                currentType = ["Входные сигналы", "Выходные сигналы", "Признаки", "Уставка"][currentIndex]
+                currentType = ["Аналоговые входы", "Дискретный входы", "Аналоговый выход", "Дискретный выход", "Признаки", "Уставка"][currentIndex]
                 console.log(loader1.active)
 
-                // Принудительное обновление всех ListView
                 for (var i = 0; i < count; i++) {
                     var item = itemAt(i)
                     if (item && item.hasOwnProperty("listView")) {
-                        item.listView.model = 0  // Временно обнуляем
+                        item.listView.model = 0
                         item.listView.model = dataModel
                         item.listView.forceLayout()
                     }
@@ -1354,10 +1549,10 @@ ApplicationWindow {
                 asynchronous: true
                 // onActiveChanged: if (!active) sourceComponent = null
                 onLoaded: {
-                    item.paramType = "Входные сигналы"
+                    item.paramType = "Аналоговые входы"
                     item.listView = listView
                         item.addClicked.connect(() => {
-                        currentType = "Входные сигналы"
+                        currentType = "Аналоговые входы"
 
                     })
                 }
@@ -1370,10 +1565,10 @@ ApplicationWindow {
                 // onActiveChanged: if (!active) sourceComponent = null
                 asynchronous: true
                 onLoaded: {
-                    item.paramType = "Выходные сигналы"
+                    item.paramType = "Дискретные входы"
                     item.listView = listView
                         item.addClicked.connect(() => {
-                        currentType = "Выходные сигналы"
+                        currentType = "Дискретные входы"
 
                     })
                 }
@@ -1386,10 +1581,10 @@ ApplicationWindow {
                 // onActiveChanged: if (!active) sourceComponent = null
                 asynchronous: true
                 onLoaded: {
-                    item.paramType = "Признаки"
+                    item.paramType = "Аналоговый выход"
                     item.listView = listView
                         item.addClicked.connect(() => {
-                        currentType = "Признаки"
+                        currentType = "Аналоговый выход"
 
                     })
                 }
@@ -1398,6 +1593,36 @@ ApplicationWindow {
             Loader {
                 id: loader4
                 active: tabBar.currentIndex === 3
+                sourceComponent: parameterPageComponent
+                // onActiveChanged: if (!active) sourceComponent = null
+                asynchronous: true
+                onLoaded: {
+                    item.paramType = "Дискретный выход"
+                    item.listView = listView
+                        item.addClicked.connect(() => {
+                        currentType = "Дискретный выход"
+
+                    })
+                }
+            }
+            Loader {
+                id: loader5
+                active: tabBar.currentIndex === 4
+                sourceComponent: parameterPageComponent
+                // onActiveChanged: if (!active) sourceComponent = null
+                asynchronous: true
+                onLoaded: {
+                    item.paramType = "Признаки"
+                    item.listView = listView
+                        item.addClicked.connect(() => {
+                        currentType = "Признаки"
+
+                    })
+                }
+            }
+            Loader {
+                id: loader6
+                active: tabBar.currentIndex === 5
                 sourceComponent: parameterPageComponent
                 // onActiveChanged: if (!active) sourceComponent = null
                 asynchronous: true
@@ -1412,840 +1637,36 @@ ApplicationWindow {
             }
             Loader {
                 id: mekLoader
-                active: tabBar.currentIndex === 4 && modbus
+                active: tabBar.currentIndex === 6 && modbus
                 sourceComponent: modbusPageComponent
                 asynchronous: true
 
                  // onActiveChanged: if (!active) sourceComponent = null  // Optional unload
             }
             Loader {
-                active: tabBar.currentIndex === 5 && mek
+                active: tabBar.currentIndex === 7 && mek
                 sourceComponent: mekPageComponent
                 asynchronous: true
 
                 // onActiveChanged: if (!active) sourceComponent = null  // Optional unload
             }
             Loader {
-                active: tabBar.currentIndex === 6
+                active: tabBar.currentIndex === 8
                 sourceComponent: mek101PageComponent
                 asynchronous: true
 
                 // onActiveChanged: if (!active) sourceComponent = null  // Optional unload
             }
             Loader {
-                active: tabBar.currentIndex === 7
+                active: tabBar.currentIndex === 9
                 sourceComponent: mek104PageComponent
                 asynchronous: true
                 // onActiveChanged: if (!active) sourceComponent = null  // Optional unload
             }
 
-          //  ModBus Settings
-    //         ScrollView {
-    //             clip: true
-    //             contentWidth: grid.implicitWidth
-    //             contentHeight: grid.implicitHeight
-    //             leftPadding: 15
-    //             rightPadding: 15
-    //             visible: modbus
-    //             ScrollBar.horizontal.policy: ScrollBar.AsNeeded
-    //             ScrollBar.vertical.policy: ScrollBar.AsNeeded
-    //             property var typeIndexMap: {
-    //                     "Coil": 0,
-    //                     "Discrete input": 0,
-    //                     "Input register": 0,
-    //                     "Holding register": 0
-    //             }
-    //             ColumnLayout {
-    //                 id: grid
-    //                 width: parent.width - 30
-    //                 spacing: 5
-    //                 anchors.fill: parent
-    //                 Layout.preferredHeight: 30
-    //                 // Header Row
-    //                 RowLayout {
-    //                     spacing: 5
-    //                     Label {
-    //                         text: "IO"
-    //                         Layout.preferredWidth: 50
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Тип"
-    //                         Layout.preferredWidth: 100
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Наименование"
-    //                         Layout.preferredWidth: 200
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Тип данных"
-    //                         Layout.preferredWidth: 100
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Адрес"
-    //                         Layout.preferredWidth: 100
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Блок"
-    //                         Layout.preferredWidth: 100
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Item {
-    //                         Layout.preferredWidth: 160
-    //                     }
-    //                 }
-    //
-    //                 Repeater {
-    //                     model: dataModel
-    //                     delegate: RowLayout {
-    //                         spacing: 5
-    //                         Text {
-    //                             text: ioIndex
-    //                             Layout.preferredWidth: 50
-    //                             horizontalAlignment: Text.AlignHCenter
-    //                             elide: Text.ElideRight
-    //                         }
-    //                         Text {
-    //                             text: paramType
-    //                             Layout.preferredWidth: 100
-    //                             horizontalAlignment: Text.AlignHCenter
-    //                             elide: Text.ElideRight
-    //                         }
-    //                         Text {
-    //                             text: name
-    //                             Layout.preferredWidth: 200
-    //                             horizontalAlignment: Text.AlignHCenter
-    //                             MouseArea {
-    //                                 id: mouseArea
-    //                                 anchors.fill: parent
-    //                                 hoverEnabled: true
-    //                                 ToolTip {
-    //                                     visible: mouseArea.containsMouse
-    //                                     text: name
-    //                                 }
-    //                             }
-    //                             elide: Text.ElideRight
-    //                         }
-    //                         Text {
-    //                             text: type
-    //                             Layout.preferredWidth: 100
-    //                             horizontalAlignment: Text.AlignHCenter
-    //                             elide: Text.ElideRight
-    //                         }
-    //                         TextField {
-    //                             id: mbaddress
-    //                             text: dataModel.get(index).address
-    //                             Layout.preferredWidth: 100
-    //                             Layout.preferredHeight: 30
-    //                             horizontalAlignment: Text.AlignHCenter
-    //                             onTextChanged: dataModel.setProperty(index,
-    //                                 "address",
-    //                                 text)
-    //                         }
-    //                         ComboBox {
-    //                             id: combo
-    //                             model: ["Coil", "Discrete input", "Input register", "Holding register"]
-    //
-    //                             displayText: currentIndex === -1 ? "" : model[currentIndex]
-    //
-    //                             currentIndex: {
-    //                                 if (!blockName) return -1;
-    //                                 var idx = model.indexOf(blockName);
-    //                                 return idx >= 0 ? idx : -1;
-    //                             }
-    //
-    //                             onCurrentIndexChanged: {
-    //                                 if (!loadingState && currentIndex >= 0) {
-    //                                     dataModel.setProperty(index, "blockName", model[currentIndex])
-    //                                     assignIndexByType(model[currentIndex])
-    //                                 }
-    //                             }
-    //
-    //                             Layout.preferredWidth: 100
-    //                             Layout.preferredHeight: 30
-    //                         }
-    //                         Button {
-    //                             text: "Удалить"
-    //                             Layout.preferredWidth: 160
-    //                             onClicked: dataModel.remove(index)
-    //                             Material.background: Material.Red
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //
-    //       //  MEK settings
-    //         ScrollView {
-    //             clip: true
-    //             contentWidth: gridmek.implicitWidth
-    //             contentHeight: gridmek.implicitHeight
-    //             ScrollBar.horizontal.policy: ScrollBar.AsNeeded
-    //             ScrollBar.vertical.policy: ScrollBar.AsNeeded
-    //             leftPadding: 15
-    //             rightPadding: 15
-    //             visible: mek
-    //
-    //             ColumnLayout {
-    //                 id: gridmek
-    //                 width: parent.width - 30
-    //                 spacing: 8
-    //                 anchors.fill: parent
-    //                 Layout.preferredHeight: 30
-    //
-    //                 RowLayout {
-    //                     spacing: 8
-    //
-    //                     Label {
-    //                         text: "IO"
-    //                         Layout.preferredWidth: 50
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Тип"
-    //                         Layout.preferredWidth: 100
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Наименование"
-    //                         Layout.preferredWidth: 200
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Тип данных"
-    //                         Layout.preferredWidth: 100
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Адрес ОИ"
-    //                         Layout.preferredWidth: 100
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Адрес АСДУ"
-    //                         Layout.preferredWidth: 100
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Номер буфера"
-    //                         Layout.preferredWidth: 100
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Тип при спорадике"
-    //                         Layout.preferredWidth: 130
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Тип при фоновом"
-    //                         Layout.preferredWidth: 130
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Тип при пер/цик"
-    //                         Layout.preferredWidth: 130
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Тип при общем"
-    //                         Layout.preferredWidth: 130
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: ""
-    //                         Layout.preferredWidth: 160
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                 }
-    //
-    //                 Repeater {
-    //                     model: dataModel
-    //                     delegate: RowLayout {
-    //                         spacing: 8
-    //
-    //                         Text {
-    //                             text: ioIndex
-    //                             Layout.preferredWidth: 50
-    //                             horizontalAlignment: Text.AlignHCenter
-    //                         }
-    //                         Text {
-    //                             text: paramType
-    //                             Layout.preferredWidth: 100
-    //                             horizontalAlignment: Text.AlignHCenter
-    //                         }
-    //                         Text {
-    //                             text: name
-    //                             Layout.preferredWidth: 200
-    //                             horizontalAlignment: Text.AlignHCenter
-    //                             elide: Text.ElideRight
-    //                             MouseArea {
-    //                                 anchors.fill: parent
-    //                                 hoverEnabled: true
-    //                                 ToolTip.visible: containsMouse
-    //                                 ToolTip.text: name
-    //                             }
-    //                         }
-    //                         Text {
-    //                             text: type
-    //                             Layout.preferredWidth: 100
-    //                             horizontalAlignment: Text.AlignHCenter
-    //                         }
-    //                         TextField {
-    //                             text: ioa_address || ""
-    //                             Layout.preferredWidth: 100
-    //                             Layout.preferredHeight: 30
-    //                             horizontalAlignment: Text.AlignHCenter
-    //                             onTextChanged: dataModel.setProperty(index, "ioa_address", text)
-    //                         }
-    //                         TextField {
-    //                             text: asdu_address || ""
-    //                             Layout.preferredWidth: 100
-    //                             Layout.preferredHeight: 30
-    //                             horizontalAlignment: Text.AlignHCenter
-    //                             onTextChanged: dataModel.setProperty(index, "asdu_address", text)
-    //                         }
-    //                         ComboBox {
-    //                             id: secondClassCombo
-    //                             model: ["NOT_USE", "SECOND_CLASS_1", "SECOND_CLASS_2", "SECOND_CLASS_3", "SECOND_CLASS_4",
-    //                                 "SECOND_CLASS_5", "SECOND_CLASS_6", "SECOND_CLASS_7", "SECOND_CLASS_8"]
-    //                             property string _currentValue: second_class_num || ""
-    //                             property bool _initialized: false
-    //
-    //                             Component.onCompleted: {
-    //                                 if (_currentValue) {
-    //                                     var idx = model.indexOf(_currentValue);
-    //                                     currentIndex = idx >= 0 ? idx : 0;
-    //                                 } else {
-    //                                     currentIndex = 0;
-    //                                 }
-    //                                 _initialized = true;
-    //                             }
-    //
-    //                             on_CurrentValueChanged: {
-    //                                 if (_initialized && _currentValue) {
-    //                                     var idx = model.indexOf(_currentValue);
-    //                                     currentIndex = idx >= 0 ? idx : 0;
-    //                                 }
-    //                             }
-    //
-    //                             onCurrentIndexChanged: {
-    //                                 if (_initialized && !loadingState && currentIndex >= 0) {
-    //                                     dataModel.setProperty(index, "second_class_num", model[currentIndex]);
-    //                                 }
-    //                             }
-    //                             Layout.preferredWidth: 100
-    //                             Layout.preferredHeight: 30
-    //                         }
-    //
-    //                         ComboBox {
-    //                             id: typeSpontCombo
-    //                             model: ["NOT_USE", "M_SP_NA_1", "M_SP_TA1", "M_DP_NA_1", "M_DP_TA_1", "M_BO_NA_1",
-    //                                 "M_BO_TA_1", "M_ME_NA_1", "M_ME_TA_1", "M_ME_NB1", "M_ME_TB_1", "M_ME_NC_1",
-    //                                 "M_ME_TC_1", "M_ME_ND_1", "M_SP_TB_1", "M_DP_TB_1", "M_BO_TB_1", "M_ME_TD_1", "M_ME_TF_1"]
-    //
-    //                             property string _currentValue: type_spont || ""
-    //                             property bool _initialized: false
-    //                             Component.onCompleted: {
-    //                                 if (_currentValue) {
-    //                                     var idx = model.indexOf(_currentValue);
-    //                                     currentIndex = idx >= 0 ? idx : 0;
-    //                                 } else {
-    //                                     currentIndex = 0;
-    //                                 }
-    //                                 _initialized = true;
-    //                             }
-    //
-    //                             on_CurrentValueChanged: {
-    //                                 if (_initialized && _currentValue) {
-    //                                     var idx = model.indexOf(_currentValue);
-    //                                     currentIndex = idx >= 0 ? idx : 0;
-    //                                 }
-    //                             }
-    //
-    //                             onCurrentIndexChanged: {
-    //                                 if (_initialized && !loadingState && currentIndex >= 0) {
-    //                                     dataModel.setProperty(index, "type_spont", model[currentIndex]);
-    //                                 }
-    //                             }
-    //                             Layout.preferredWidth: 130
-    //                             Layout.preferredHeight: 30
-    //                         }
-    //                         ComboBox {
-    //                             id: typeBackCombo
-    //                             model: ["NOT_USE", "M_SP_NA_1", "M_DP_NA_1", "M_BO_NA_1", "M_ME_NA_1",
-    //                                 "M_ME_NB_1", "M_ME_NC_1", "M_ME_ND_1"]
-    //                             property string _currentValue: type_back || ""
-    //                             property bool _initialized: false
-    //                             Component.onCompleted: {
-    //                                 if (_currentValue) {
-    //                                     var idx = model.indexOf(_currentValue);
-    //                                     currentIndex = idx >= 0 ? idx : 0;
-    //                                 } else {
-    //                                     currentIndex = 0;
-    //                                 }
-    //                                 _initialized = true;
-    //                             }
-    //
-    //                             on_CurrentValueChanged: {
-    //                                 if (_initialized && _currentValue) {
-    //                                     var idx = model.indexOf(_currentValue);
-    //                                     currentIndex = idx >= 0 ? idx : 0;
-    //                                 }
-    //                             }
-    //
-    //                             onCurrentIndexChanged: {
-    //                                 if (_initialized && !loadingState && currentIndex >= 0) {
-    //                                     dataModel.setProperty(index, "type_back", model[currentIndex]);
-    //                                 }
-    //                             }
-    //
-    //                             Layout.preferredWidth: 130
-    //                             Layout.preferredHeight: 30
-    //                         }
-    //
-    //                         ComboBox {
-    //                             id: typepercyc
-    //                             model: ["NOT_USE", "M_ME_NA_1", "M_ME_NB_1", "M_ME_NC_1", "M_ME_ND_1"]
-    //                             property string _currentValue: type_percyc || ""
-    //                             property bool _initialized: false
-    //                             Component.onCompleted: {
-    //                                 if (_currentValue) {
-    //                                     var idx = model.indexOf(_currentValue);
-    //                                     currentIndex = idx >= 0 ? idx : 0;
-    //                                 } else {
-    //                                     currentIndex = 0;
-    //                                 }
-    //                                 _initialized = true;
-    //                             }
-    //
-    //                             on_CurrentValueChanged: {
-    //                                 if (_initialized && _currentValue) {
-    //                                     var idx = model.indexOf(_currentValue);
-    //                                     currentIndex = idx >= 0 ? idx : 0;
-    //                                 }
-    //                             }
-    //
-    //                             onCurrentIndexChanged: {
-    //                                 if (_initialized && !loadingState && currentIndex >= 0) {
-    //                                     dataModel.setProperty(index, "type_percyc", model[currentIndex]);
-    //                                 }
-    //                             }
-    //                             Layout.preferredWidth: 130
-    //                             Layout.preferredHeight: 30
-    //                         }
-    //                         ComboBox {
-    //                             id: typedef
-    //                             model: ["NOT_USE", "M_SP_NA_1", "M_SP_TA1", "M_DP_NA_1", "M_DP_TA_1", "M_BO_NA_1",
-    //                                 "M_BO_TA_1", "M_ME_NA_1", "M_ME_TA_1", "M_ME_NB1", "M_ME_TB_1", "M_ME_NC_1",
-    //                                 "M_ME_TC_1", "M_ME_ND_1", "M_SP_TB_1", "M_DP_TB_1", "M_BO_TB_1", "M_ME_TD_1", "M_ME_TF_1"]
-    //                             property string _currentValue: type_def || ""
-    //                             property bool _initialized: false
-    //                             Component.onCompleted: {
-    //                                 if (_currentValue) {
-    //                                     var idx = model.indexOf(_currentValue);
-    //                                     currentIndex = idx >= 0 ? idx : 0;
-    //                                 } else {
-    //                                     currentIndex = 0;
-    //                                 }
-    //                                 _initialized = true;
-    //                             }
-    //
-    //                             on_CurrentValueChanged: {
-    //                                 if (_initialized && _currentValue) {
-    //                                     var idx = model.indexOf(_currentValue);
-    //                                     currentIndex = idx >= 0 ? idx : 0;
-    //                                 }
-    //                             }
-    //
-    //                             onCurrentIndexChanged: {
-    //                                 if (_initialized && !loadingState && currentIndex >= 0) {
-    //                                     dataModel.setProperty(index, "type_def", model[currentIndex]);
-    //                                 }
-    //                             }
-    //                             Layout.preferredWidth: 130
-    //                             Layout.preferredHeight: 30
-    //                         }
-    //                         Button {
-    //                             text: "Удалить"
-    //                             Layout.preferredWidth: 160
-    //                             onClicked: dataModel.remove(index)
-    //                             Material.background: Material.Red
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //
-    //         ScrollView {
-    //             clip: true
-    //             contentWidth: Math.min(2000, mekGrid.implicitWidth)
-    //             contentHeight: mek_101_grid.implicitHeight
-    //             ScrollBar.horizontal.policy: ScrollBar.AsNeeded
-    //             ScrollBar.vertical.policy: ScrollBar.AsNeeded
-    //             leftPadding: 15
-    //             rightPadding: 15
-    //             visible: mek_101 && mek
-    //
-    //             ColumnLayout {
-    //                 id: mek_101_grid
-    //                 width: parent.width - 30
-    //                 spacing: 8
-    //                 anchors.fill: parent
-    //
-    //                 GridLayout {
-    //                     id: headerGrid_101
-    //                     columns: 11
-    //                     columnSpacing: 5
-    //                     rowSpacing: 5
-    //
-    //                     Label {
-    //                         text: "IO"
-    //                         Layout.preferredWidth: 50
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Тип"
-    //                         Layout.preferredWidth: 100
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Наименование"
-    //                         Layout.preferredWidth: 200
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                         elide: Text.ElideRight
-    //                     }
-    //                     Label {
-    //                         text: "Адрес ОИ"
-    //                         Layout.preferredWidth: 100
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Адрес АСДУ"
-    //                         Layout.preferredWidth: 100
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Исп. в спорадике"
-    //                         Layout.preferredWidth: 100
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Исп. в цикл/период"
-    //                         Layout.preferredWidth: 100
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Исп. в фон. сканир"
-    //                         Layout.preferredWidth: 100
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Разреш. адрес"
-    //                         Layout.preferredWidth: 100
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Группа опроса"
-    //                         Layout.preferredWidth: 150
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: ""
-    //                         Layout.preferredWidth: 160
-    //                     }
-    //                 }
-    //
-    //                 Repeater {
-    //                     model: dataModel
-    //                     delegate: GridLayout {
-    //                         columns: 11
-    //                         columnSpacing: 5
-    //                         rowSpacing: 5
-    //                         Text {
-    //                             text: ioIndex
-    //                             Layout.preferredWidth: 50
-    //                             horizontalAlignment: Text.AlignHCenter
-    //                         }
-    //                         Text {
-    //                             text: paramType
-    //                             Layout.preferredWidth: 100
-    //                             horizontalAlignment: Text.AlignHCenter
-    //                         }
-    //                         Text {
-    //                             text: name
-    //                             Layout.preferredWidth: 200
-    //                             horizontalAlignment: Text.AlignHCenter
-    //                             elide: Text.ElideRight
-    //                             MouseArea {
-    //                                 anchors.fill: parent
-    //                                 hoverEnabled: true
-    //                                 ToolTip.visible: containsMouse
-    //                                 ToolTip.text: name
-    //                             }
-    //                         }
-    //                         Text {
-    //                             text: ioa_address
-    //                             Layout.preferredWidth: 100
-    //                             horizontalAlignment: Text.AlignHCenter
-    //                         }
-    //                         Text {
-    //                             text: asdu_address
-    //                             Layout.preferredWidth: 100
-    //                             horizontalAlignment: Text.AlignHCenter
-    //                         }
-    //                         Switch {
-    //                             checked: model.use_in_spont_101 || false
-    //                             Layout.preferredWidth: 100
-    //                             onCheckedChanged: dataModel.setProperty(index, "use_in_spont_101", checked)
-    //                         }
-    //                         Switch {
-    //                             checked: model.use_in_back_101 || false
-    //                             Layout.preferredWidth: 100
-    //                             onCheckedChanged: dataModel.setProperty(index, "use_in_back_101", checked)
-    //                         }
-    //                         Switch {
-    //                             checked: model.use_in_percyc_101 || false
-    //                             Layout.preferredWidth: 100
-    //                             onCheckedChanged: dataModel.setProperty(index, "use_in_percyc_101", checked)
-    //                         }
-    //                         Switch {
-    //                             checked: model.allow_address_101 || false
-    //                             Layout.preferredWidth: 100
-    //                             onCheckedChanged: dataModel.setProperty(index, "allow_address_101", checked)
-    //                         }
-    //                         ComboBox {
-    //                             id: surveyGroupCombo
-    //                             model: ["GENERAL_SURVEY", "GROUP_1", "GROUP_2", "GROUP_3", "GROUP_4",
-    //                                 "GROUP_5", "GROUP_6", "GROUP_7", "GROUP_8"]
-    //                             Layout.preferredWidth: 150
-    //                             Layout.preferredHeight: 30
-    //
-    //                             property string _currentValue: survey_group_101 || ""
-    //                             property bool _initialized: false
-    //
-    //                             Component.onCompleted: {
-    //                                 if (_currentValue) {
-    //                                     var idx = model.indexOf(_currentValue);
-    //                                     currentIndex = idx >= 0 ? idx : 0;
-    //                                 } else {
-    //                                     currentIndex = 0;
-    //                                 }
-    //                                 _initialized = true;
-    //                             }
-    //
-    //                             on_CurrentValueChanged: {
-    //                                 if (_initialized && _currentValue) {
-    //                                     var idx = model.indexOf(_currentValue);
-    //                                     currentIndex = idx >= 0 ? idx : 0;
-    //                                 }
-    //                             }
-    //
-    //                             onCurrentIndexChanged: {
-    //                                 if (_initialized && !loadingState && currentIndex >= 0) {
-    //                                     dataModel.setProperty(index, "survey_group_101", model[currentIndex]);
-    //                                 }
-    //                             }
-    //                         }
-    //                         Button {
-    //                             text: "Удалить"
-    //                             Layout.preferredWidth: 160
-    //                             onClicked: dataModel.remove(index)
-    //                             Material.background: Material.Red
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //
-    //         ScrollView {
-    //             clip: true
-    //             contentWidth: mek_104_grid.implicitWidth
-    //             contentHeight: mek_104_grid.implicitHeight
-    //             ScrollBar.horizontal.policy: ScrollBar.AsNeeded
-    //             ScrollBar.vertical.policy: ScrollBar.AsNeeded
-    //             leftPadding: 15
-    //             rightPadding: 15
-    //             visible: mek_104 && mek
-    //
-    //             ColumnLayout {
-    //                 id: mek_104_grid
-    //                 width: parent.width - 30
-    //                 spacing: 8
-    //                 anchors.fill: parent
-    //
-    //                 GridLayout {
-    //                     id: headerGrid_104
-    //                     columns: 11
-    //                     columnSpacing: 5
-    //                     rowSpacing: 5
-    //
-    //                     Label {
-    //                         text: "IO"
-    //                         Layout.preferredWidth: 50
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Тип"
-    //                         Layout.preferredWidth: 100
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Наименование"
-    //                         Layout.preferredWidth: 200
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Адрес ОИ"
-    //                         Layout.preferredWidth: 100
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Адрес АСДУ"
-    //                         Layout.preferredWidth: 100
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Исп. в спорадике"
-    //                         Layout.preferredWidth: 100
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Исп. в цикл/период"
-    //                         Layout.preferredWidth: 100
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Исп. в фон. сканир"
-    //                         Layout.preferredWidth: 100
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Разреш. адрес"
-    //                         Layout.preferredWidth: 100
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: "Группа опроса"
-    //                         Layout.preferredWidth: 150
-    //                         horizontalAlignment: Text.AlignHCenter
-    //                     }
-    //                     Label {
-    //                         text: ""
-    //                         Layout.preferredWidth: 160
-    //                     }
-    //                 }
-    //
-    //                 Repeater {
-    //                     model: dataModel
-    //                     delegate: GridLayout {
-    //                         columns: 11
-    //                         columnSpacing: 5
-    //                         rowSpacing: 5
-    //
-    //                         Text {
-    //                             text: ioIndex
-    //                             Layout.preferredWidth: 50
-    //                             horizontalAlignment: Text.AlignHCenter
-    //                         }
-    //                         Text {
-    //                             text: paramType
-    //                             Layout.preferredWidth: 100
-    //                             horizontalAlignment: Text.AlignHCenter
-    //                         }
-    //                         Text {
-    //                             text: name
-    //                             Layout.preferredWidth: 200
-    //                             horizontalAlignment: Text.AlignHCenter
-    //                             elide: Text.ElideRight
-    //                             MouseArea {
-    //                                 anchors.fill: parent
-    //                                 hoverEnabled: true
-    //                                 ToolTip.visible: containsMouse
-    //                                 ToolTip.text: name
-    //                             }
-    //                         }
-    //                         Text {
-    //                             text: ioa_address
-    //                             Layout.preferredWidth: 100
-    //                             horizontalAlignment: Text.AlignHCenter
-    //                         }
-    //                         Text {
-    //                             text: asdu_address
-    //                             Layout.preferredWidth: 100
-    //                             horizontalAlignment: Text.AlignHCenter
-    //                         }
-    //                         Switch {
-    //                             checked: model.use_in_spont_104 || false
-    //                             Layout.preferredWidth: 100
-    //                             onCheckedChanged: dataModel.setProperty(index, "use_in_spont_104", checked)
-    //                         }
-    //                         Switch {
-    //                             checked: model.use_in_back_104 || false
-    //                             Layout.preferredWidth: 100
-    //                             onCheckedChanged: dataModel.setProperty(index, "use_in_back_104", checked)
-    //                         }
-    //                         Switch {
-    //                             checked: model.use_in_percyc_104 || false
-    //                             Layout.preferredWidth: 100
-    //                             onCheckedChanged: dataModel.setProperty(index, "use_in_percyc_104", checked)
-    //                         }
-    //                         Switch {
-    //                             checked: model.allow_address_104 || false
-    //                             Layout.preferredWidth: 100
-    //                             onCheckedChanged: dataModel.setProperty(index, "allow_address_104", checked)
-    //                         }
-    //                         ComboBox {
-    //                             id: surveyGroupCombo104
-    //                             model: ["GENERAL_SURVEY", "GROUP_1", "GROUP_2", "GROUP_3", "GROUP_4",
-    //                                 "GROUP_5", "GROUP_6", "GROUP_7", "GROUP_8"]
-    //                             Layout.preferredWidth: 150
-    //                             Layout.preferredHeight: 30
-    //
-    //                             property string _currentValue: survey_group_104 || ""
-    //                             property bool _initialized: false
-    //
-    //                             Component.onCompleted: {
-    //                                 if (_currentValue) {
-    //                                     var idx = model.indexOf(_currentValue);
-    //                                     currentIndex = idx >= 0 ? idx : 0;
-    //                                 } else {
-    //                                     currentIndex = 0;
-    //                                 }
-    //                                 _initialized = true;
-    //                             }
-    //
-    //                             on_CurrentValueChanged: {
-    //                                 if (_initialized && _currentValue) {
-    //                                     var idx = model.indexOf(_currentValue);
-    //                                     currentIndex = idx >= 0 ? idx : 0;
-    //                                 }
-    //                             }
-    //
-    //                             onCurrentIndexChanged: {
-    //                                 if (_initialized && !loadingState && currentIndex >= 0) {
-    //                                     dataModel.setProperty(index, "survey_group_104", model[currentIndex]);
-    //                                 }
-    //                             }
-    //                         }
-    //
-    //                         Button {
-    //                             text: "Удалить"
-    //                             Layout.preferredWidth: 160
-    //                             onClicked: dataModel.remove(index)
-    //                             Material.background: Material.Red
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //         }
          }
      }
 
-    // Панель с кнопками внизу окна
     Rectangle {
         id: controlPanel
         anchors.bottom: parent.bottom
@@ -2317,13 +1738,13 @@ ApplicationWindow {
             Button {
                 text: "Debug Full Model"
                 onClicked: {
-                    if (testModel.count === 0) {
+                    if (dataModel.count === 0) {
                         console.log("Model is empty!")
                         return
                     }
                     console.log("----- FULL MODEL DUMP -----");
-                    for (var i = 0; i < testModel.count; i++) {
-                        var item = testModel.get(i);
+                    for (var i = 0; i < dataModel.count; i++) {
+                        var item = dataModel.get(i);
                         console.log(`\nItem ${i}: ${item.paramType} "${item.name}"`);
                         var props = Object.keys(item);
                         for (var j = 0; j < props.length; j++) {
@@ -2340,10 +1761,17 @@ ApplicationWindow {
             Button {
                 text: "Настроить ETH"
                 onClicked: {
+                    ethcounter = ethcounter + 1
                     ethConfigDialog.open()
                 }
             }
-
+            Button {
+                text: "Настроить RS"
+                onClicked: {
+                    rscounter = rscounter + 1
+                    rsConfigDialog.open()
+                }
+            }
             Item {
                 Layout.fillWidth: true
             }
@@ -2496,11 +1924,11 @@ ApplicationWindow {
     }
 
     function isAnalogInput(item) {
-        return item.paramType === "Входные сигналы" && item.type !== "bool"
+        return item.paramType === "Аналоговые входы" && item.type !== "bool"
     }
 
     function isDiscreteInput(item) {
-        return item.paramType === "Входные сигналы" && item.type === "bool"
+        return item.paramType === "Дискретные входы" && item.type === "bool"
     }
 
 
