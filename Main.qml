@@ -7,7 +7,7 @@ import FileIO 1.0
 ApplicationWindow {
     id: rootwindow
     width: 1800
-    height: 800
+    height: 1000
     visible: true
     title: "Генератор сигналов"
     property bool modbus: false
@@ -66,7 +66,7 @@ ApplicationWindow {
     Dialog {
         id: rsConfigDialog
         width: 500
-        height: 600
+        height: 1000
 
         ColumnLayout {
             anchors.fill: parent
@@ -111,8 +111,7 @@ ApplicationWindow {
                     rsConfigDialog.addToModel("RS" + rscounter +" длина слова", lenField.text, "PA_" + "RS" + rscounter + "_WORD_LEN", "unsigned short", "Да", "Нет");
                     rsConfigDialog.addToModel("RS" + rscounter +" стоп-бит", stopField.currentText, "PA_" + "RS" + rscounter + "_STOP_BITS", "unsigned short", "Да", "Нет");
                     rsConfigDialog.addToModel("RS" + rscounter +" адрес устройства", addField.text, "PA_" + "RS" + rscounter + "_MAC_NIC", "unsigned int", "Да", "Нет");
-                    console.log("Данные сохранены в модель!");
-                    rsConfigDialog.close();  // Закрываем диалог
+                    rsConfigDialog.close();
                 }
             }
         }
@@ -139,7 +138,7 @@ ApplicationWindow {
     Dialog {
         id: ethConfigDialog
         width: 500
-        height: 600
+        height: 1000
 
         ColumnLayout {
             anchors.fill: parent
@@ -164,7 +163,6 @@ ApplicationWindow {
                 placeholderText: "255.255.255.0"
             }
 
-            // Шлюз
             Label { text: "Шлюз" }
             TextField {
                 id: gatewayField
@@ -172,7 +170,6 @@ ApplicationWindow {
                 placeholderText: "192.168.0.254"
             }
 
-            // Старшие 3 байта MAC
             Label { text: "Старшие 3 байта MAC адреса" }
             TextField {
                 id: macHighField
@@ -180,7 +177,6 @@ ApplicationWindow {
                 placeholderText: "00:1A:2B"
             }
 
-            // Младшие 3 байта MAC
             Label { text: "Младшие 3 байта MAC адреса" }
             TextField {
                 id: macLowField
@@ -188,7 +184,6 @@ ApplicationWindow {
                 placeholderText: "3C:4D:5E"
             }
 
-            // IP клиентов
             Label { text: "IP адрес клиента 1" }
             TextField {
                 id: clientIp1Field
@@ -248,7 +243,6 @@ ApplicationWindow {
                 text: "Сохранить"
                 Layout.alignment: Qt.AlignRight
                 onClicked: {
-                    // Добавляем все параметры в dataModel
                     ethConfigDialog.addToModel("ETH" + ethcounter + " IP адрес", ipAddressField.text, "ETH" + ethcounter + "_IP_ADDR", "unsigned int", "Да", "Нет");
                     ethConfigDialog.addToModel("ETH" + ethcounter +" Маска подсети", subnetMaskField.text, "ETH" + ethcounter + "_MASK", "unsigned int", "Да", "Нет");
                     ethConfigDialog.addToModel("ETH" + ethcounter +" Шлюз", gatewayField.text, "ETH" + ethcounter + "_GATEWAY", "unsigned int", "Да", "Нет");
@@ -264,8 +258,7 @@ ApplicationWindow {
                     ethConfigDialog.addToModel("ETH" + ethcounter +" Порт 3", port3Field.text, "ETH" + ethcounter + "_IP_PORT3", "unsigned short", "Да", "Нет");
                     ethConfigDialog.addToModel("ETH" + ethcounter +" Порт 4", port4Field.text, "ETH" + ethcounter + "_IP_PORT4", "unsigned short", "Да", "Нет");
 
-                    console.log("Данные сохранены в модель!");
-                    ethConfigDialog.close();  // Закрываем диалог
+                    ethConfigDialog.close();
                 }
             }
         }
@@ -289,7 +282,6 @@ ApplicationWindow {
         }
     }
 
-    // Диалог открытия файла
     Platform.FileDialog {
         id: fileDialog
         title: "Выберите файл конфигурации"
@@ -328,11 +320,10 @@ ApplicationWindow {
         }
     }
 
-    // Диалог сохранения файла
     Platform.FileDialog {
         id: saveFileDialog
         nameFilters: ["JSON files (*.json)"]
-        defaultSuffix: "json" // Автоматически добавит .json если не указано
+        defaultSuffix: "json"
         fileMode: Platform.FileDialog.SaveFile
         onAccepted: {
             const filePath = String(file).replace("file://", "")
@@ -342,7 +333,6 @@ ApplicationWindow {
         }
     }
 
-    //Диалог подтверждения выхода
     Dialog {
         id: exitConfirmDialog
         title: "Есть несохранённые изменения"
@@ -452,8 +442,8 @@ ApplicationWindow {
                     header: Rectangle {
                         z:2
                         width: listView.width
-                        height: 25 // Высота хедера
-                        color: "#f0f0f0"  // Цвет фона хедера
+                        height: 25
+                        color: "#f0f0f0"
                         RowLayout {
                         width: listView.width
                         Item {
@@ -671,7 +661,7 @@ ApplicationWindow {
                             Layout.preferredWidth: 80
                             Layout.preferredHeight: 30
                             onTextChanged: dataModel.setProperty(index, "def_value", text)
-                            enabled: paramType !== "Входные сигналы"
+                            enabled: paramType !== ("Аналоговые входы" || "Дискретные входы")
                             opacity: enabled ? 1.0 : 0.5
                         }
                         TextField {
@@ -701,7 +691,7 @@ ApplicationWindow {
                             Layout.preferredWidth: 80
                             Layout.preferredHeight: 30
                             onTextChanged: dataModel.setProperty(index, "tolp", text)
-                            enabled: paramType === "Выходные сигналы"
+                            enabled: paramType === ("Аналоговый выход" || "Дискретный выход")
                             opacity: enabled ? 1.0 : 0.5
                         }
                         Button {
@@ -792,7 +782,6 @@ ApplicationWindow {
                     spacing: 5
                     anchors.fill: parent
                     Layout.preferredHeight: 30
-                    // Header Row
                     RowLayout {
                         spacing: 5
                         Label {
@@ -917,186 +906,136 @@ ApplicationWindow {
 
         Item {
             anchors.fill: parent
-            function set(i,role, value) {
-                dataModel.setProperty(i, role, value)
-            }
-            ColumnLayout {
+
+            ScrollView {
                 anchors.fill: parent
-                spacing: 8
+                clip: true
+                leftPadding: 10
+                rightPadding: 10
+                topPadding: 10
+                bottomPadding: 10
 
-                // Header Row
-                RowLayout {
+                ColumnLayout {
                     spacing: 8
-                    Label { text: "IO"; Layout.preferredWidth: 50 }
-                    Label { text: "Тип"; Layout.preferredWidth: 100 }
-                    Label { text: "Наименование"; Layout.preferredWidth: 200 }
-                    Label { text: "Тип данных"; Layout.preferredWidth: 100 }
-                    Label { text: "Адрес ОИ"; Layout.preferredWidth: 100 }
-                    Label { text: "Адрес АСДУ"; Layout.preferredWidth: 100 }
-                    Label { text: "Номер буфера"; Layout.preferredWidth: 130 }
-                    Label { text: "Тип при спорадике"; Layout.preferredWidth: 130 }
-                    Label { text: "Тип при фоновом"; Layout.preferredWidth: 130 }
-                    Label { text: "тип при пер/цик"; Layout.preferredWidth: 130 }
-                    Label { text: "тип при общем"; Layout.preferredWidth: 130 }
-                    Label { text: ""; Layout.preferredWidth: 100 }
-                }
+                    width: parent.width
 
-                ListView {
-                    id: mekList
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    clip: true
-                    cacheBuffer: 1000
-                    spacing: 4
-                    model: dataModel
-
-                    delegate: Item {
-                        width: mekList.width
+                    Rectangle {
+                        width: parent.width
                         height: 40
+                        color: "#f0f0f0"
 
                         RowLayout {
                             anchors.fill: parent
                             spacing: 8
+
+                            Label { text: "IO"; Layout.preferredWidth: 50 }
+                            Label { text: "Тип"; Layout.preferredWidth: 100 }
+                            Label { text: "Наименование"; Layout.preferredWidth: 200 }
+                            Label { text: "Тип данных"; Layout.preferredWidth: 100 }
+                            Label { text: "Адрес ОИ"; Layout.preferredWidth: 100 }
+                            Label { text: "Адрес АСДУ"; Layout.preferredWidth: 100 }
+                            Label { text: "Номер буфера"; Layout.preferredWidth: 130 }
+                            Label { text: "Тип при спорадике"; Layout.preferredWidth: 130 }
+                            Label { text: "Тип при фоновом"; Layout.preferredWidth: 130 }
+                            Label { text: "Тип при пер/цик"; Layout.preferredWidth: 130 }
+                            Label { text: "Тип при общем"; Layout.preferredWidth: 130 }
+                            Label { text: ""; Layout.preferredWidth: 100 }
+                        }
+                    }
+
+                    ListView {
+                        id: mekList
+                        Layout.fillWidth: true
+                        implicitHeight: 800
+                        spacing: 4
+                        clip: true
+                        cacheBuffer: 200
+                        boundsBehavior: Flickable.StopAtBounds
+                        model: dataModel
+                        delegate: RowLayout {
+                            spacing: 8
+                            width: mekList.width
+                            height: 40
+
+                            Text { text: ioIndex; Layout.preferredWidth: 50; verticalAlignment: Text.AlignVCenter }
+
+                            Text { text: paramType; Layout.preferredWidth: 100; verticalAlignment: Text.AlignVCenter }
+
                             Text {
-                                text: model.ioIndex
-                                Layout.preferredWidth: 50
-                            }
-                            Text {
-                                text: model.paramType
-                                Layout.preferredWidth: 100
-                                horizontalAlignment: Text.AlignHCenter
-                            }
-                            Text {
-                                text: model.name
+                                text: name
                                 Layout.preferredWidth: 200
                                 elide: Text.ElideRight
+                                verticalAlignment: Text.AlignVCenter
                                 ToolTip.visible: containsMouse
-                                ToolTip.text: model.name
-                                MouseArea {
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                }
+                                ToolTip.text: name
+                                MouseArea { anchors.fill: parent; hoverEnabled: true }
                             }
-                            Text {
-                                text: model.type
-                                Layout.preferredWidth: 100
-                                horizontalAlignment: Text.AlignHCenter
-                            }
+
+                            Text { text: type; Layout.preferredWidth: 100; verticalAlignment: Text.AlignVCenter }
+
                             TextField {
-                                text: model.ioa_address || ""
-                                Layout.preferredWidth: 100
-                                onTextChanged: dataModel.setProperty(index, "ioa_address", text)
-                            }
-                            TextField {
-                                text: model.asdu_address || ""
+                                text: ioa_address || ""
                                 Layout.preferredWidth: 100
                                 Layout.preferredHeight: 30
-                                horizontalAlignment: Text.AlignHCenter
+                                onTextChanged: dataModel.setProperty(index, "ioa_address", text)
+                            }
+
+                            TextField {
+                                text: asdu_address || ""
+                                Layout.preferredWidth: 100
+                                Layout.preferredHeight: 30
                                 onTextChanged: dataModel.setProperty(index, "asdu_address", text)
                             }
-                            Button {
-                                id: bufferBtn
-                                text: model.second_class_num || "Выбрать"
+
+                            ComboBox {
+                                model: ["NOT_USE", "SECOND_CLASS_1", "SECOND_CLASS_2", "SECOND_CLASS_3", "SECOND_CLASS_4",
+                                    "SECOND_CLASS_5", "SECOND_CLASS_6", "SECOND_CLASS_7", "SECOND_CLASS_8"]
+                                currentIndex: model.indexOf(second_class_num || "NOT_USE")
                                 Layout.preferredWidth: 130
-                                onClicked: bufferMenu.open()
-                            }
-                            Menu {
-                                id: bufferMenu
-                                y: bufferBtn.height
-                                MenuItem { text: "NOT_USE"; onTriggered: set(index,"second_class_num", text) }
-                                MenuItem { text: "SECOND_CLASS_1"; onTriggered: set(index,"second_class_num", text) }
-                                MenuItem { text: "SECOND_CLASS_2"; onTriggered: set(index,"second_class_num", text) }
-                                MenuItem { text: "SECOND_CLASS_3"; onTriggered: set(index,"second_class_num", text) }
-                                MenuItem { text: "SECOND_CLASS_4"; onTriggered: set(index,"second_class_num", text) }
-                                MenuItem { text: "SECOND_CLASS_5"; onTriggered: set(index,"second_class_num", text) }
-                                MenuItem { text: "SECOND_CLASS_6"; onTriggered: set(index,"second_class_num", text) }
-                                MenuItem { text: "SECOND_CLASS_7"; onTriggered: set(index,"second_class_num", text) }
-                                MenuItem { text: "SECOND_CLASS_8"; onTriggered: set(index,"second_class_num", text) }
-                            }
-                            Button {
-                                id: spontBtn
-                                text: model.type_spont || "Выбрать"
-                                Layout.preferredWidth: 130
-                                onClicked: spontMenu.open()
-                            }
-                            Menu {
-                                id: spontMenu
-                                y: spontBtn.height
-                                Repeater {
-                                    model: [
-                                        "NOT_USE", "M_SP_NA_1", "M_SP_TA1", "M_DP_NA_1", "M_DP_TA_1", "M_BO_NA_1",
-                                        "M_BO_TA_1", "M_ME_NA_1", "M_ME_TA_1", "M_ME_NB1", "M_ME_TB_1", "M_ME_NC_1",
-                                        "M_ME_TC_1", "M_ME_ND_1", "M_SP_TB_1", "M_DP_TB_1", "M_BO_TB_1", "M_ME_TD_1", "M_ME_TF_1"
-                                    ]
-                                    delegate: MenuItem {
-                                        text: modelData
-                                        onTriggered: set(index,"type_spont", modelData)
-                                    }
-                                }
-                            }
-                            Button {
-                                id: backBtn
-                                text: model.type_back || "Выбрать"
-                                Layout.preferredWidth: 130
-                                onClicked: backMenu.open()
-                            }
-                            Menu {
-                                id: backMenu
-                                y: backBtn.height
-                                Repeater {
-                                    model: [
-                                        "NOT_USE", "M_SP_NA_1", "M_DP_NA_1", "M_BO_NA_1", "M_ME_NA_1",
-                                        "M_ME_NB_1", "M_ME_NC_1", "M_ME_ND_1"
-                                    ]
-                                    delegate: MenuItem {
-                                        text: modelData
-                                        onTriggered: set(index,"type_back", modelData)
-                                    }
-                                }
-                            }
-                            Button {
-                                id: percycBtn
-                                text: model.type_percyc || "Выбрать"
-                                Layout.preferredWidth: 130
-                                onClicked: percycMenu.open()
+                                Layout.preferredHeight: 30
+                                onCurrentIndexChanged: dataModel.setProperty(index, "second_class_num", model[currentIndex])
                             }
 
-                            Menu {
-                                id: percycMenu
-                                y: percycBtn.height
-                                Repeater {
-                                    model: ["NOT_USE", "M_ME_NA_1", "M_ME_NB_1", "M_ME_NC_1", "M_ME_ND_1"]
-                                    delegate: MenuItem {
-                                        text: modelData
-                                        onTriggered: set(index,"type_percyc", modelData)
-                                    }
-                                }
-                            }
-                            Button {
-                                id: defBtn
-                                text: model.type_def || "Выбрать"
+                            ComboBox {
+                                model: ["NOT_USE", "M_SP_NA_1", "M_SP_TA1", "M_DP_NA_1", "M_DP_TA_1", "M_BO_NA_1",
+                                    "M_BO_TA_1", "M_ME_NA_1", "M_ME_TA_1", "M_ME_NB1", "M_ME_TB_1", "M_ME_NC_1",
+                                    "M_ME_TC_1", "M_ME_ND_1", "M_SP_TB_1", "M_DP_TB_1", "M_BO_TB_1", "M_ME_TD_1", "M_ME_TF_1"]
+                                currentIndex: model.indexOf(type_spont || "NOT_USE")
                                 Layout.preferredWidth: 130
-                                onClicked: defMenu.open()
+                                Layout.preferredHeight: 30
+                                onCurrentIndexChanged: dataModel.setProperty(index, "type_spont", model[currentIndex])
                             }
 
-                            Menu {
-                                id: defMenu
-                                y: defBtn.height
-                                Repeater {
-                                    model: [
-                                        "NOT_USE", "M_SP_NA_1", "M_SP_TA1", "M_DP_NA_1", "M_DP_TA_1", "M_BO_NA_1",
-                                        "M_BO_TA_1", "M_ME_NA_1", "M_ME_TA_1", "M_ME_NB1", "M_ME_TB_1", "M_ME_NC_1",
-                                        "M_ME_TC_1", "M_ME_ND_1", "M_SP_TB_1", "M_DP_TB_1", "M_BO_TB_1", "M_ME_TD_1", "M_ME_TF_1"
-                                    ]
-                                    delegate: MenuItem {
-                                        text: modelData
-                                        onTriggered: set(index,"type_def", modelData)
-                                    }
-                                }
+                            ComboBox {
+                                model: ["NOT_USE", "M_SP_NA_1", "M_DP_NA_1", "M_BO_NA_1", "M_ME_NA_1",
+                                    "M_ME_NB_1", "M_ME_NC_1", "M_ME_ND_1"]
+                                currentIndex: model.indexOf(type_back || "NOT_USE")
+                                Layout.preferredWidth: 130
+                                Layout.preferredHeight: 30
+                                onCurrentIndexChanged: dataModel.setProperty(index, "type_back", model[currentIndex])
                             }
+
+                            ComboBox {
+                                model: ["NOT_USE", "M_ME_NA_1", "M_ME_NB_1", "M_ME_NC_1", "M_ME_ND_1"]
+                                currentIndex: model.indexOf(type_percyc || "NOT_USE")
+                                Layout.preferredWidth: 130
+                                Layout.preferredHeight: 30
+                                onCurrentIndexChanged: dataModel.setProperty(index, "type_percyc", model[currentIndex])
+                            }
+
+                            ComboBox {
+                                model: ["NOT_USE", "M_SP_NA_1", "M_SP_TA1", "M_DP_NA_1", "M_DP_TA_1", "M_BO_NA_1",
+                                    "M_BO_TA_1", "M_ME_NA_1", "M_ME_TA_1", "M_ME_NB1", "M_ME_TB_1", "M_ME_NC_1",
+                                    "M_ME_TC_1", "M_ME_ND_1", "M_SP_TB_1", "M_DP_TB_1", "M_BO_TB_1", "M_ME_TD_1", "M_ME_TF_1"]
+                                currentIndex: model.indexOf(type_def || "NOT_USE")
+                                Layout.preferredWidth: 130
+                                Layout.preferredHeight: 30
+                                onCurrentIndexChanged: dataModel.setProperty(index, "type_def", model[currentIndex])
+                            }
+
                             Button {
                                 text: "Удалить"
-                                Layout.preferredWidth: 100
+                                Layout.preferredWidth: 160
                                 onClicked: dataModel.remove(index)
                                 Material.background: Material.Red
                             }
@@ -1117,11 +1056,8 @@ ApplicationWindow {
                 spacing: 8
                 anchors.fill: parent
 
-                GridLayout {
-                    id: headerGrid_101
-                    columns: 11
-                    columnSpacing: 5
-                    rowSpacing: 5
+                RowLayout {
+                    spacing: 8
 
                     Label {
                         text: "IO"
@@ -1179,13 +1115,20 @@ ApplicationWindow {
                         Layout.preferredWidth: 160
                     }
                 }
-
-                Repeater {
+                ListView {
+                    id: mek101List
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    cacheBuffer: 200
+                    spacing: 4
                     model: dataModel
-                    delegate: GridLayout {
-                        columns: 11
-                        columnSpacing: 5
-                        rowSpacing: 5
+
+                    delegate: Item {
+                        width: mek101List.width
+                        height: 40
+
+                        RowLayout{
                         Text {
                             text: ioIndex
                             Layout.preferredWidth: 50
@@ -1282,6 +1225,7 @@ ApplicationWindow {
             }
         }
     }
+    }
 
     Component {
         id: mek104PageComponent
@@ -1292,13 +1236,8 @@ ApplicationWindow {
                 width: parent.width - 30
                 spacing: 8
                 anchors.fill: parent
-
-                GridLayout {
-                    id: headerGrid_104
-                    columns: 11
-                    columnSpacing: 5
-                    rowSpacing: 5
-
+                RowLayout {
+                    spacing: 8
                     Label {
                         text: "IO"
                         Layout.preferredWidth: 50
@@ -1355,13 +1294,20 @@ ApplicationWindow {
                     }
                 }
 
-                Repeater {
+                ListView {
+                    id: mek104List
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    cacheBuffer: 200
+                    spacing: 4
                     model: dataModel
-                    delegate: GridLayout {
-                        columns: 11
-                        columnSpacing: 5
-                        rowSpacing: 5
 
+                    delegate: Item {
+                        width: mek104List.width
+                        height: 40
+
+                        RowLayout{
                         Text {
                             text: ioIndex
                             Layout.preferredWidth: 50
@@ -1459,6 +1405,7 @@ ApplicationWindow {
             }
         }
     }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -1547,7 +1494,6 @@ ApplicationWindow {
                 active: tabBar.currentIndex === 0
                 sourceComponent: parameterPageComponent
                 asynchronous: true
-                // onActiveChanged: if (!active) sourceComponent = null
                 onLoaded: {
                     item.paramType = "Аналоговые входы"
                     item.listView = listView
@@ -1562,7 +1508,6 @@ ApplicationWindow {
                 id: loader2
                 active: tabBar.currentIndex === 1
                 sourceComponent: parameterPageComponent
-                // onActiveChanged: if (!active) sourceComponent = null
                 asynchronous: true
                 onLoaded: {
                     item.paramType = "Дискретные входы"
@@ -1578,7 +1523,6 @@ ApplicationWindow {
                 id: loader3
                 active: tabBar.currentIndex === 2
                 sourceComponent: parameterPageComponent
-                // onActiveChanged: if (!active) sourceComponent = null
                 asynchronous: true
                 onLoaded: {
                     item.paramType = "Аналоговый выход"
@@ -1594,7 +1538,6 @@ ApplicationWindow {
                 id: loader4
                 active: tabBar.currentIndex === 3
                 sourceComponent: parameterPageComponent
-                // onActiveChanged: if (!active) sourceComponent = null
                 asynchronous: true
                 onLoaded: {
                     item.paramType = "Дискретный выход"
@@ -1609,7 +1552,6 @@ ApplicationWindow {
                 id: loader5
                 active: tabBar.currentIndex === 4
                 sourceComponent: parameterPageComponent
-                // onActiveChanged: if (!active) sourceComponent = null
                 asynchronous: true
                 onLoaded: {
                     item.paramType = "Признаки"
@@ -1624,7 +1566,6 @@ ApplicationWindow {
                 id: loader6
                 active: tabBar.currentIndex === 5
                 sourceComponent: parameterPageComponent
-                // onActiveChanged: if (!active) sourceComponent = null
                 asynchronous: true
                 onLoaded: {
                     item.paramType = "Уставка"
@@ -1640,28 +1581,22 @@ ApplicationWindow {
                 active: tabBar.currentIndex === 6 && modbus
                 sourceComponent: modbusPageComponent
                 asynchronous: true
-
-                 // onActiveChanged: if (!active) sourceComponent = null  // Optional unload
             }
             Loader {
                 active: tabBar.currentIndex === 7 && mek
                 sourceComponent: mekPageComponent
                 asynchronous: true
 
-                // onActiveChanged: if (!active) sourceComponent = null  // Optional unload
             }
             Loader {
                 active: tabBar.currentIndex === 8
                 sourceComponent: mek101PageComponent
                 asynchronous: true
-
-                // onActiveChanged: if (!active) sourceComponent = null  // Optional unload
             }
             Loader {
                 active: tabBar.currentIndex === 9
                 sourceComponent: mek104PageComponent
                 asynchronous: true
-                // onActiveChanged: if (!active) sourceComponent = null  // Optional unload
             }
 
          }
@@ -1673,7 +1608,7 @@ ApplicationWindow {
         anchors.left: parent.left
         anchors.right: parent.right
         height: 70
-        color: "#d0ffffff"  // Полупрозрачный белый
+        color: "#d0ffffff"
         Behavior on color { ColorAnimation { duration: 200 } }
 
 
@@ -1934,7 +1869,6 @@ ApplicationWindow {
 
     function assignIndexByType(type) {
         let count = 1;
-        // Сначала собираем все существующие адреса для этого типа
         let existingAddresses = [];
         for (let i = 0; i < dataModel.count; i++) {
             let item = dataModel.get(i);
