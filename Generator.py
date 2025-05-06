@@ -1,10 +1,11 @@
 import json
 from pathlib import Path
 import os
-
+from datetime import datetime
 
 def main():
     current_dir = Path(os.getcwd())
+    current_date = datetime.now().strftime("%d.%m.%Y")
 
     file_name = input("Введите имя JSON файла (например: export.json): ").strip()
     json_path = current_dir / file_name
@@ -51,34 +52,158 @@ def main():
     }
 
     # Начальные строки для каждого файла
-    defines_content = """
+    defines_content = f""" /**
+ * @file defines.h
+ * @author Мизикин Владислав
+ * @date 	{current_date}
+ * @brief
+ */
+
+/* Directive to prevent recursive inclusion ----------------------------------*/
+
+#pragma once
+
+/* Defines -------------------------------------------------------------------*/
+
+#define INFO_OBJECT_CAPACITY    1
+
+
+/* Includes ------------------------------------------------------------------*/
+
+/* Exported classes ----------------------------------------------------------*/
+
     
     """
-    info_objects_content = """#include "defines.h"
-    
-    namespace core {
-        void AddInfoObjects() {
+    info_objects_content = f"""/**
+ * @file info_objects.cpp
+ * @author Мизикин Владислав
+ * @date 	{current_date}
+ * @brief
+ *
+ *
+ */
+/* Includes ------------------------------------------------------------------*/
+
+#include "defines.h"
+#include "core.h"
+
+/* Private typedef -----------------------------------------------------------*/
+
+/* Private define ------------------------------------------------------------*/
+
+/* Private variables ---------------------------------------------------------*/
+
+/* Private function prototypes -----------------------------------------------*/
+
+/* Private functions ---------------------------------------------------------*/
+
+/* Exported methods ----------------------------------------------------------*/
+
+namespace core
+{{
+	void Core::InitInfoObjects()
+	{{
+		info_objects_.reserve(INFO_OBJECT_CAPACITY);
+		
     """
-    tele_content = """#include "defines.h"
-    
-    namespace core {
-        void AddTelesignalizations() {
+    tele_content = f"""/**
+ * @file telesignalizations.cpp
+ * @author Мизикин Владислав
+ * @date 	{current_date}
+ * @brief
+ *
+ *
+ */
+/* Includes ------------------------------------------------------------------*/
+
+#include "defines.h"
+#include "core.h"
+
+/* Private typedef -----------------------------------------------------------*/
+
+/* Private define ------------------------------------------------------------*/
+
+/* Private variables ---------------------------------------------------------*/
+
+/* Private function prototypes -----------------------------------------------*/
+
+/* Private functions ---------------------------------------------------------*/
+
+/* Exported methods ----------------------------------------------------------*/
+
+namespace core
+{{
+	void Core::InitTelesignalizations()
+	{{
+
     """
-    telecommands_content = """#include "defines.h"
-    
-    namespace core {
-        void AddTelecommands() {
+    telecommands_content = f"""/**	
+ * @file telecommands.cpp	
+ * @author Мизикин Владислав	
+ * @date 	{current_date}
+ * @brief	
+ *	
+ *	
+ */
+/* Includes ------------------------------------------------------------------*/
+
+#include "defines.h"
+#include "core.h"
+
+/* Private typedef -----------------------------------------------------------*/
+
+/* Private define ------------------------------------------------------------*/
+
+/* Private variables ---------------------------------------------------------*/
+
+/* Private function prototypes -----------------------------------------------*/
+
+/* Private functions ---------------------------------------------------------*/
+
+/* Exported methods ----------------------------------------------------------*/
+
+namespace core
+{{
+	void Core::InitTelecommands()
+	{{
+
     """
-    saved_parameters_content = """#include "defines.h"
-    
-    namespace core {
-        void AddStoredParameters() {
+    saved_parameters_content = f"""/**
+ * @file saved_parameters.cpp
+ * @author Мизикин Владислав
+ * @date 	{current_date}
+ * @brief
+ *
+ *
+ */
+/* Includes ------------------------------------------------------------------*/
+
+#include "defines.h"
+#include "core.h"
+
+/* Private typedef -----------------------------------------------------------*/
+
+/* Private define ------------------------------------------------------------*/
+
+/* Private variables ---------------------------------------------------------*/
+
+/* Private function prototypes -----------------------------------------------*/
+
+/* Private functions ---------------------------------------------------------*/
+
+/* Exported methods ----------------------------------------------------------*/
+
+namespace core
+{{
+	void Core::InitSavedParameters()
+	{{
+
     """
-    communications_content = """
+    communications_content = f"""
     /**
      * @file communications.cpp
      * @author Мизикин Владислав
-     * @date 
+     * @date {current_date}
      * @brief
      *
      *
@@ -101,13 +226,40 @@ def main():
     
     /* Exported methods ----------------------------------------------------------*/
     
-    namespace core {
-        void Core::InitCommunications() {
+    namespace core {{
+        void Core::InitCommunications() {{
     """
 
-    telemeasurments_content = """#include "defines.h"
-    namespace core {
-        void AddTelemeasurments() {
+    telemeasurments_content = f"""/**	
+ * @file telecommands.cpp	
+ * @author Мизикин Владислав	
+ * @date 	{current_date}
+ * @brief	
+ *	
+ *	
+ */
+/* Includes ------------------------------------------------------------------*/
+
+#include "defines.h"
+#include "core.h"
+
+/* Private typedef -----------------------------------------------------------*/
+
+/* Private define ------------------------------------------------------------*/
+
+/* Private variables ---------------------------------------------------------*/
+
+/* Private function prototypes -----------------------------------------------*/
+
+/* Private functions ---------------------------------------------------------*/
+
+/* Exported methods ----------------------------------------------------------*/
+
+namespace core
+{{
+	void Core::InitTelecommands()
+	{{
+
     """
 
     # Список блоков для communications.cpp
@@ -122,14 +274,15 @@ def main():
         # Определение типа для info_objects (приведение к нужному виду)
         orig_type = obj.get("type", "")
         mapped_type = type_mapping_info.get(orig_type, orig_type)
-        info_objects_content += (f"        Add{mapped_type}InfoObject(ind_{obj['codeName']}); //{obj['name'].strip()}\n")
+        def_value = f".SetValue({obj['def_value']})" if obj.get("def_value") else ""
+        info_objects_content += f"        Add{mapped_type}InfoObject(ind_{obj['codeName']}){def_value}; //{obj['name'].strip()}\n"
 
         # Генерация для telesignalizations.cpp (если paramType == \"Входные сигналы\" и поле \"ad\" задано)
-        if obj.get("paramType") == "Входные сигналы" and obj.get("ad"):
+        if obj.get("paramType") == "Дискретные входы" and obj.get("ad"):
             tele_content += (f"        AddTelesignalization(ind_{obj['codeName']}, parameters::TelesignalizationIndexes::{obj['codeName']}, ind_{obj['ad']});\n")
 
         # Генерация для telecommands.cpp (если paramType == \"Выходные сигналы\")
-        if obj.get("paramType") == "Выходные сигналы":
+        if obj.get("paramType") == "Аналоговый выход" or "Дискретный выход":
             telecommands_content += (f"        AddTelecommand(ind_{obj['codeName']}, parameters::TelecommandIndexes::{obj['codeName']});\n")
 
         # Генерация для saved_parameters.cpp (если paramType == \"Признаки\" и saving == \"Да\" или paramType == \"Уставки\")
@@ -137,13 +290,14 @@ def main():
             saved_parameters_content += (f"        AddStoredObject(ind_{obj['codeName']});\n")
 
         # Генерация для telemeasurments.cpp
-        ktt_param = f"ind_{obj['ktt']}" if obj.get("ktt") else "std::nullopt"
-        aperture_param = f"ind_{obj['aperture']}" if obj.get("aperture") else "std::nullopt"
-        TM_type = obj.get("type", "")
-        TM_type_name = TM_mapping.get(TM_type, TM_type)
-        telemeasurments_content += (
-            f" AddTelemeasurment<InfoObject::InfoElement::CurrentType::{TM_type_name}>(ind_{obj['codeName']}, parameters::TelemeasurmentIndexes::{obj['codeName']}, {ktt_param}, " \
-            f"{aperture_param});\n")
+        if(obj.get("paramType") == "Аналоговые входы"):
+            ktt_param = f"ind_{obj['ktt']}" if obj.get("ktt") else "std::nullopt"
+            aperture_param = f"ind_{obj['aperture']}" if obj.get("aperture") else "std::nullopt"
+            TM_type = obj.get("type", "")
+            TM_type_name = TM_mapping.get(TM_type, TM_type)
+            telemeasurments_content += (
+                f" AddTelemeasurment<InfoObject::InfoElement::CurrentType::{TM_type_name}>(ind_{obj['codeName']}, parameters::TelemeasurmentIndexes::{obj['codeName']}, {ktt_param}, " \
+                f"{aperture_param});\n")
 
     # Формирование кода для communications.cpp:
     for block in block_types:

@@ -1,4 +1,4 @@
-import QtQuick 2.15
+    import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Controls.Material 2.15
 import QtQuick.Layouts 1.15
@@ -6,8 +6,8 @@ import Qt.labs.platform 1.1 as Platform
 import FileIO 1.0
 ApplicationWindow {
     id: rootwindow
-    width: 1800
-    height: 1000
+    width: 1920
+    height: 1080
     visible: true
     title: "Генератор сигналов"
     property bool modbus: false
@@ -66,8 +66,9 @@ ApplicationWindow {
     Dialog {
         id: rsConfigDialog
         width: 500
-        height: 1000
-
+        height: 500
+        anchors.centerIn: parent
+        title: "Настройка RS"
         ColumnLayout {
             anchors.fill: parent
             spacing: 10
@@ -100,20 +101,21 @@ ApplicationWindow {
                 TextField {
                     id: addField
                 }
-            }
-            Button {
-                text: "Сохранить"
-                Layout.alignment: Qt.AlignRight
-                onClicked: {
-                    // Добавляем все параметры в dataModel
-                    rsConfigDialog.addToModel("RS" + rscounter + " четность", parityField.currentText, "PA_" + "RS" + rscounter + "_PARITY", "unsigned short", "Да", "Нет");
-                    rsConfigDialog.addToModel("RS" + rscounter +" скорость", baudrateField.currentText, "PA_" + "RS" + rscounter + "_BAUDRATE", "unsigned short", "Да", "Нет");
-                    rsConfigDialog.addToModel("RS" + rscounter +" длина слова", lenField.text, "PA_" + "RS" + rscounter + "_WORD_LEN", "unsigned short", "Да", "Нет");
-                    rsConfigDialog.addToModel("RS" + rscounter +" стоп-бит", stopField.currentText, "PA_" + "RS" + rscounter + "_STOP_BITS", "unsigned short", "Да", "Нет");
-                    rsConfigDialog.addToModel("RS" + rscounter +" адрес устройства", addField.text, "PA_" + "RS" + rscounter + "_MAC_NIC", "unsigned int", "Да", "Нет");
-                    rsConfigDialog.close();
+                Button {
+                    text: "Сохранить"
+                    Layout.alignment: Qt.AlignRight
+                    onClicked: {
+                        // Добавляем все параметры в dataModel
+                        rsConfigDialog.addToModel("RS" + rscounter + " четность", parityField.currentText, "PA_" + "RS" + rscounter + "_PARITY", "unsigned short", "Да", "Нет");
+                        rsConfigDialog.addToModel("RS" + rscounter +" скорость", baudrateField.currentText, "PA_" + "RS" + rscounter + "_BAUDRATE", "unsigned short", "Да", "Нет");
+                        rsConfigDialog.addToModel("RS" + rscounter +" длина слова", lenField.text, "PA_" + "RS" + rscounter + "_WORD_LEN", "unsigned short", "Да", "Нет");
+                        rsConfigDialog.addToModel("RS" + rscounter +" стоп-бит", stopField.currentText, "PA_" + "RS" + rscounter + "_STOP_BITS", "unsigned short", "Да", "Нет");
+                        rsConfigDialog.addToModel("RS" + rscounter +" адрес устройства", addField.text, "PA_" + "RS" + rscounter + "_MAC_NIC", "unsigned int", "Да", "Нет");
+                        rsConfigDialog.close();
+                    }
                 }
             }
+
         }
         function addToModel(name, value, codename, type, saving, logicuse) {
             dataModel.append({
@@ -138,8 +140,9 @@ ApplicationWindow {
     Dialog {
         id: ethConfigDialog
         width: 500
-        height: 1000
-
+        height: 1080
+        anchors.centerIn: parent
+        title: "Настройка ETH"
         ColumnLayout {
             anchors.fill: parent
             spacing: 10
@@ -238,7 +241,6 @@ ApplicationWindow {
                 id: port4Field
                 validator: IntValidator { bottom: 1; top: 65535 }
             }
-        }
             Button {
                 text: "Сохранить"
                 Layout.alignment: Qt.AlignRight
@@ -261,6 +263,8 @@ ApplicationWindow {
                     ethConfigDialog.close();
                 }
             }
+        }
+
         }
         function addToModel(name, value, codename, type, saving, logicuse) {
             dataModel.append({
@@ -445,24 +449,65 @@ ApplicationWindow {
                         height: 25
                         color: "#f0f0f0"
                         RowLayout {
+                        spacing: 0
                         width: listView.width
                         Item {
                             Layout.preferredWidth: 12
                             visible: false
                         }
-                        Label { text: "IO"; Layout.preferredWidth: 50 }
-                        Label { text: "Наименование"; Layout.preferredWidth: 200 }
-                        Label { text: "Англ.название"; Layout.preferredWidth: 200 }
-                        Label { text: "Тип"; Layout.preferredWidth: 200 }
-                        Label { text: "Логика"; Layout.preferredWidth: 80 }
-                        Label { text: "Сохран."; Layout.preferredWidth: 80 }
-                        Label { text: "Апертура"; Layout.preferredWidth: 100 }
-                        Label { text: "КТТ"; Layout.preferredWidth: 80 }
-                        Label { text: "Умолч."; Layout.preferredWidth: 80 }
-                        Label { text: "АД"; Layout.preferredWidth: 60 }
-                        Label { text: "Выход"; Layout.preferredWidth: 80 }
-                        Label { text: "Кор.имп"; Layout.preferredWidth: 80 }
-                        Label { text: "Дл.имп"; Layout.preferredWidth: 80 }
+                        Label { text: "IO";
+                            Layout.minimumWidth: 150  // Minimum width constraint
+                            Layout.preferredWidth: 150  // Default preferred width
+                            Layout.maximumWidth: 200  // Optional maximum width
+                            Layout.fillWidth: true  }// Allows expansion }
+                        Label { text: "Наименование";     Layout.minimumWidth: 220  // Minimum width constraint
+                            Layout.preferredWidth: 220  // Default preferred width
+                            Layout.maximumWidth: 400  // Optional maximum width
+                            Layout.fillWidth: true  }// Allows expansion }
+                        Label { text: "Англ.название";     Layout.minimumWidth: 220  // Minimum width constraint
+                            Layout.preferredWidth: 220  // Default preferred width
+                            Layout.maximumWidth: 400  // Optional maximum width
+                            Layout.fillWidth: true}  // Allows expansion }
+                        Label { text: "Тип";     Layout.minimumWidth: 240  // Minimum width constraint
+                            Layout.preferredWidth: 240  // Default preferred width
+                            Layout.maximumWidth: 400  // Optional maximum width
+                            Layout.fillWidth: true } // Allows expansion }
+                        Label { text: "Логика";     Layout.minimumWidth: 100  // Minimum width constraint
+                            Layout.preferredWidth: 100  // Default preferred width
+                            Layout.maximumWidth: 160  // Optional maximum width
+                            Layout.fillWidth: true } // Allows expansion }
+                        Label { text: "Сохран.";     Layout.minimumWidth: 140  // Minimum width constraint
+                            Layout.preferredWidth: 140  // Default preferred width
+                            Layout.maximumWidth: 160  // Optional maximum width
+                            Layout.fillWidth: true  }// Allows expansion }
+                        Label { text: "Апертура";      Layout.minimumWidth: 120  // Minimum width constraint
+                            Layout.preferredWidth: 120  // Default preferred width
+                            Layout.maximumWidth: 200  // Optional maximum width
+                            Layout.fillWidth: true  }// Allows expansion }
+                        Label { text: "КТТ";      Layout.minimumWidth: 100  // Minimum width constraint
+                            Layout.preferredWidth: 100  // Default preferred width
+                            Layout.maximumWidth: 160  // Optional maximum width
+                            Layout.fillWidth: true  }// Allows expansion }
+                        Label { text: "Умолч.";      Layout.minimumWidth: 100  // Minimum width constraint
+                            Layout.preferredWidth: 100  // Default preferred width
+                            Layout.maximumWidth: 160  // Optional maximum width
+                            Layout.fillWidth: true } // Allows expansion }
+                        Label { text: "АД";      Layout.minimumWidth: 80  // Minimum width constraint
+                            Layout.preferredWidth: 80  // Default preferred width
+                            Layout.maximumWidth: 120  // Optional maximum width
+                            Layout.fillWidth: true } // Allows expansion }
+                        Label { text: "Выход";      Layout.minimumWidth: 100  // Minimum width constraint
+                            Layout.preferredWidth: 100  // Default preferred width
+                            Layout.maximumWidth: 160  // Optional maximum width
+                            Layout.fillWidth: true  }// Allows expansion }
+                        Label { text: "Кор.имп";      Layout.minimumWidth: 100  // Minimum width constraint
+                            Layout.preferredWidth: 100  // Default preferred width
+                            Layout.maximumWidth: 160  // Optional maximum width
+                            Layout.fillWidth: true } // Allows expansion }
+                        Label { text: "Дл.имп";      Layout.minimumWidth: 100  // Minimum width constraint
+                            Layout.preferredWidth: 100  // Default preferred width
+                            Layout.maximumWidth: 160  // Optional maximum width
+                            Layout.fillWidth: true } // Allows expansion }
                         Label {
                             text: ""
                             Layout.preferredWidth: 160
@@ -504,14 +549,20 @@ ApplicationWindow {
 
                         TextField {
                             text: ioIndex
-                            Layout.preferredWidth: 50
+                            Layout.minimumWidth: 50  // Minimum width constraint
+                            Layout.preferredWidth: 50  // Default preferred width
+                            Layout.maximumWidth: 150  // Optional maximum width
+                            Layout.fillWidth: true  // Allows expansion                            Layout.fillWidth: true
                             Layout.preferredHeight: 30
                             onTextChanged: dataModel.setProperty(index, "ioIndex", text)
                         }
                         TextField {
                             id: nameField
                             text: name
-                            Layout.preferredWidth: 200
+                            Layout.minimumWidth: 200  // Minimum width constraint
+                            Layout.preferredWidth: 200  // Default preferred width
+                            Layout.maximumWidth: 400  // Optional maximum width
+                            Layout.fillWidth: true  // Allows expansion
                             Layout.preferredHeight: 30
                             property color normalTextColor: Material.Black
                             property bool isDuplicate: false
@@ -567,8 +618,12 @@ ApplicationWindow {
                         TextField {
                             id: codeNameField
                             text: codeName
-                            Layout.preferredWidth: 200
+                            Layout.minimumWidth: 200  // Minimum width constraint
+                            Layout.preferredWidth: 200  // Default preferred width
+                            Layout.maximumWidth: 400
                             Layout.preferredHeight: 30
+                            Layout.fillWidth: true
+
                             property color normalTextColor: Material.Black
                             property bool isDuplicate: false
 
@@ -623,73 +678,110 @@ ApplicationWindow {
                             model: ["bool", "float", "unsigned int", "unsigned short", "unsigned char"]
                             currentIndex: model.indexOf(type || "bool")
                             onCurrentTextChanged: dataModel.setProperty(index, "type", currentText)
-                            Layout.preferredWidth: 200
+                            Layout.minimumWidth: 200  // Minimum width constraint
+                            Layout.preferredWidth: 200  // Default preferred width
+                            Layout.maximumWidth: 400
+                            Layout.fillWidth: true
+
                             Layout.preferredHeight: 30
                         }
                         ComboBox {
                             model: ["Да", "Нет"]
                             currentIndex: model.indexOf(logicuse || "Да")
                             onCurrentTextChanged: dataModel.setProperty(index, "logicuse", currentText)
-                            Layout.preferredWidth: 80
+                            Layout.minimumWidth: 80  // Minimum width constraint
+                            Layout.preferredWidth: 80  // Default preferred width
+                            Layout.maximumWidth: 160
+                            Layout.fillWidth: true
+
                             Layout.preferredHeight: 30
                         }
                         ComboBox {
                             model: ["Да", "Нет"]
                             currentIndex: model.indexOf(saving || "Да")
                             onCurrentTextChanged: dataModel.setProperty(index, "saving", currentText)
-                            Layout.preferredWidth: 80
+                            Layout.minimumWidth: 80  // Minimum width constraint
+                            Layout.preferredWidth: 80  // Default preferred width
+                            Layout.maximumWidth: 160
                             Layout.preferredHeight: 30
+                            Layout.fillWidth: true
+
                         }
                         TextField {
                             text: aperture
-                            Layout.preferredWidth: 100
+                            Layout.minimumWidth: 100  // Minimum width constraint
+                            Layout.preferredWidth: 100  // Default preferred width
+                            Layout.maximumWidth: 200
                             Layout.preferredHeight: 30
+                            Layout.fillWidth: true
+
                             onTextChanged: dataModel.setProperty(index, "aperture", text)
                             enabled: rootwindow.isAnalogInput(dataModel.get(index)) || paramType=== "Уставка"
                             opacity: enabled ? 1.0 : 0.5
                         }
                         TextField {
                             text: ktt
-                            Layout.preferredWidth: 80
+                            Layout.minimumWidth: 80  // Minimum width constraint
+                            Layout.preferredWidth: 80  // Default preferred width
+                            Layout.maximumWidth: 160
                             Layout.preferredHeight: 30
+                            Layout.fillWidth: true
+
                             onTextChanged: dataModel.setProperty(index, "ktt", text)
                             enabled: rootwindow.isAnalogInput(dataModel.get(index)) || paramType === "Уставка"
                             opacity: enabled ? 1.0 : 0.5
                         }
                         TextField {
                             text: def_value
-                            Layout.preferredWidth: 80
+                            Layout.minimumWidth: 80  // Minimum width constraint
+                            Layout.preferredWidth: 80  // Default preferred width
+                            Layout.maximumWidth: 160
                             Layout.preferredHeight: 30
+                            Layout.fillWidth: true
                             onTextChanged: dataModel.setProperty(index, "def_value", text)
                             enabled: paramType !== ("Аналоговые входы" || "Дискретные входы")
                             opacity: enabled ? 1.0 : 0.5
                         }
                         TextField {
                             text: ad
-                            Layout.preferredWidth: 60
+                            Layout.minimumWidth: 60  // Minimum width constraint
+                            Layout.preferredWidth: 60  // Default preferred width
+                            Layout.maximumWidth: 120
                             Layout.preferredHeight: 30
+                            Layout.fillWidth: true
                             onTextChanged: dataModel.setProperty(index, "ad", text)
                             enabled: rootwindow.isDiscreteInput(dataModel.get(index))
                             opacity: enabled ? 1.0 : 0.5
                         }
                         TextField {
                             text: oc
-                            Layout.preferredWidth: 80
+                            Layout.minimumWidth: 80  // Minimum width constraint
+                            Layout.preferredWidth: 80  // Default preferred width
+                            Layout.maximumWidth: 160
                             Layout.preferredHeight: 30
+                            Layout.fillWidth: true
                             onTextChanged: dataModel.setProperty(index, "oc", text)
                         }
                         TextField {
                             text: tosp
-                            Layout.preferredWidth: 80
+                            Layout.minimumWidth: 80  // Minimum width constraint
+                            Layout.preferredWidth: 80  // Default preferred width
+                            Layout.maximumWidth: 160
                             Layout.preferredHeight: 30
+                            Layout.fillWidth: true
+
                             onTextChanged: dataModel.setProperty(index, "tosp", text)
                             enabled: paramType === "Выходные сигналы"
                             opacity: enabled ? 1.0 : 0.5
                         }
                         TextField {
                             text: tolp
-                            Layout.preferredWidth: 80
+                            Layout.minimumWidth: 80  // Minimum width constraint
+                            Layout.preferredWidth: 80  // Default preferred width
+                            Layout.maximumWidth: 160
                             Layout.preferredHeight: 30
+                            Layout.fillWidth: true
+
                             onTextChanged: dataModel.setProperty(index, "tolp", text)
                             enabled: paramType === ("Аналоговый выход" || "Дискретный выход")
                             opacity: enabled ? 1.0 : 0.5
@@ -730,7 +822,7 @@ ApplicationWindow {
                         "address": "",
                         "blockName": "",
                         "ioa_address": "",
-                        "asdu_address": "",
+                        "asdu_address": 1,
                         "second_class_num": "",
                         "type_spont": "",
                         "type_back": "",
@@ -906,7 +998,7 @@ ApplicationWindow {
 
         Item {
             anchors.fill: parent
-
+            Component.onCompleted: assignIOA()
             ScrollView {
                 anchors.fill: parent
                 clip: true
@@ -914,7 +1006,7 @@ ApplicationWindow {
                 rightPadding: 10
                 topPadding: 10
                 bottomPadding: 10
-
+                ScrollBar.vertical.policy: ScrollBar.AlwaysOn
                 ColumnLayout {
                     spacing: 8
                     width: parent.width
@@ -1721,6 +1813,13 @@ ApplicationWindow {
                     fileHandler.runPythonScript()
                 }
             }
+
+            Button {
+                text: "MEK indexing"
+                onClicked: {
+                    assignIOA
+                }
+            }
         }
     }
 
@@ -1866,38 +1965,77 @@ ApplicationWindow {
         return item.paramType === "Дискретные входы" && item.type === "bool"
     }
 
-
     function assignIndexByType(type) {
-        let count = 1;
-        let existingAddresses = [];
+        // First collect all existing addresses for this type
+        const existingAddresses = [];
         for (let i = 0; i < dataModel.count; i++) {
-            let item = dataModel.get(i);
+            const item = dataModel.get(i);
             if (item.blockName === type && item.address && item.address !== "") {
-                let addr = parseInt(item.address);
+                const addr = parseInt(item.address);
                 if (!isNaN(addr)) {
                     existingAddresses.push(addr);
                 }
             }
         }
+
+        // Sort addresses in ascending order
             existingAddresses.sort((a, b) => a - b);
 
+        // Find the next available address
         let nextAddr = 1;
-        for (let addr of existingAddresses) {
+        for (const addr of existingAddresses) {
             if (addr === nextAddr) {
-                nextAddr++;
+                // Get the item that has this address to determine its type
+                const itemWithAddr = Array.from({length: dataModel.count})
+                    .map((_, i) => dataModel.get(i))
+                .find(item => parseInt(item.address) === addr && item.blockName === type);
+
+                if (itemWithAddr) {
+                    // Determine increment based on type
+                    const increment = getAddressIncrement(type, itemWithAddr.type);
+                    nextAddr += increment;
+                } else {
+                    nextAddr += 1; // Default increment if item not found
+                }
             } else if (addr > nextAddr) {
-                break;
+                break; // Found a gap we can use
             }
         }
 
+        // Assign addresses to items without one
         for (let i = 0; i < dataModel.count; i++) {
-            let item = dataModel.get(i);
+            const item = dataModel.get(i);
             if (item.blockName === type && (!item.address || item.address === "")) {
-                dataModel.setProperty(i, "address", nextAddr);
-                nextAddr++;
+                dataModel.setProperty(i, "address", nextAddr.toString());
+
+                // Determine increment for next address
+                const increment = getAddressIncrement(type, item.type);
+                nextAddr += increment;
             }
         }
     }
+
+    // Helper function to determine address increment based on type
+    function getAddressIncrement(blockType, dataType) {
+        if (blockType === "Input register" || blockType === "Holding register") {
+            // 16-bit types (1 register)
+            if (dataType === "unsigned short" || dataType === "short" || dataType === "bool") {
+                return 1;
+            }
+            // 32-bit types (2 registers)
+            if (dataType === "float" || dataType === "unsigned int" || dataType === "int") {
+                return 2;
+            }
+        }
+        // For Coils and Discrete Inputs (always 1 bit)
+        return 1;
+    }
+    function assignIOA() {
+        for (var i = 0; i < dataModel.count; i++) {
+            dataModel.setProperty(i, "ioa_address", i + 1);
+        }
+    }
+
 
     function updateNextIoIndex() {
         var maxIndex = 0;
