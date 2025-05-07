@@ -30,6 +30,106 @@ ApplicationWindow {
 
         }
     }
+    ListModel { id: analogInputsModel }
+    ListModel { id: digitalInputsModel }
+    ListModel { id: analogOutputsModel }
+    ListModel { id: digitalOutputsModel }
+    ListModel { id: flagsModel }
+    ListModel { id: settingsModel }
+
+    function initializeFilteredModels() {
+        analogInputsModel.clear()
+        digitalInputsModel.clear()
+        analogOutputsModel.clear()
+        digitalOutputsModel.clear()
+        flagsModel.clear()
+        settingsModel.clear()
+
+        for (var i = 0; i < dataModel.count; i++) {
+            syncFilteredModels()
+        }
+    }
+
+    // Function to update filtered models when an item changes
+    function syncFilteredModels() {
+        // Clear all filtered models
+        analogInputsModel.clear()
+        digitalInputsModel.clear()
+        analogOutputsModel.clear()
+        digitalOutputsModel.clear()
+        flagsModel.clear()
+        settingsModel.clear()
+
+        // Repopulate from main dataModel
+        for (var i = 0; i < dataModel.count; i++) {
+            var item = dataModel.get(i)
+            switch(item.paramType) {
+                case "Аналоговые входы": analogInputsModel.append({ "originalIndex": i }); break
+                case "Дискретные входы": digitalInputsModel.append({ "originalIndex": i }); break
+                case "Аналоговый выход": analogOutputsModel.append({ "originalIndex": i }); break
+                case "Дискретный выход": digitalOutputsModel.append({ "originalIndex": i }); break
+                case "Признаки": flagsModel.append({ "originalIndex": i }); break
+                case "Уставка": settingsModel.append({ "originalIndex": i }); break
+            }
+        }
+    }
+
+
+    function removeFromAllFilteredModels(id) {
+        var models = [settingsModel, flagsModel, digitalOutputsModel,
+            analogOutputsModel, digitalInputsModel, analogInputsModel]
+        for (var m = 0; m < models.length; m++) {
+            var model = models[m]
+            for (var i = model.count - 1; i >= 0; i--) {
+                if (model.get(i).__id === id) {
+                    model.remove(i)
+                    break
+                }
+            }
+        }
+    }
+
+
+    Connections {
+        target: dataModel
+
+        function onRowsInserted(parent, first, last) {
+            for (var i = first; i <= last; i++) {
+                syncFilteredModels()
+            }
+        }
+
+        function onRowsRemoved(parent, first, last) {
+            // Rebuild all filtered models after removal
+            initializeFilteredModels()
+        }
+
+        function onDataChanged(topLeft, bottomRight, roles) {
+            for (var i = topLeft.row; i <= bottomRight.row; i++) {
+                var item = dataModel.get(i)
+                console.log("change")
+                // If paramType changed, we need to re-categorize
+                if (roles.length === 0 || roles.indexOf("paramType") >= 0) {
+                    syncFilteredModels()
+                }
+            }
+        }
+    }
+
+    function getFilteredModel(type) {
+        switch(type) {
+            case "Аналоговые входы": return analogInputsModel
+            case "Дискретные входы": return digitalInputsModel
+            case "Аналоговый выход": return analogOutputsModel
+            case "Дискретный выход": return digitalOutputsModel
+            case "Признаки": return flagsModel
+            case "Уставка": return settingsModel
+            default: return analogInputsModel
+        }
+    }
+
+
+
     Dialog {
         id: startDialog
         title: "Выберите действие"
@@ -302,11 +402,14 @@ ApplicationWindow {
                         dataModel.append(data[i])
                     }
                     updateNextIoIndex();
+                    initializeFilteredModels()
 
                     modbus = dataModel.count > 0 && dataModel.get(0).hasOwnProperty("address");
                     mek = dataModel.count > 0 && dataModel.get(0).hasOwnProperty("ioa_address");
                     mek_101 = dataModel.count > 0 && dataModel.get(0).hasOwnProperty("use_in_spont_101");
                     mek_104 = dataModel.count > 0 && dataModel.get(0).hasOwnProperty("use_in_spont_104");
+
+
                         Qt.callLater(() => {
                             for (let i = 0; i < listView.count; ++i) {
                         let item = listView.itemAtIndex(i);
@@ -438,7 +541,8 @@ ApplicationWindow {
                     id: listView
                     width: parent.width - 30
                     height: parent.height
-                    model: dataModel
+                    cacheBuffer: 200
+                    model: getFilteredModel(pageRoot.paramType)
                     spacing: 0
                     interactive: true
                     clip: true
@@ -521,44 +625,63 @@ ApplicationWindow {
                         property bool hasDuplicateName: false
                         property bool hasDuplicateCodeName: false
 
-                        required property int index
-                        required property string ioIndex
-                        required property string paramType
-                        required property string name
-                        required property string codeName
-                        required property string type
-                        required property string logicuse
-                        required property string saving
-                        required property string aperture
-                        required property string ktt
-                        required property string def_value
-                        required property string ad
-                        required property string oc
-                        required property string tosp
-                        required property string tolp
+                         required property int index
+                         property string ioIndex
+                         property string paramType
+                         property string name
+                         property string codeName
+                         property string type
+                         property string logicuse
+                         property string saving
+                         property string aperture
+                         property string ktt
+                         property string def_value
+                         property string ad
+                         property string oc
+                         property string tosp
+                         property string tolp
+
+                        property int originalIndex: {
+                            switch (pageRoot.paramType) {
+                                case "Аналоговые входы":
+                                    return analogInputsModel.get(index).originalIndex
+                                case "Дискретные входы":
+                                    return digitalInputsModel.get(index).originalIndex
+                                case "Аналоговый выход":
+                                    return analogOutputsModel.get(index).originalIndex
+                                case "Дискретный выход":
+                                    return digitalOutputsModel.get(index).originalIndex
+                                case "Признаки":
+                                    return flagsModel.get(index).originalIndex
+                                case "Уставка":
+                                    return settingsModel.get(index).originalIndex
+                                default:
+                                    return -1
+                            }
+                        }
 
                         width: listView.width
                         spacing: 0
-                        height: visible ? implicitHeight : 0
-                        visible: paramType === pageRoot.paramType
+                        height: implicitHeight
 
                         Item {
                             Layout.preferredWidth: 12
                             visible: false
                         }
+                        property var itemData: dataModel.get(originalIndex)
 
                         TextField {
-                            text: ioIndex
+                            text: itemData.ioIndex
                             Layout.minimumWidth: 50  // Minimum width constraint
                             Layout.preferredWidth: 50  // Default preferred width
                             Layout.maximumWidth: 150  // Optional maximum width
                             Layout.fillWidth: true  // Allows expansion                            Layout.fillWidth: true
                             Layout.preferredHeight: 30
-                            onTextChanged: dataModel.setProperty(index, "ioIndex", text)
+                            onTextChanged: dataModel.setProperty(originalIndex, "ioIndex", text)
                         }
                         TextField {
                             id: nameField
-                            text: name
+                            text: itemData.name
                             Layout.minimumWidth: 200  // Minimum width constraint
                             Layout.preferredWidth: 200  // Default preferred width
                             Layout.maximumWidth: 400  // Optional maximum width
@@ -570,7 +693,7 @@ ApplicationWindow {
                             function updateName(newText) {
                                 isDuplicate = rootwindow.checkDuplicateName(newText, index);
                                 if (!isDuplicate) {
-                                    dataModel.setProperty(index, "name", newText);
+                                    dataModel.setProperty(originalIndexindex, "name", newText);
                                 }
                                 return isDuplicate;
                             }
@@ -617,7 +740,7 @@ ApplicationWindow {
 
                         TextField {
                             id: codeNameField
-                            text: codeName
+                            text: itemData.codeName
                             Layout.minimumWidth: 200  // Minimum width constraint
                             Layout.preferredWidth: 200  // Default preferred width
                             Layout.maximumWidth: 400
@@ -630,7 +753,7 @@ ApplicationWindow {
                             function updateName(newText) {
                                 isDuplicate = rootwindow.checkDuplicateCodeName(newText, index);
                                 if (!isDuplicate) {
-                                    dataModel.setProperty(index, "codeName", newText);
+                                    dataModel.setProperty(originalIndex, "codeName", newText);
                                 }
                                 return isDuplicate;
                             }
@@ -676,8 +799,15 @@ ApplicationWindow {
                         }
                         ComboBox {
                             model: ["bool", "float", "unsigned int", "unsigned short", "unsigned char"]
-                            currentIndex: model.indexOf(type || "bool")
-                            onCurrentTextChanged: dataModel.setProperty(index, "type", currentText)
+                            currentIndex: {
+                                if (!itemData) return 0
+                                return model.indexOf(itemData.type || "bool")
+                            }
+                            onCurrentTextChanged: {
+                                if (itemData) {
+                                    dataModel.setProperty(originalIndex, "type", currentText)
+                                }
+                            }
                             Layout.minimumWidth: 200  // Minimum width constraint
                             Layout.preferredWidth: 200  // Default preferred width
                             Layout.maximumWidth: 400
@@ -687,8 +817,15 @@ ApplicationWindow {
                         }
                         ComboBox {
                             model: ["Да", "Нет"]
-                            currentIndex: model.indexOf(logicuse || "Да")
-                            onCurrentTextChanged: dataModel.setProperty(index, "logicuse", currentText)
+                            currentIndex: {
+                                if (!itemData) return 0
+                                return model.indexOf(itemData.logicuse || "bool")
+                            }
+                            onCurrentTextChanged: {
+                                if (itemData) {
+                                    dataModel.setProperty(originalIndex, "logicuse", currentText)
+                                }
+                            }
                             Layout.minimumWidth: 80  // Minimum width constraint
                             Layout.preferredWidth: 80  // Default preferred width
                             Layout.maximumWidth: 160
@@ -698,8 +835,15 @@ ApplicationWindow {
                         }
                         ComboBox {
                             model: ["Да", "Нет"]
-                            currentIndex: model.indexOf(saving || "Да")
-                            onCurrentTextChanged: dataModel.setProperty(index, "saving", currentText)
+                            currentIndex: {
+                                if (!itemData) return 0
+                                return model.indexOf(itemData.saving || "bool")
+                            }
+                            onCurrentTextChanged: {
+                                if (itemData) {
+                                    dataModel.setProperty(originalIndex, "saving", currentText)
+                                }
+                            }
                             Layout.minimumWidth: 80  // Minimum width constraint
                             Layout.preferredWidth: 80  // Default preferred width
                             Layout.maximumWidth: 160
@@ -708,88 +852,88 @@ ApplicationWindow {
 
                         }
                         TextField {
-                            text: aperture
+                            text: itemData.aperture
                             Layout.minimumWidth: 100  // Minimum width constraint
                             Layout.preferredWidth: 100  // Default preferred width
                             Layout.maximumWidth: 200
                             Layout.preferredHeight: 30
                             Layout.fillWidth: true
 
-                            onTextChanged: dataModel.setProperty(index, "aperture", text)
-                            enabled: rootwindow.isAnalogInput(dataModel.get(index)) || paramType=== "Уставка"
+                            onTextChanged: dataModel.setProperty(originalIndex, "aperture", text)
+                            enabled: rootwindow.isAnalogInput(itemData) || itemData.paramType=== "Уставка"
                             opacity: enabled ? 1.0 : 0.5
                         }
                         TextField {
-                            text: ktt
+                            text: itemData.ktt
                             Layout.minimumWidth: 80  // Minimum width constraint
                             Layout.preferredWidth: 80  // Default preferred width
                             Layout.maximumWidth: 160
                             Layout.preferredHeight: 30
                             Layout.fillWidth: true
 
-                            onTextChanged: dataModel.setProperty(index, "ktt", text)
-                            enabled: rootwindow.isAnalogInput(dataModel.get(index)) || paramType === "Уставка"
+                            onTextChanged: dataModel.setProperty(originalIndex, "ktt", text)
+                            enabled: rootwindow.isAnalogInput(itemData) || itemData.paramType === "Уставка"
                             opacity: enabled ? 1.0 : 0.5
                         }
                         TextField {
-                            text: def_value
+                            text: itemData.def_value
                             Layout.minimumWidth: 80  // Minimum width constraint
                             Layout.preferredWidth: 80  // Default preferred width
                             Layout.maximumWidth: 160
                             Layout.preferredHeight: 30
                             Layout.fillWidth: true
-                            onTextChanged: dataModel.setProperty(index, "def_value", text)
-                            enabled: paramType !== ("Аналоговые входы" || "Дискретные входы")
+                            onTextChanged: dataModel.setProperty(originalIndex, "def_value", text)
+                            enabled: itemData.paramType !== ("Аналоговые входы" || "Дискретные входы")
                             opacity: enabled ? 1.0 : 0.5
                         }
                         TextField {
-                            text: ad
+                            text: itemData.ad
                             Layout.minimumWidth: 60  // Minimum width constraint
                             Layout.preferredWidth: 60  // Default preferred width
                             Layout.maximumWidth: 120
                             Layout.preferredHeight: 30
                             Layout.fillWidth: true
-                            onTextChanged: dataModel.setProperty(index, "ad", text)
-                            enabled: rootwindow.isDiscreteInput(dataModel.get(index))
+                            onTextChanged: dataModel.setProperty(originalIndex, "ad", text)
+                            enabled: rootwindow.isDiscreteInput(itemData)
                             opacity: enabled ? 1.0 : 0.5
                         }
                         TextField {
-                            text: oc
+                            text: itemData.oc
                             Layout.minimumWidth: 80  // Minimum width constraint
                             Layout.preferredWidth: 80  // Default preferred width
                             Layout.maximumWidth: 160
                             Layout.preferredHeight: 30
                             Layout.fillWidth: true
-                            onTextChanged: dataModel.setProperty(index, "oc", text)
+                            onTextChanged: dataModel.setProperty(originalIndex, "oc", text)
                         }
                         TextField {
-                            text: tosp
+                            text: itemData.tosp
                             Layout.minimumWidth: 80  // Minimum width constraint
                             Layout.preferredWidth: 80  // Default preferred width
                             Layout.maximumWidth: 160
                             Layout.preferredHeight: 30
                             Layout.fillWidth: true
 
-                            onTextChanged: dataModel.setProperty(index, "tosp", text)
-                            enabled: paramType === "Выходные сигналы"
+                            onTextChanged: dataModel.setProperty(originalIndex, "tosp", text)
+                            enabled: itemData.paramType === "Выходные сигналы"
                             opacity: enabled ? 1.0 : 0.5
                         }
                         TextField {
-                            text: tolp
+                            text: itemData.tolp
                             Layout.minimumWidth: 80  // Minimum width constraint
                             Layout.preferredWidth: 80  // Default preferred width
                             Layout.maximumWidth: 160
                             Layout.preferredHeight: 30
                             Layout.fillWidth: true
 
-                            onTextChanged: dataModel.setProperty(index, "tolp", text)
-                            enabled: paramType === ("Аналоговый выход" || "Дискретный выход")
+                            onTextChanged: dataModel.setProperty(originalIndex, "tolp", text)
+                            enabled: itemData.paramType === "Аналоговый выход" || itemData.paramType === "Дискретный выход"
                             opacity: enabled ? 1.0 : 0.5
                         }
                         Button {
                             text: "Удалить"
                             Layout.preferredWidth: 160
-                            onClicked: dataModel.remove(index)
+                            onClicked: dataModel.remove(originalIndex)
                             Material.background: Material.Red
                         }
                     }
@@ -844,6 +988,7 @@ ApplicationWindow {
                         "allow_address_104": false,
                         "survey_group_104": ""
                     });
+                    Qt.callLater(syncFilteredModels)
                 }
             }
         }
@@ -1568,19 +1713,7 @@ ApplicationWindow {
             Layout.fillHeight: true
             currentIndex: tabBar.currentIndex
             anchors.margins: 10
-            onCurrentIndexChanged: {
-                currentType = ["Аналоговые входы", "Дискретный входы", "Аналоговый выход", "Дискретный выход", "Признаки", "Уставка"][currentIndex]
-                console.log(loader1.active)
 
-                for (var i = 0; i < count; i++) {
-                    var item = itemAt(i)
-                    if (item && item.hasOwnProperty("listView")) {
-                        item.listView.model = 0
-                        item.listView.model = dataModel
-                        item.listView.forceLayout()
-                    }
-                }
-            }
             Loader {
                 id: loader1
                 active: tabBar.currentIndex === 0
