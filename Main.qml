@@ -1,4 +1,4 @@
-    import QtQuick 2.15
+import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Controls.Material 2.15
 import QtQuick.Layouts 1.15
@@ -8,6 +8,7 @@ ApplicationWindow {
     id: rootwindow
     width: 1920
     height: 1080
+    minimumWidth: 1920
     visible: true
     title: "Генератор сигналов"
     property bool modbus: false
@@ -419,7 +420,10 @@ ApplicationWindow {
                         if (item && item.codeNameField) {
                             item.codeNameField.updateName(item.codeNameField.text);
                         }
+
                     }
+                    checkForDuplicates();
+
                 });
                 }
                 loadingState = false
@@ -679,124 +683,53 @@ ApplicationWindow {
                             Layout.preferredHeight: 30
                             onTextChanged: dataModel.setProperty(originalIndex, "ioIndex", text)
                         }
+
                         TextField {
                             id: nameField
                             text: itemData.name
-                            Layout.minimumWidth: 200  // Minimum width constraint
-                            Layout.preferredWidth: 200  // Default preferred width
-                            Layout.maximumWidth: 400  // Optional maximum width
-                            Layout.fillWidth: true  // Allows expansion
+                            Layout.minimumWidth: 200
+                            Layout.preferredWidth: 200
+                            Layout.maximumWidth: 400
+                            Layout.fillWidth: true
                             Layout.preferredHeight: 30
-                            property color normalTextColor: Material.Black
-                            property bool isDuplicate: false
+                            color: itemData.isNameDuplicate ? "red" : "black"
 
-                            function updateName(newText) {
-                                isDuplicate = rootwindow.checkDuplicateName(newText, index);
-                                if (!isDuplicate) {
-                                    dataModel.setProperty(originalIndexindex, "name", newText);
-                                }
-                                return isDuplicate;
-                            }
+                            ToolTip.visible: hovered
+                            ToolTip.text: itemData.isNameDuplicate ?
+                                "Это наименование уже используется" :
+                                text
 
-                            onTextChanged: {
-                                if (updateName(text) && text !== "") {
-                                    duplicateAnimation.stop();
-                                    duplicateAnimation.start();
-                                }
-                            }
-
-                            SequentialAnimation {
-                                id: duplicateAnimation
-                                running: false
-                                ColorAnimation {
-                                    target: nameField
-                                    property: "normalTextColor"
-                                    to: Material.Red
-                                    duration: 150
-                                }
-                                ColorAnimation {
-                                    target: nameField
-                                    property: "normalTextColor"
-                                    to: Material.Black
-                                    duration: 150
-                                }
-                                loops: 2
-                            }
-
-                            Binding {
-                                target: nameField
-                                property: "Material.foreground"
-                                value: nameField.isDuplicate ? Material.Red : nameField.normalTextColor
-                            }
-
-                            ToolTip {
-                                visible: parent.hovered
-                                delay: 300
-                                text: parent.isDuplicate ? "Это наименование уже используется!" : parent.text
-                                Material.theme: parent.isDuplicate ? Material.Dark : Material.Light
-                                Material.background: parent.isDuplicate ? Material.Red : Material.Grey
+                            // Update model on change
+                            onTextChanged: if (text !== itemData.name) {
+                                dataModel.setProperty(originalIndex, "name", text)
+                                Qt.callLater(rootwindow.checkForDuplicates)
                             }
                         }
 
                         TextField {
                             id: codeNameField
                             text: itemData.codeName
-                            Layout.minimumWidth: 200  // Minimum width constraint
-                            Layout.preferredWidth: 200  // Default preferred width
+                            Layout.minimumWidth: 200
+                            Layout.preferredWidth: 200
                             Layout.maximumWidth: 400
-                            Layout.preferredHeight: 30
                             Layout.fillWidth: true
+                            Layout.preferredHeight: 30
 
-                            property color normalTextColor: Material.Black
-                            property bool isDuplicate: false
+                            color: itemData.isCodeNameDuplicate ? "red" : "black"
 
-                            function updateName(newText) {
-                                isDuplicate = rootwindow.checkDuplicateCodeName(newText, index);
-                                if (!isDuplicate) {
-                                    dataModel.setProperty(originalIndex, "codeName", newText);
-                                }
-                                return isDuplicate;
-                            }
+                            ToolTip.visible: hovered
+                            ToolTip.text: itemData.isCodeNameDuplicate ?
+                                "Это наименование на английском уже используется" :
+                                text
 
-                            onTextChanged: {
-                                if (updateName(text) && text !== "") {
-                                    duplicateAnimation.stop();
-                                    duplicateAnimation.start();
-                                }
-                            }
-
-                            SequentialAnimation {
-                                id: duplicatecodeAnimation
-                                running: false
-                                ColorAnimation {
-                                    target: codeNameField
-                                    property: "normalTextColor"
-                                    to: Material.Red
-                                    duration: 150
-                                }
-                                ColorAnimation {
-                                    target: codeNameField
-                                    property: "normalTextColor"
-                                    to: Material.Black
-                                    duration: 150
-                                }
-                                loops: 2
-                            }
-
-                            Binding {
-                                target: codeNameField
-                                property: "Material.foreground"
-                                value: codeNameField.isDuplicate ? Material.Red : nameField.normalTextColor
-                            }
-
-                            ToolTip {
-                                visible: parent.hovered
-                                delay: 300
-                                text: parent.isDuplicate ? "Это наименование на английском уже используется!" : parent.text
-                                Material.theme: parent.isDuplicate ? Material.Dark : Material.Light
-                                Material.background: parent.isDuplicate ? Material.Red : Material.Grey
+                            onTextChanged: if (text !== itemData.codeName) {
+                                dataModel.setProperty(originalIndex, "codeName", text)
+                                Qt.callLater(rootwindow.checkForDuplicates)
                             }
                         }
+
+
+
                         ComboBox {
                             model: ["bool", "float", "unsigned int", "unsigned short", "unsigned char"]
                             currentIndex: {
@@ -2179,6 +2112,46 @@ ApplicationWindow {
             }
         }
         nextIoIndex = maxIndex + 1;
+    }
+    function checkForDuplicates() {
+        const names = new Set();
+        const codeNames = new Set();
+        let hasNameDuplicates = false;
+        let hasCodeNameDuplicates = false;
+
+        for (let i = 0; i < dataModel.count; i++) {
+            const item = dataModel.get(i);
+
+            // Check name duplicates
+            if (names.has(item.name)) {
+                hasNameDuplicates = true;
+                // Mark all items with this name as duplicates
+                for (let j = 0; j < dataModel.count; j++) {
+                    if (dataModel.get(j).name === item.name) {
+                        dataModel.setProperty(j, "isNameDuplicate", true);
+                    }
+                }
+            } else {
+                names.add(item.name);
+                dataModel.setProperty(i, "isNameDuplicate", false);
+            }
+
+            // Check code name duplicates
+            if (codeNames.has(item.codeName)) {
+                hasCodeNameDuplicates = true;
+                // Mark all items with this code name as duplicates
+                for (let j = 0; j < dataModel.count; j++) {
+                    if (dataModel.get(j).codeName === item.codeName) {
+                        dataModel.setProperty(j, "isCodeNameDuplicate", true);
+                    }
+                }
+            } else {
+                codeNames.add(item.codeName);
+                dataModel.setProperty(i, "isCodeNameDuplicate", false);
+            }
+        }
+
+        return { hasNameDuplicates, hasCodeNameDuplicates };
     }
 
 }
