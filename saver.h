@@ -40,10 +40,14 @@ public:
 	 */
 	Q_INVOKABLE QVariant loadFromFile(const QString &filename);
 
-	Q_INVOKABLE void runPythonScript();
-
 	Q_INVOKABLE QString cleanPath(const QString &path) const;
 	static void registerType();
+
+public slots:
+	void runPythonScript();
+signals:
+	void pythonFinished(const QString &output);
+	void pythonError(const QString &error);
 
 private:
 	bool ensureOutputDirectory() const;
@@ -51,6 +55,9 @@ private:
 	QVariant loadFromRelativePath(const QString &relativePath);
 
 	bool saveToRelativePath(const QString &relativePath, const QVariant &data);
+
+	QProcess *m_process;
+
 };
 
 #endif // FILEHANDLER_H

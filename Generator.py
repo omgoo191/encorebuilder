@@ -1,20 +1,25 @@
 import json
+import sys
 from pathlib import Path
 import os
 from datetime import datetime
 
-def main():
+def main(json_file):
     current_dir = Path(os.getcwd())
     current_date = datetime.now().strftime("%d.%m.%Y")
 
-    file_name = input("Введите имя JSON файла (например: export.json): ").strip()
-    json_path = current_dir / file_name
+    # file_name = input("Введите имя JSON файла (например: export.json): ").strip()
+    # json_path = current_dir / file_name
+    json_path = current_dir / json_file
+
+    # if not json_path.exists():
+    #     print(f"Ошибка: Файл '{file_name}' не найден в директории: {current_dir}")
+    #     input("Нажмите Enter для выхода...")
+    #     return
 
     if not json_path.exists():
-        print(f"Ошибка: Файл '{file_name}' не найден в директории: {current_dir}")
-        input("Нажмите Enter для выхода...")
-        return
-
+        print(f"Error: File '{json_file}' not found in: {current_dir}", file=sys.stderr)
+        return 1
     try:
         with json_path.open("r", encoding="utf-8") as file:
             data = json.load(file)
@@ -358,4 +363,8 @@ namespace core
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) < 2:
+        print("Usage: python Generator.py <json_file>", file=sys.stderr)
+        sys.exit(1)
+
+    sys.exit(main(sys.argv[1]))

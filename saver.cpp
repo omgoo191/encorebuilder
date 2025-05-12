@@ -3,8 +3,16 @@
 #include <QStandardPaths>
 #include <QDir>
 
-FileHandler::FileHandler(QObject *parent) : QObject(parent) {}
-
+FileHandler::FileHandler(QObject *parent) : QObject(parent)
+{
+	m_process = new QProcess(this);
+	connect(m_process, &QProcess::readyReadStandardOutput, [this]() {
+		emit pythonFinished(QString::fromLocal8Bit(m_process->readAllStandardOutput()));
+	});
+	connect(m_process, &QProcess::errorOccurred, [this](QProcess::ProcessError error) {
+		emit pythonError(QString("Error: %1").arg(error));
+	});
+}
 QString FileHandler::getAppDirectory() const {
 	QDir projectDir(QCoreApplication::applicationDirPath());
 	projectDir.cdUp();
@@ -106,22 +114,25 @@ bool FileHandler::saveToRelativePath(const QString &relativePath, const QVariant
 void FileHandler::runPythonScript()
 {
 	QString basepath = QCoreApplication::applicationDirPath();
-	QDir path = QDir(basepath);
+	QDir path(basepath);
 	path.cdUp();
+
 	QString jsonpath = path.absoluteFilePath("output/export.json");
-	QString program = path.absoluteFilePath("venv/bin/python.exe");
-	QStringList arguments;
-	arguments << "Generator.py" << jsonpath;
-	QProcess *process = new QProcess(this);
-	process->setProgram(program);
-	process->setArguments(arguments);
-	process->start();
-	if (!process->waitForStarted())
-	{
-		qWarning() << "Failed to start Python process";
+
+	QString pythonExec;
+	pythonExec = path.absoluteFilePath("venv/bin/python.exe");
+
+	if (!QFile::exists(pythonExec)) {
+		emit pythonError("Python interpreter not found at: " + pythonExec);
 		return;
 	}
-	process->waitForFinished(-1);
-	QByteArray output = process->readAllStandardOutput();
-	qDebug() << output << "Python script output";
+
+	QString scriptPath = path.absoluteFilePath("Generator.py");
+	if (!QFile::exists(scriptPath)) {
+		emit pythonError("Python script not found at: " + scriptPath);
+		return;
+	}
+
+	m_process->setWorkingDirectory(path.absolutePath());
+	m_process->start(pythonExec, {scriptPath, jsonpath});
 }

@@ -538,8 +538,8 @@ ApplicationWindow {
                 padding: 10
                 ScrollBar.vertical.policy: ScrollBar.AlwaysOn
                 leftPadding: 15
-                rightPadding: 10
-                contentWidth: listView.width
+                rightPadding: 22
+                contentWidth: listView.width - 30
                 contentHeight: listView.height
                 ListView {
                     id: listView
@@ -929,15 +929,6 @@ ApplicationWindow {
 
     Component {
         id: modbusPageComponent
-        ScrollView {
-            clip: true
-            contentWidth: grid.implicitWidth
-            contentHeight: grid.implicitHeight
-            leftPadding: 15
-            rightPadding: 15
-            visible: modbus
-            ScrollBar.horizontal.policy: ScrollBar.AsNeeded
-            ScrollBar.vertical.policy: ScrollBar.AsNeeded
             Item {
                 anchors.fill: parent
                 property var typeIndexMap: {
@@ -989,159 +980,200 @@ ApplicationWindow {
                         }
                     }
 
-                    Repeater {
+                    ListView {
+                        id: mbList
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        cacheBuffer: 200
+                        spacing: 4
                         model: dataModel
-                        delegate: RowLayout {
-                            spacing: 5
-                            Text {
-                                text: ioIndex
-                                Layout.preferredWidth: 50
-                                horizontalAlignment: Text.AlignHCenter
-                                elide: Text.ElideRight
-                            }
-                            Text {
-                                text: paramType
-                                Layout.preferredWidth: 100
-                                horizontalAlignment: Text.AlignHCenter
-                                elide: Text.ElideRight
-                            }
-                            Text {
-                                text: name
-                                Layout.preferredWidth: 200
-                                horizontalAlignment: Text.AlignHCenter
-                                MouseArea {
-                                    id: mouseArea
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    ToolTip {
-                                        visible: mouseArea.containsMouse
-                                        text: name
+                        ScrollBar.vertical: ScrollBar {
+                            id: vbar
+                            policy: ScrollBar.AlwaysOn
+                        }
+                        delegate: Item {
+                            width: mbList.width
+                            height: 40
+                            RowLayout{
+                                Text {
+                                    text: ioIndex
+                                    Layout.preferredWidth: 50
+                                    horizontalAlignment: Text.AlignHCenter
+                                    elide: Text.ElideRight
+                                }
+                                Text {
+                                    text: paramType
+                                    Layout.preferredWidth: 100
+                                    horizontalAlignment: Text.AlignHCenter
+                                    elide: Text.ElideRight
+                                }
+                                Text {
+                                    text: name
+                                    Layout.preferredWidth: 200
+                                    horizontalAlignment: Text.AlignHCenter
+                                    elide: Text.ElideRight
+                                }
+                                Text {
+                                    text: type
+                                    Layout.preferredWidth: 100
+                                    horizontalAlignment: Text.AlignHCenter
+                                    elide: Text.ElideRight
+                                }
+                                TextField {
+                                    id: mbaddress
+                                    text: dataModel.get(index).address
+                                    Layout.preferredWidth: 100
+                                    Layout.preferredHeight: 30
+                                    horizontalAlignment: Text.AlignHCenter
+                                    onTextChanged: dataModel.setProperty(index,
+                                        "address",
+                                        text)
+                                }
+                                ComboBox {
+                                    id: combo
+                                    model: ["Coil", "Discrete input", "Input register", "Holding register"]
+
+                                    currentIndex: model.indexOf(blockName || "Coil")
+                                    onCurrentIndexChanged: {
+                                        if (!loadingState && currentIndex >= 0) {
+                                            dataModel.setProperty(index, "blockName", model[currentIndex])
+                                            assignIndexByType(model[currentIndex])
+                                        }
                                     }
+
+                                    Layout.preferredWidth: 100
+                                    Layout.preferredHeight: 30
                                 }
-                                elide: Text.ElideRight
-                            }
-                            Text {
-                                text: type
-                                Layout.preferredWidth: 100
-                                horizontalAlignment: Text.AlignHCenter
-                                elide: Text.ElideRight
-                            }
-                            TextField {
-                                id: mbaddress
-                                text: dataModel.get(index).address
-                                Layout.preferredWidth: 100
-                                Layout.preferredHeight: 30
-                                horizontalAlignment: Text.AlignHCenter
-                                onTextChanged: dataModel.setProperty(index,
-                                    "address",
-                                    text)
-                            }
-                            ComboBox {
-                                id: combo
-                                model: ["Coil", "Discrete input", "Input register", "Holding register"]
-
-                                displayText: currentIndex === -1 ? "" : model[currentIndex]
-
-                                currentIndex: {
-                                    if (!blockName) return -1;
-                                    var idx = model.indexOf(blockName);
-                                    return idx >= 0 ? idx : -1;
+                                Button {
+                                    text: "Удалить"
+                                    Layout.preferredWidth: 160
+                                    onClicked: dataModel.remove(index)
+                                    Material.background: Material.Red
                                 }
-
-                                onCurrentIndexChanged: {
-                                    if (!loadingState && currentIndex >= 0) {
-                                        dataModel.setProperty(index, "blockName", model[currentIndex])
-                                        assignIndexByType(model[currentIndex])
-                                    }
-                                }
-
-                                Layout.preferredWidth: 100
-                                Layout.preferredHeight: 30
-                            }
-                            Button {
-                                text: "Удалить"
-                                Layout.preferredWidth: 160
-                                onClicked: dataModel.remove(index)
-                                Material.background: Material.Red
                             }
                         }
                     }
                 }
             }
+
         }
-    }
 
     Component {
         id: mekPageComponent
-
         Item {
             anchors.fill: parent
             Component.onCompleted: assignIOA()
-            ScrollView {
+            ColumnLayout {
+                spacing: 8
+                width: parent.width - 30
                 anchors.fill: parent
-                clip: true
-                leftPadding: 10
-                rightPadding: 10
-                topPadding: 10
-                bottomPadding: 10
-                ScrollBar.vertical.policy: ScrollBar.AlwaysOn
-                ColumnLayout {
+
+                RowLayout {
                     spacing: 8
-                    width: parent.width
 
-                    Rectangle {
-                        width: parent.width
-                        height: 40
-                        color: "#f0f0f0"
-
-                        RowLayout {
-                            anchors.fill: parent
-                            spacing: 8
-
-                            Label { text: "IO"; Layout.preferredWidth: 50 }
-                            Label { text: "Тип"; Layout.preferredWidth: 100 }
-                            Label { text: "Наименование"; Layout.preferredWidth: 200 }
-                            Label { text: "Тип данных"; Layout.preferredWidth: 100 }
-                            Label { text: "Адрес ОИ"; Layout.preferredWidth: 100 }
-                            Label { text: "Адрес АСДУ"; Layout.preferredWidth: 100 }
-                            Label { text: "Номер буфера"; Layout.preferredWidth: 130 }
-                            Label { text: "Тип при спорадике"; Layout.preferredWidth: 130 }
-                            Label { text: "Тип при фоновом"; Layout.preferredWidth: 130 }
-                            Label { text: "Тип при пер/цик"; Layout.preferredWidth: 130 }
-                            Label { text: "Тип при общем"; Layout.preferredWidth: 130 }
-                            Label { text: ""; Layout.preferredWidth: 100 }
-                        }
+                    Label {
+                        text: "IO"
+                        Layout.preferredWidth: 50
+                        horizontalAlignment: Text.AlignHCenter
                     }
+                    Label {
+                        text: "Тип"
+                        Layout.preferredWidth: 100
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    Label {
+                        text: "Наименование"
+                        Layout.preferredWidth: 200
+                        horizontalAlignment: Text.AlignHCenter
+                        elide: Text.ElideRight
+                    }
+                    Label {
+                        text: "Адрес ОИ"
+                        Layout.preferredWidth: 100
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    Label { text: "Адрес ОИ"
+                        Layout.preferredWidth: 100
+                        horizontalAlignment: Text.AlignLeft
+                    }
+                    Label { text: "Адрес АСДУ"
+                        Layout.preferredWidth: 100
+                        horizontalAlignment: Text.AlignLeft
+                    }
+                    Label { text: "Номер буфера"
+                        Layout.preferredWidth: 130
+                        horizontalAlignment: Text.AlignLeft
+                    }
+                    Label { text: "Тип при спорадике"
+                        Layout.preferredWidth: 130
+                        horizontalAlignment: Text.AlignLeft
+                    }
+                    Label { text: "Тип при фоновом"
+                        Layout.preferredWidth: 130
+                        horizontalAlignment:Text.AlignLeft
+                    }
+                    Label { text: "Тип при пер/цик"
+                        Layout.preferredWidth: 130
+                    }
+                    Label { text: "Тип при общем"
+                        Layout.preferredWidth: 130
+                        horizontalAlignment: Text.AlignLeft
+                    }
+                    Label { text: ""
+                        Layout.preferredWidth: 100
+                        horizontalAlignment: Text.AlignLeft
+                    }
+                }
 
-                    ListView {
-                        id: mekList
-                        Layout.fillWidth: true
-                        implicitHeight: 800
-                        spacing: 4
-                        clip: true
-                        cacheBuffer: 200
-                        boundsBehavior: Flickable.StopAtBounds
-                        model: dataModel
-                        delegate: RowLayout {
-                            spacing: 8
-                            width: mekList.width
-                            height: 40
+                ListView {
+                    id: mekList
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    cacheBuffer: 200
+                    spacing: 4
+                    model: dataModel
+                    ScrollBar.vertical: ScrollBar {
+                        id: vbar
+                        policy: ScrollBar.AlwaysOn
+                    }
+                    delegate: Item {
+                        width: mekList.width
+                        height: 40
 
-                            Text { text: ioIndex; Layout.preferredWidth: 50; verticalAlignment: Text.AlignVCenter }
+                        RowLayout{
+                        Text {
+                            text: ioIndex
+                                Layout.preferredWidth: 50
+                            horizontalAlignment: Text.AlignHCenter
+                            }
 
-                            Text { text: paramType; Layout.preferredWidth: 100; verticalAlignment: Text.AlignVCenter }
+                            Text { text: paramType
+                                ;
+                                Layout.preferredWidth: 100
+                                ;
+                                horizontalAlignment: Text.AlignHCenter
+                            }
 
                             Text {
                                 text: name
                                 Layout.preferredWidth: 200
                                 elide: Text.ElideRight
-                                verticalAlignment: Text.AlignVCenter
+                                horizontalAlignment: Text.AlignHCenter
                                 ToolTip.visible: containsMouse
                                 ToolTip.text: name
-                                MouseArea { anchors.fill: parent; hoverEnabled: true }
+                                MouseArea { anchors.fill: parent
+                                    ;
+                                    hoverEnabled: true
+                                }
                             }
 
-                            Text { text: type; Layout.preferredWidth: 100; verticalAlignment: Text.AlignVCenter }
+                            Text { text: type
+                                ;
+                                Layout.preferredWidth: 100
+                                ;
+                                horizontalAlignment: Text.AlignHCenter
+                            }
 
                             TextField {
                                 text: ioa_address || ""
@@ -1293,7 +1325,10 @@ ApplicationWindow {
                     cacheBuffer: 200
                     spacing: 4
                     model: dataModel
-
+                    ScrollBar.vertical: ScrollBar {
+                        id: vbar
+                        policy: ScrollBar.AlwaysOn
+                    }
                     delegate: Item {
                         width: mek101List.width
                         height: 40
@@ -1472,7 +1507,10 @@ ApplicationWindow {
                     cacheBuffer: 200
                     spacing: 4
                     model: dataModel
-
+                    ScrollBar.vertical: ScrollBar {
+                        id: vbar
+                        policy: ScrollBar.AlwaysOn
+                    }
                     delegate: Item {
                         width: mek104List.width
                         height: 40
@@ -2032,57 +2070,44 @@ ApplicationWindow {
     }
 
     function assignIndexByType(type) {
-        // First collect all existing addresses for this type
+        // 1. Cache existing addresses (ONE-TIME SCAN)
         const existingAddresses = [];
         for (let i = 0; i < dataModel.count; i++) {
             const item = dataModel.get(i);
-            if (item.blockName === type && item.address && item.address !== "") {
+            if (item.blockName === type && item.address) {
                 const addr = parseInt(item.address);
-                if (!isNaN(addr)) {
-                    existingAddresses.push(addr);
-                }
+                if (!isNaN(addr)) existingAddresses.push(addr);
             }
         }
-
-        // Sort addresses in ascending order
             existingAddresses.sort((a, b) => a - b);
 
-        // Find the next available address
-        let nextAddr = 1;
-        for (const addr of existingAddresses) {
-            if (addr === nextAddr) {
-                // Get the item that has this address to determine its type
-                const itemWithAddr = Array.from({length: dataModel.count})
-                    .map((_, i) => dataModel.get(i))
-                .find(item => parseInt(item.address) === addr && item.blockName === type);
-
-                if (itemWithAddr) {
-                    // Determine increment based on type
-                    const increment = getAddressIncrement(type, itemWithAddr.type);
-                    nextAddr += increment;
-                } else {
-                    nextAddr += 1; // Default increment if item not found
-                }
-            } else if (addr > nextAddr) {
-                break; // Found a gap we can use
+        // 2. Find all items needing addresses (ONE-TIME SCAN)
+        const itemsNeedingAddress = [];
+        for (let i = 0; i < dataModel.count; i++) {
+            const item = dataModel.get(i);
+            if (item.blockName === type && !item.address) {
+                itemsNeedingAddress.push({ index: i, dataType: item.type });
             }
         }
 
-        // Assign addresses to items without one
-        for (let i = 0; i < dataModel.count; i++) {
-            const item = dataModel.get(i);
-            if (item.blockName === type && (!item.address || item.address === "")) {
-                dataModel.setProperty(i, "address", nextAddr.toString());
-
-                // Determine increment for next address
-                const increment = getAddressIncrement(type, item.type);
-                nextAddr += increment;
+        // 3. Assign addresses in bulk (NO RESCANNING)
+        let nextAddr = 1;
+        for (const { index, dataType } of itemsNeedingAddress) {
+            // Skip used addresses
+            while (existingAddresses.includes(nextAddr)) {
+                nextAddr += getAddressIncrement(type, dataType);
             }
+            // Assign
+            dataModel.setProperty(index, "address", nextAddr.toString());
+            existingAddresses.push(nextAddr); // Mark as used
+            nextAddr += getAddressIncrement(type, dataType);
         }
     }
 
+
     // Helper function to determine address increment based on type
     function getAddressIncrement(blockType, dataType) {
+        console.log("test2")
         if (blockType === "Input register" || blockType === "Holding register") {
             // 16-bit types (1 register)
             if (dataType === "unsigned short" || dataType === "short" || dataType === "bool") {
