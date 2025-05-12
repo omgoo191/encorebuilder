@@ -21,7 +21,7 @@ def create_excel_report(json_file, output_file):
                          bottom=Side(style='thin'))
     group_font = Font(bold=True, size=12, color="FFFFFF")
     group_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
-    center_alignment = Alignment(horizontal='center', vertical='center')
+    center_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
     # Write headers
     headers = [
@@ -31,7 +31,7 @@ def create_excel_report(json_file, output_file):
         "Тип данных",
         "Используется в логике",
         "Сохранение",
-        "Апертура",
+        "Уставка апертуры",
         "КТТ",
         "Значение по умолчанию"
     ]
@@ -75,24 +75,24 @@ def create_excel_report(json_file, output_file):
 
         # Write items in group
         for item in items:
-            ws.cell(row=current_row, column=2, value=item.get("ioIndex", "")).border = thin_border
-            ws.cell(row=current_row, column=3, value=item.get("name", "").strip()).border = thin_border
-            ws.cell(row=current_row, column=4, value=item.get("codeName", "").strip()).border = thin_border
-            ws.cell(row=current_row, column=5, value=item.get("type", "")).border = thin_border
+            ws.cell(row=current_row, column=1, value=item.get("ioIndex", "")).border = thin_border
+            ws.cell(row=current_row, column=2, value=item.get("name", "").strip()).border = thin_border
+            ws.cell(row=current_row, column=3, value=item.get("codeName", "").strip()).border = thin_border
+            ws.cell(row=current_row, column=4, value=item.get("type", "")).border = thin_border
 
             logicuse = item.get("logicuse", "")
-            ws.cell(row=current_row, column=6, value="Да" if logicuse == "Да" else "").border = thin_border
+            ws.cell(row=current_row, column=5, value="Да" if logicuse == "Да" else "").border = thin_border
 
             saving = item.get("saving", "")
-            ws.cell(row=current_row, column=7, value="Да" if saving == "Да" else "").border = thin_border
+            ws.cell(row=current_row, column=6, value="Да" if saving == "Да" else "").border = thin_border
 
-            ws.cell(row=current_row, column=8, value=item.get("aperture", "")).border = thin_border
-            ws.cell(row=current_row, column=9, value=item.get("ktt", "")).border = thin_border
-            ws.cell(row=current_row, column=10, value=item.get("def_value", "")).border = thin_border
+            ws.cell(row=current_row, column=7, value=item.get("aperture", "")).border = thin_border
+            ws.cell(row=current_row, column=8, value=item.get("ktt", "")).border = thin_border
+            ws.cell(row=current_row, column=9, value=item.get("def_value", "")).border = thin_border
 
             current_row += 1
 
-    column_widths = [10, 40, 40, 15, 20, 15, 15, 15, 20]
+    column_widths = [10, 70, 40, 15, 30, 15, 15, 15, 40]
     for i, width in enumerate(column_widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = width
 
