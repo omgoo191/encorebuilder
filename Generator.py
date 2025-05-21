@@ -4,22 +4,15 @@ from pathlib import Path
 import os
 from datetime import datetime
 
+
 def main(json_file):
-    current_dir = Path(os.getcwd())
+
+    json_path = Path(json_file).resolve()
     current_date = datetime.now().strftime("%d.%m.%Y")
-
-    # file_name = input("Введите имя JSON файла (например: export.json): ").strip()
-    # json_path = current_dir / file_name
-    json_path = current_dir / json_file
-
-    # if not json_path.exists():
-    #     print(f"Ошибка: Файл '{file_name}' не найден в директории: {current_dir}")
-    #     input("Нажмите Enter для выхода...")
-    #     return
-
     if not json_path.exists():
-        print(f"Error: File '{json_file}' not found in: {current_dir}", file=sys.stderr)
+        print(f"Error: File '{json_file}' not found at resolved path: {json_path}", file=sys.stderr)
         return 1
+
     try:
         with json_path.open("r", encoding="utf-8") as file:
             data = json.load(file)
@@ -29,9 +22,8 @@ def main(json_file):
                 for obj in data
             ]
     except json.JSONDecodeError:
-        print(f"Ошибка: Файл '{file_name}' содержит некорректный JSON")
-        input("Нажмите Enter для выхода...")
-        return
+        print(f"Ошибка: Файл содержит некорректный JSON", file=sys.stderr)
+        return 1
 
     type_mapping_info = {
         "bool": "Bool",
@@ -295,7 +287,7 @@ namespace core
             saved_parameters_content += (f"        AddStoredObject(ind_{obj['codeName']});\n")
 
         # Генерация для telemeasurments.cpp
-        if(obj.get("paramType") == "Аналоговые входы"):
+        if (obj.get("paramType") == "Аналоговые входы"):
             ktt_param = f"ind_{obj['ktt']}" if obj.get("ktt") else "std::nullopt"
             aperture_param = f"ind_{obj['aperture']}" if obj.get("aperture") else "std::nullopt"
             TM_type = obj.get("type", "")

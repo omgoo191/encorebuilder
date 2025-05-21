@@ -3,11 +3,27 @@ import json
 from openpyxl import Workbook
 from openpyxl.styles import Font, Border, Side, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
+import sys
+from pathlib import Path
 from datetime import datetime
 
-def create_excel_report(json_file, output_file):
-    with open(json_file, 'r', encoding='utf-8') as f:
-        data = json.load(f)
+def main(json_file):
+    json_path = Path(json_file).resolve()
+    if not json_path.exists():
+        print(f"Error: File '{json_file}' not found at resolved path: {json_path}", file=sys.stderr)
+        return 1
+
+    try:
+        with json_path.open("r", encoding="utf-8") as file:
+            data = json.load(file)
+            data = [
+                {k: v.replace('\n', '').strip() if isinstance(v, str) else v
+                 for k, v in obj.items()}
+                for obj in data
+            ]
+    except json.JSONDecodeError:
+        print(f"Ошибка: Файл содержит некорректный JSON", file=sys.stderr)
+        return 1
 
     wb = Workbook()
     ws = wb.active
@@ -99,10 +115,12 @@ def create_excel_report(json_file, output_file):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ws.cell(row=current_row+1, column=1, value=f"{timestamp}")
 
-    wb.save(output_file)
-    print(f"Excel file saved as {output_file}")
+    wb.save("Инфо объекты.xlsx")
+    print(f"Excel file saved")
 
 if __name__ == "__main__":
-    input_json = "export.json"  # Change to your input file
-    output_excel = "Инфо объекты.xlsx"  # Change to desired output file
-    create_excel_report(input_json, output_excel)
+    if len(sys.argv) < 2:
+        print("Usage: python Generator.py <json_file>", file=sys.stderr)
+        sys.exit(1)
+
+    sys.exit(main(sys.argv[1]))

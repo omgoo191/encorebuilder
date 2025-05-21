@@ -44,7 +44,7 @@ public:
 	static void registerType();
 
 public slots:
-	void runPythonScript();
+	void runPythonScript(const QString &jsonFilePath, bool type);
 signals:
 	void pythonFinished(const QString &output);
 	void pythonError(const QString &error);

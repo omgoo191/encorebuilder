@@ -4,6 +4,7 @@ import QtQuick.Controls.Material 2.15
 import QtQuick.Layouts 1.15
 import Qt.labs.platform 1.1 as Platform
 import FileIO 1.0
+import QtQuick.Dialogs
 ApplicationWindow {
     id: rootwindow
     width: 1920
@@ -28,9 +29,10 @@ ApplicationWindow {
         dynamicRoles: false
         onCountChanged: {
             updateNextIoIndex();
-
         }
     }
+    property var toModel:[]
+    property var triggerModel:[]
     ListModel { id: analogInputsModel }
     ListModel { id: digitalInputsModel }
     ListModel { id: analogOutputsModel }
@@ -387,6 +389,31 @@ ApplicationWindow {
         }
     }
 
+    FileDialog {
+        id: jsonSelectDialog
+        title: "Выберите JSON файл"
+        fileMode: FileDialog.OpenFile
+        nameFilters: ["JSON файлы (*.json)"]
+        property string exportType: ""
+        onAccepted: {
+            let localPath = selectedFile.toString().startsWith("file:///")
+                ? selectedFile.toString().substring(8)
+                : selectedFile.toString().replace("file://", "")
+            if(exportType === "code"){
+                fileHandler.runPythonScript(localPath, true)
+            }
+            if(exportType === "exel")
+                {
+                fileHandler.runPythonScript(localPath, false)
+            }
+
+        }
+
+        onRejected: {
+            console.log("Выбор отменён")
+        }
+    }
+
     Platform.FileDialog {
         id: fileDialog
         title: "Выберите файл конфигурации"
@@ -404,7 +431,8 @@ ApplicationWindow {
                     }
                     updateNextIoIndex();
                     initializeFilteredModels()
-
+                    updateFiltered()
+                    updateTrigger()
                     modbus = dataModel.count > 0 && dataModel.get(0).hasOwnProperty("address");
                     mek = dataModel.count > 0 && dataModel.get(0).hasOwnProperty("ioa_address");
                     mek_101 = dataModel.count > 0 && dataModel.get(0).hasOwnProperty("use_in_spont_101");
@@ -522,14 +550,13 @@ ApplicationWindow {
     ListModel{
         id:testModel
     }
-
     Component {
-        id: parameterPageComponent
+        id: parameterPageComponent1
 
 
         ColumnLayout {
-            id: pageRoot
-            property string paramType: "Аналоговые входы"
+            id: pageRoot1
+            property string paramType: "Дискретный выход"
             signal addClicked
             ScrollView {
                 Layout.fillWidth: true
@@ -539,89 +566,54 @@ ApplicationWindow {
                 ScrollBar.vertical.policy: ScrollBar.AlwaysOn
                 leftPadding: 15
                 rightPadding: 22
-                contentWidth: listView.width - 30
-                contentHeight: listView.height
+                contentWidth: listView1.width - 30
+                contentHeight: listView1.height
                 ListView {
-                    id: listView
+                    id: listView1
                     width: parent.width - 30
                     height: parent.height
                     cacheBuffer: 200
-                    model: getFilteredModel(pageRoot.paramType)
+                    model: digitalOutputsModel
                     spacing: 0
                     interactive: true
                     clip: true
                     headerPositioning: ListView.OverlayHeader
                     header: Rectangle {
                         z:2
-                        width: listView.width
+                        width: listView1.width
                         height: 25
                         color: "#f0f0f0"
                         RowLayout {
-                        spacing: 0
-                        width: listView.width
-                        Item {
-                            Layout.preferredWidth: 12
-                            visible: false
+                            spacing: 0
+                            width: listView1.width
+                            Label { text: "IO";
+                                Layout.preferredWidth: 50}
+                            Label { text: "Наименование";
+                                Layout.preferredWidth: 350}
+                            Label { text: "Англ.название"
+                                Layout.preferredWidth: 350}
+                            Label { text: "Single/Double"
+                                Layout.preferredWidth: 80
+                                }
+                            Label { text: "Тип"
+                                Layout.preferredWidth: 120}
+                            Label { text: "Логика"
+                                Layout.preferredWidth: 100}
+                            Label { text: "Выход"
+                                Layout.preferredWidth: 100
+                            }
+                            Label { text: "Кор.имп"
+                                Layout.preferredWidth: 100
+                            }
+                            Label { text: "Дл.имп"
+                                Layout.preferredWidth: 100
+                            }
+                            Label {
+                                text: ""
+                                Layout.preferredWidth: 160
+                                Layout.alignment: Qt.AlignHCenter
+                            }
                         }
-                        Label { text: "IO";
-                            Layout.minimumWidth: 150  // Minimum width constraint
-                            Layout.preferredWidth: 150  // Default preferred width
-                            Layout.maximumWidth: 200  // Optional maximum width
-                            Layout.fillWidth: true  }// Allows expansion }
-                        Label { text: "Наименование";     Layout.minimumWidth: 220  // Minimum width constraint
-                            Layout.preferredWidth: 220  // Default preferred width
-                            Layout.maximumWidth: 400  // Optional maximum width
-                            Layout.fillWidth: true  }// Allows expansion }
-                        Label { text: "Англ.название";     Layout.minimumWidth: 220  // Minimum width constraint
-                            Layout.preferredWidth: 220  // Default preferred width
-                            Layout.maximumWidth: 400  // Optional maximum width
-                            Layout.fillWidth: true}  // Allows expansion }
-                        Label { text: "Тип";     Layout.minimumWidth: 240  // Minimum width constraint
-                            Layout.preferredWidth: 240  // Default preferred width
-                            Layout.maximumWidth: 400  // Optional maximum width
-                            Layout.fillWidth: true } // Allows expansion }
-                        Label { text: "Логика";     Layout.minimumWidth: 100  // Minimum width constraint
-                            Layout.preferredWidth: 100  // Default preferred width
-                            Layout.maximumWidth: 160  // Optional maximum width
-                            Layout.fillWidth: true } // Allows expansion }
-                        Label { text: "Сохран.";     Layout.minimumWidth: 140  // Minimum width constraint
-                            Layout.preferredWidth: 140  // Default preferred width
-                            Layout.maximumWidth: 160  // Optional maximum width
-                            Layout.fillWidth: true  }// Allows expansion }
-                        Label { text: "Апертура";      Layout.minimumWidth: 120  // Minimum width constraint
-                            Layout.preferredWidth: 120  // Default preferred width
-                            Layout.maximumWidth: 200  // Optional maximum width
-                            Layout.fillWidth: true  }// Allows expansion }
-                        Label { text: "КТТ";      Layout.minimumWidth: 100  // Minimum width constraint
-                            Layout.preferredWidth: 100  // Default preferred width
-                            Layout.maximumWidth: 160  // Optional maximum width
-                            Layout.fillWidth: true  }// Allows expansion }
-                        Label { text: "Умолч.";      Layout.minimumWidth: 100  // Minimum width constraint
-                            Layout.preferredWidth: 100  // Default preferred width
-                            Layout.maximumWidth: 160  // Optional maximum width
-                            Layout.fillWidth: true } // Allows expansion }
-                        Label { text: "АД";      Layout.minimumWidth: 80  // Minimum width constraint
-                            Layout.preferredWidth: 80  // Default preferred width
-                            Layout.maximumWidth: 120  // Optional maximum width
-                            Layout.fillWidth: true } // Allows expansion }
-                        Label { text: "Выход";      Layout.minimumWidth: 100  // Minimum width constraint
-                            Layout.preferredWidth: 100  // Default preferred width
-                            Layout.maximumWidth: 160  // Optional maximum width
-                            Layout.fillWidth: true  }// Allows expansion }
-                        Label { text: "Кор.имп";      Layout.minimumWidth: 100  // Minimum width constraint
-                            Layout.preferredWidth: 100  // Default preferred width
-                            Layout.maximumWidth: 160  // Optional maximum width
-                            Layout.fillWidth: true } // Allows expansion }
-                        Label { text: "Дл.имп";      Layout.minimumWidth: 100  // Minimum width constraint
-                            Layout.preferredWidth: 100  // Default preferred width
-                            Layout.maximumWidth: 160  // Optional maximum width
-                            Layout.fillWidth: true } // Allows expansion }
-                        Label {
-                            text: ""
-                            Layout.preferredWidth: 160
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                    }
                     }
 
                     delegate: RowLayout {
@@ -629,57 +621,33 @@ ApplicationWindow {
                         property bool hasDuplicateName: false
                         property bool hasDuplicateCodeName: false
 
-                         required property int index
-                         property string ioIndex
-                         property string paramType
-                         property string name
-                         property string codeName
-                         property string type
-                         property string logicuse
-                         property string saving
-                         property string aperture
-                         property string ktt
-                         property string def_value
-                         property string ad
-                         property string oc
-                         property string tosp
-                         property string tolp
+                        required property int index
+                        property string ioIndex
+                        property string paramType
+                        property string name
+                        property string codeName
+                        property string type
+                        property string logicuse
+                        property string saving
+                        property string aperture
+                        property string ktt
+                        property string def_value
+                        property string ad
+                        property string oc
+                        property string tosp
+                        property string tolp
 
-                        property int originalIndex: {
-                            switch (pageRoot.paramType) {
-                                case "Аналоговые входы":
-                                    return analogInputsModel.get(index).originalIndex
-                                case "Дискретные входы":
-                                    return digitalInputsModel.get(index).originalIndex
-                                case "Аналоговый выход":
-                                    return analogOutputsModel.get(index).originalIndex
-                                case "Дискретный выход":
-                                    return digitalOutputsModel.get(index).originalIndex
-                                case "Признаки":
-                                    return flagsModel.get(index).originalIndex
-                                case "Уставка":
-                                    return settingsModel.get(index).originalIndex
-                                default:
-                                    return -1
-                            }
-                        }
+                        property int originalIndex: digitalOutputsModel.get(index).originalIndex
 
-                        width: listView.width
+                        width: listView1.width
                         spacing: 0
                         height: implicitHeight
 
-                        Item {
-                            Layout.preferredWidth: 12
-                            visible: false
-                        }
                         property var itemData: dataModel.get(originalIndex)
 
                         TextField {
                             text: itemData.ioIndex
-                            Layout.minimumWidth: 50  // Minimum width constraint
-                            Layout.preferredWidth: 50  // Default preferred width
-                            Layout.maximumWidth: 150  // Optional maximum width
-                            Layout.fillWidth: true  // Allows expansion                            Layout.fillWidth: true
+                            Layout.preferredWidth: 50
                             Layout.preferredHeight: 30
                             onTextChanged: dataModel.setProperty(originalIndex, "ioIndex", text)
                         }
@@ -687,10 +655,7 @@ ApplicationWindow {
                         TextField {
                             id: nameField
                             text: itemData.name
-                            Layout.minimumWidth: 200
-                            Layout.preferredWidth: 200
-                            Layout.maximumWidth: 400
-                            Layout.fillWidth: true
+                            Layout.preferredWidth: 350
                             Layout.preferredHeight: 30
                             color: itemData.isNameDuplicate ? "red" : "black"
 
@@ -699,7 +664,6 @@ ApplicationWindow {
                                 "Это наименование уже используется" :
                                 text
 
-                            // Update model on change
                             onTextChanged: if (text !== itemData.name) {
                                 dataModel.setProperty(originalIndex, "name", text)
                                 Qt.callLater(rootwindow.checkForDuplicates)
@@ -709,10 +673,7 @@ ApplicationWindow {
                         TextField {
                             id: codeNameField
                             text: itemData.codeName
-                            Layout.minimumWidth: 200
-                            Layout.preferredWidth: 200
-                            Layout.maximumWidth: 400
-                            Layout.fillWidth: true
+                            Layout.preferredWidth: 350
                             Layout.preferredHeight: 30
 
                             color: itemData.isCodeNameDuplicate ? "red" : "black"
@@ -722,30 +683,111 @@ ApplicationWindow {
                                 "Это наименование на английском уже используется" :
                                 text
 
-                            onTextChanged: if (text !== itemData.codeName) {
-                                dataModel.setProperty(originalIndex, "codeName", text)
+                            onEditingFinished: {
+                                if (text === itemData.codeName)
+                                    return
+
+                                let newCodeName = text
+                                let newOc = "VAL_" + newCodeName
+
+                                // Обновляем текущий элемент
+                                dataModel.setProperty(originalIndex, "codeName", newCodeName)
+                                updateFiltered()
+                                updateTrigger()
+                                // Ищем соответствующий уже добавленный innermek-элемент
+                                let existingIndex = -1
+                                for (let i = 0; i < dataModel.count; ++i) {
+                                    let item = dataModel.get(i)
+                                    if (item.paramType === "innermek" && item.oc === newOc) {
+                                        existingIndex = i
+                                        break
+                                    }
+                                }
+
+                                if (existingIndex >= 0) {
+                                    // Уже существует — просто обновим данные
+                                    dataModel.setProperty(existingIndex, "oc", newOc)
+                                    dataModel.setProperty(existingIndex, "codeName", newOc)
+                                    dataModel.setProperty(existingIndex, "name", newOc)
+                                } else {
+                                    // Создаём только если ещё не было
+                                    dataModel.append({
+                                        paramType: "innermek",
+                                        ioIndex: rootwindow.nextIoIndex.toString(),
+                                        name: newOc,
+                                        codeName: newOc,
+                                        oc: newOc,
+                                        type: "bool",
+                                        logicuse: "Да",
+                                        saving: "Нет",
+                                        sod: "",
+                                        aperture: "",
+                                        ktt: "",
+                                        def_value: "",
+                                        ad: "",
+                                        tosp: "",
+                                        tolp: "",
+                                        address: "",
+                                        blockName: "",
+                                        ioa_address: "",
+                                        asdu_address: 1,
+                                        second_class_num: "",
+                                        type_spont: "",
+                                        type_back: "",
+                                        type_percyc: "",
+                                        type_def: "",
+                                        oi_c_sc_na_1: false,
+                                        oi_c_se_na_1: false,
+                                        oi_c_se_nb_1: false,
+                                        oi_c_dc_na_1: false,
+                                        oi_c_bo_na_1: false,
+                                        use_in_spont_101: false,
+                                        use_in_back_101: false,
+                                        use_in_percyc_101: false,
+                                        allow_address_101: false,
+                                        survey_group_101: "",
+                                        use_in_spont_104: false,
+                                        use_in_back_104: false,
+                                        use_in_percyc_104: false,
+                                        allow_address_104: false,
+                                        survey_group_104: ""
+                                    })
+                                }
+
                                 Qt.callLater(rootwindow.checkForDuplicates)
                             }
                         }
+                        Switch {
+                            checked: itemData.sod || false
+                            Layout.preferredWidth: 80
+                            onCheckedChanged: {
+                                dataModel.setProperty(originalIndex, "sod", checked)
 
+                                // Найти дочерний элемент с VAL_ + codeName
+                                let parentCodeName = itemData.codeName
+                                let childCodeName = "VAL_" + parentCodeName
 
-
+                                for (let i = 0; i < dataModel.count; i++) {
+                                    let item = dataModel.get(i)
+                                    if (item.paramType === "innermek" && item.codeName === childCodeName) {
+                                        dataModel.setProperty(i, "type", checked ? "unsigned char" : "bool")
+                                        break
+                                    }
+                                }
+                            }
+                        }
                         ComboBox {
-                            model: ["bool", "float", "unsigned int", "unsigned short", "unsigned char"]
+                            model: ["unsigned char"]
                             currentIndex: {
                                 if (!itemData) return 0
-                                return model.indexOf(itemData.type || "bool")
+                                return model.indexOf(itemData.type || "unsigned char")
                             }
                             onCurrentTextChanged: {
                                 if (itemData) {
                                     dataModel.setProperty(originalIndex, "type", currentText)
                                 }
                             }
-                            Layout.minimumWidth: 200  // Minimum width constraint
-                            Layout.preferredWidth: 200  // Default preferred width
-                            Layout.maximumWidth: 400
-                            Layout.fillWidth: true
-
+                            Layout.preferredWidth: 120
                             Layout.preferredHeight: 30
                         }
                         ComboBox {
@@ -759,110 +801,67 @@ ApplicationWindow {
                                     dataModel.setProperty(originalIndex, "logicuse", currentText)
                                 }
                             }
-                            Layout.minimumWidth: 80  // Minimum width constraint
-                            Layout.preferredWidth: 80  // Default preferred width
-                            Layout.maximumWidth: 160
-                            Layout.fillWidth: true
-
+                            Layout.preferredWidth: 100
                             Layout.preferredHeight: 30
+                        }
+                        TextField {
+                            text: "VAL_" + codeNameField.text
+                            Layout.preferredWidth: 100
+                            Layout.preferredHeight: 30
+                            enabled: false
                         }
                         ComboBox {
-                            model: ["Да", "Нет"]
-                            currentIndex: {
-                                if (!itemData) return 0
-                                return model.indexOf(itemData.saving || "bool")
+                            id: tospComboBox
+                            Layout.preferredWidth: 100
+                            Layout.preferredHeight: 30
+
+                            editable: true
+                            model: toModel
+
+                            Component.onCompleted: {
+                                const idx = toModel.indexOf(itemData.tosp)
+                                currentIndex = idx >= 0 ? idx : -1
                             }
-                            onCurrentTextChanged: {
-                                if (itemData) {
-                                    dataModel.setProperty(originalIndex, "saving", currentText)
+
+                            onActivated: {
+                                if (currentIndex >= 0) {
+                                    dataModel.setProperty(originalIndex, "tosp", toModel[currentIndex])
                                 }
                             }
-                            Layout.minimumWidth: 80  // Minimum width constraint
-                            Layout.preferredWidth: 80  // Default preferred width
-                            Layout.maximumWidth: 160
-                            Layout.preferredHeight: 30
-                            Layout.fillWidth: true
 
+                            onCurrentTextChanged: {
+                                if (!toModel.includes(currentText)) {
+                                    dataModel.setProperty(originalIndex, "tosp", currentText)
+                                }
+                            }
                         }
-                        TextField {
-                            text: itemData.aperture
-                            Layout.minimumWidth: 100  // Minimum width constraint
-                            Layout.preferredWidth: 100  // Default preferred width
-                            Layout.maximumWidth: 200
-                            Layout.preferredHeight: 30
-                            Layout.fillWidth: true
 
-                            onTextChanged: dataModel.setProperty(originalIndex, "aperture", text)
-                            enabled: rootwindow.isAnalogInput(itemData) || itemData.paramType=== "Уставка"
-                            opacity: enabled ? 1.0 : 0.5
-                        }
-                        TextField {
-                            text: itemData.ktt
-                            Layout.minimumWidth: 80  // Minimum width constraint
-                            Layout.preferredWidth: 80  // Default preferred width
-                            Layout.maximumWidth: 160
+                        ComboBox {
+                            id: tolpComboBox
+                            Layout.preferredWidth: 100
                             Layout.preferredHeight: 30
-                            Layout.fillWidth: true
 
-                            onTextChanged: dataModel.setProperty(originalIndex, "ktt", text)
-                            enabled: rootwindow.isAnalogInput(itemData) || itemData.paramType === "Уставка"
-                            opacity: enabled ? 1.0 : 0.5
-                        }
-                        TextField {
-                            text: itemData.def_value
-                            Layout.minimumWidth: 80  // Minimum width constraint
-                            Layout.preferredWidth: 80  // Default preferred width
-                            Layout.maximumWidth: 160
-                            Layout.preferredHeight: 30
-                            Layout.fillWidth: true
-                            onTextChanged: dataModel.setProperty(originalIndex, "def_value", text)
-                            enabled: itemData.paramType !== ("Аналоговые входы" || "Дискретные входы")
-                            opacity: enabled ? 1.0 : 0.5
-                        }
-                        TextField {
-                            text: itemData.ad
-                            Layout.minimumWidth: 60  // Minimum width constraint
-                            Layout.preferredWidth: 60  // Default preferred width
-                            Layout.maximumWidth: 120
-                            Layout.preferredHeight: 30
-                            Layout.fillWidth: true
-                            onTextChanged: dataModel.setProperty(originalIndex, "ad", text)
-                            enabled: rootwindow.isDiscreteInput(itemData)
-                            opacity: enabled ? 1.0 : 0.5
-                        }
-                        TextField {
-                            text: itemData.oc
-                            Layout.minimumWidth: 80  // Minimum width constraint
-                            Layout.preferredWidth: 80  // Default preferred width
-                            Layout.maximumWidth: 160
-                            Layout.preferredHeight: 30
-                            Layout.fillWidth: true
-                            onTextChanged: dataModel.setProperty(originalIndex, "oc", text)
-                        }
-                        TextField {
-                            text: itemData.tosp
-                            Layout.minimumWidth: 80  // Minimum width constraint
-                            Layout.preferredWidth: 80  // Default preferred width
-                            Layout.maximumWidth: 160
-                            Layout.preferredHeight: 30
-                            Layout.fillWidth: true
+                            editable: true
+                            model: toModel
 
-                            onTextChanged: dataModel.setProperty(originalIndex, "tosp", text)
-                            enabled: itemData.paramType === "Выходные сигналы"
-                            opacity: enabled ? 1.0 : 0.5
-                        }
-                        TextField {
-                            text: itemData.tolp
-                            Layout.minimumWidth: 80  // Minimum width constraint
-                            Layout.preferredWidth: 80  // Default preferred width
-                            Layout.maximumWidth: 160
-                            Layout.preferredHeight: 30
-                            Layout.fillWidth: true
+                            Component.onCompleted: {
+                                const idx = toModel.indexOf(itemData.tolp)
+                                currentIndex = idx >= 0 ? idx : -1
+                            }
 
-                            onTextChanged: dataModel.setProperty(originalIndex, "tolp", text)
-                            enabled: itemData.paramType === "Аналоговый выход" || itemData.paramType === "Дискретный выход"
-                            opacity: enabled ? 1.0 : 0.5
+                            onActivated: {
+                                if (currentIndex >= 0) {
+                                    dataModel.setProperty(originalIndex, "tolp", toModel[currentIndex])
+                                }
+                            }
+
+                            onCurrentTextChanged: {
+                                if (!toModel.includes(currentText)) {
+                                    dataModel.setProperty(originalIndex, "tolp", currentText)
+                                }
+                            }
                         }
+
                         Button {
                             text: "Удалить"
                             Layout.preferredWidth: 160
@@ -871,6 +870,302 @@ ApplicationWindow {
                         }
                     }
                 }
+            }
+
+            Button {
+                Layout.alignment: Qt.AlignCenter
+                text: "+"
+
+                Material.background: Material.Green
+                Material.foreground: "white"
+                onClicked: {
+                    addClicked()
+                    dataModel.append( {
+                        "paramType": "Дискретный выход",
+                        "ioIndex": rootwindow.nextIoIndex.toString(),
+                        "name": "",
+                        "codeName": "",
+                        "sod": "",
+                        "type": "unsigned char",
+                        "logicuse": "Да",
+                        "saving": "Да",
+                        "aperture": "",
+                        "ktt": "",
+                        "def_value": "",
+                        "ad": "",
+                        "oc": "",
+                        "tosp": "",
+                        "tolp": "",
+                        "sector": "",
+                        "address": "",
+                        "blockName": "",
+                        "ioa_address": "",
+                        "asdu_address": 1,
+                        "second_class_num": "",
+                        "type_spont": "",
+                        "type_back": "",
+                        "type_percyc": "",
+                        "type_def": "",
+                        "oi_c_sc_na_1": false,
+                        "oi_c_se_na_1": false,
+                        "oi_c_se_nb_1": false,
+                        "oi_c_dc_na_1": false,
+                        "oi_c_bo_na_1": false,
+                        "use_in_spont_101": false,
+                        "use_in_back_101": false,
+                        "use_in_percyc_101": false,
+                        "allow_address_101": false,
+                        "survey_group_101": "",
+                        "use_in_spont_104": false,
+                        "use_in_back_104": false,
+                        "use_in_percyc_104": false,
+                        "allow_address_104": false,
+                        "survey_group_104": ""
+                    });
+                    updateFiltered()
+                    updateTrigger()
+                }
+            }
+        }
+    }
+
+    Component {
+    id: parameterPageComponent
+    ColumnLayout {
+        id: pageRoot
+        property string paramType: "Аналоговые входы"
+        signal addClicked
+        ScrollView {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            clip: true
+            padding: 10
+            ScrollBar.vertical.policy: ScrollBar.AlwaysOn
+            leftPadding: 15
+            rightPadding: 22
+            contentWidth: listView.width - 30
+            contentHeight: listView.height
+            ListView {
+                id: listView
+                width: parent.width - 30
+                height: parent.height
+                cacheBuffer: 200
+                model: getFilteredModel(pageRoot.paramType)
+                spacing: 0
+                interactive: true
+                clip: true
+                headerPositioning: ListView.OverlayHeader
+                header: Rectangle {
+                    z: 2
+                    width: listView.width
+                    height: 25
+                    color: "#f0f0f0"
+                    RowLayout {
+                        width: listView.width
+                        anchors.fill: parent
+                        spacing: 8
+
+                        Label { text: "IO"
+                            Layout.preferredWidth: 50
+                        }
+                        Label { text: "Наименование"
+                            Layout.preferredWidth: 350
+                        }
+                        Label { text: "Англ.название"
+                            Layout.preferredWidth: 350
+                        }
+                        Label { text: "Тип"
+                            Layout.preferredWidth: 120
+                        }
+                        Label { text: "Логика"
+                            Layout.preferredWidth: 100
+                        }
+                        Label {
+                            text: "Сохран."
+                            visible: rootwindow.currentType === "Признаки" || rootwindow.currentType === "Уставка"
+                            Layout.preferredWidth: 140
+                        }
+                        Label {
+                            text: "Триггер"
+                            visible: rootwindow.currentType === "Признаки"
+                            Layout.preferredWidth: 140
+                        }
+                        Label {
+                            text: "Апертура"
+                            visible: rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Уставка"
+                            Layout.preferredWidth: 120
+                        }
+                        Label {
+                            text: "КТТ"
+                            visible: rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Уставка"
+                            Layout.preferredWidth: 100
+                        }
+                        Label {
+                            text: "Знач. по умолч."
+                            visible: !(rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Дискретные входы")
+                            Layout.preferredWidth: 120
+                        }
+                        Label { text: "Антидребезг"
+                            Layout.preferredWidth: 170
+                            visible: rootwindow.currentType === "Дискретные входы"
+                        }
+                        Label {
+                            text: ""
+                            Layout.preferredWidth: 120
+                        }
+                    }
+                }
+
+                delegate: RowLayout {
+                    z: 1
+                    property bool hasDuplicateName: false
+                    property bool hasDuplicateCodeName: false
+
+                    required property int index
+                    property string ioIndex
+                    property string paramType
+                    property string name
+                    property string codeName
+                    property string type
+                    property string logicuse
+                    property string saving
+                    property string aperture
+                    property string ktt
+                    property string def_value
+                    property string ad
+                    property string oc
+                    property string sector
+                    property string tosp
+                    property string tolp
+
+                    property int originalIndex: {
+                        switch (pageRoot.paramType) {
+                            case "Аналоговые входы":
+                                return analogInputsModel.get(index).originalIndex
+                            case "Дискретные входы":
+                                return digitalInputsModel.get(index).originalIndex
+                            case "Аналоговый выход":
+                                return analogOutputsModel.get(index).originalIndex
+                            case "Дискретный выход":
+                                return digitalOutputsModel.get(index).originalIndex
+                            case "Признаки":
+                                return flagsModel.get(index).originalIndex
+                            case "Уставка":
+                                return settingsModel.get(index).originalIndex
+                            default:
+                                return -1
+                        }
+                    }
+
+                    width: listView.width
+                    spacing: 0
+                    height: implicitHeight
+
+                    property var itemData: dataModel.get(originalIndex)
+
+                    TextField {
+                        text: itemData.ioIndex
+                        Layout.preferredWidth: 50
+                        Layout.preferredHeight: 30
+                        onTextChanged: dataModel.setProperty(originalIndex, "ioIndex", text)
+                    }
+                    TextField {
+                        text: itemData.name
+                        Layout.preferredWidth: 350
+                        Layout.preferredHeight: 30
+                        color: itemData.isNameDuplicate ? "red" : "black"
+                        onTextChanged: {
+                            dataModel.setProperty(originalIndex, "name", text)
+                            Qt.callLater(rootwindow.checkForDuplicates)
+                        }
+                    }
+
+                    TextField {
+                        text: itemData.codeName
+                        Layout.preferredWidth: 350
+                        Layout.preferredHeight: 30
+                        color: itemData.isCodeNameDuplicate ? "red" : "black"
+                        onTextChanged: {
+                            dataModel.setProperty(originalIndex, "codeName", text)
+                            Qt.callLater(rootwindow.checkForDuplicates)
+                        }
+                    }
+
+                    ComboBox {
+                        editable: true
+                        model: ["bool", "float", "unsigned int", "unsigned short", "unsigned char"]
+                        currentIndex: model.indexOf(itemData.type || "bool")
+                        onCurrentTextChanged: dataModel.setProperty(originalIndex, "type", currentText)
+                        Layout.preferredWidth: 120
+                        Layout.preferredHeight: 30
+                    }
+
+                    ComboBox {
+                        model: ["Да", "Нет"]
+                        currentIndex: model.indexOf(itemData.logicuse || "Да")
+                        onCurrentTextChanged: dataModel.setProperty(originalIndex, "logicuse", currentText)
+                        Layout.preferredWidth: 100
+                        Layout.preferredHeight: 30
+                    }
+
+                    ComboBox {
+                        visible: rootwindow.currentType === "Признаки" || rootwindow.currentType === "Уставка"
+                        model: ["Нет", "Да"]
+                        currentIndex: model.indexOf(itemData.saving || "Нет")
+                        onCurrentTextChanged: dataModel.setProperty(originalIndex, "saving", currentText)
+                        Layout.preferredWidth: 140
+                        Layout.preferredHeight: 30
+                    }
+
+                    ComboBox {
+                        visible: rootwindow.currentType === "Признаки"
+                        editable: true
+                        model: triggerModel
+                        currentIndex: triggerModel.indexOf(itemData.sector)
+                        onCurrentTextChanged: dataModel.setProperty(originalIndex, "sector", currentText)
+                        Layout.preferredWidth: 140
+                        Layout.preferredHeight: 30
+                    }
+
+                    TextField {
+                        visible: rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Уставка"
+                        text: itemData.aperture
+                        onTextChanged: dataModel.setProperty(originalIndex, "aperture", text)
+                        Layout.preferredWidth: 120
+                        Layout.preferredHeight: 30
+                    }
+
+                    TextField {
+                        visible: rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Уставка"
+                        text: itemData.ktt
+                        onTextChanged: dataModel.setProperty(originalIndex, "ktt", text)
+                        Layout.preferredWidth: 100
+                        Layout.preferredHeight: 30
+                    }
+                    TextField {
+                        visible: !(rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Дискретные входы")
+                        text: itemData.def_value
+                        onTextChanged: dataModel.setProperty(originalIndex, "def_value", text)
+                        Layout.preferredWidth: 120
+                        Layout.preferredHeight: 30
+                    }
+                    TextField {
+                        text: itemData.ad
+                        Layout.preferredWidth: 170
+                        Layout.preferredHeight: 30
+                        onTextChanged: dataModel.setProperty(originalIndex, "ad", text)
+                        visible: rootwindow.currentType === "Дискретные входы"
+                    }
+                    Button {
+                        text: "Удалить"
+                        Layout.preferredWidth: 120
+                        Layout.preferredHeight: 50
+                        onClicked: dataModel.remove(originalIndex)
+                        Material.background: Material.Red
+                    }
+
+                }
+            }
             }
 
             Button {
@@ -896,6 +1191,7 @@ ApplicationWindow {
                         "oc": "",
                         "tosp": "",
                         "tolp": "",
+                        "sector": "",
                         "address": "",
                         "blockName": "",
                         "ioa_address": "",
@@ -922,6 +1218,8 @@ ApplicationWindow {
                         "survey_group_104": ""
                     });
                     Qt.callLater(syncFilteredModels)
+                    updateFiltered()
+                    updateTrigger()
                 }
             }
         }
@@ -1674,8 +1972,32 @@ ApplicationWindow {
             onCurrentIndexChanged: {
                 if (currentIndex >= 0) {
                     swipeView.currentIndex = currentIndex;
+                    switch(swipeView.currentIndex) {
+                        case 0:
+                            rootwindow.currentType = "Аналоговые входы";
+                            break;
+                        case 1:
+                            rootwindow.currentType = "Дискретные входы";
+                            break;
+                        case 2:
+                            rootwindow.currentType = "Аналоговый выход";
+                            break;
+                        case 3:
+                            rootwindow.currentType = "Дискретный выход";
+                            break;
+                        case 4:
+                            rootwindow.currentType = "Признаки";
+                            break;
+                        case 5:
+                            rootwindow.currentType = "Уставка";
+                            break;
+                        default:
+                            rootwindow.currentType = "";
+                    }
+                    console.log(rootwindow.currentType);
                 }
             }
+
         }
 
         StackLayout {
@@ -1694,8 +2016,7 @@ ApplicationWindow {
                     item.paramType = "Аналоговые входы"
                     item.listView = listView
                         item.addClicked.connect(() => {
-                        currentType = "Аналоговые входы"
-
+                        rootwindow.currentType = "Аналоговые входы"
                     })
                 }
             }
@@ -1709,7 +2030,7 @@ ApplicationWindow {
                     item.paramType = "Дискретные входы"
                     item.listView = listView
                         item.addClicked.connect(() => {
-                        currentType = "Дискретные входы"
+                        rootwindow.currentType = "Дискретные входы"
 
                     })
                 }
@@ -1724,7 +2045,7 @@ ApplicationWindow {
                     item.paramType = "Аналоговый выход"
                     item.listView = listView
                         item.addClicked.connect(() => {
-                        currentType = "Аналоговый выход"
+                        rootwindow.currentType = "Аналоговый выход"
 
                     })
                 }
@@ -1733,13 +2054,13 @@ ApplicationWindow {
             Loader {
                 id: loader4
                 active: tabBar.currentIndex === 3
-                sourceComponent: parameterPageComponent
+                sourceComponent: parameterPageComponent1
                 asynchronous: true
                 onLoaded: {
                     item.paramType = "Дискретный выход"
-                    item.listView = listView
+                    item.listView = listView1
                         item.addClicked.connect(() => {
-                        currentType = "Дискретный выход"
+                        rootwindow.currentType = "Дискретный выход"
 
                     })
                 }
@@ -1753,7 +2074,7 @@ ApplicationWindow {
                     item.paramType = "Признаки"
                     item.listView = listView
                         item.addClicked.connect(() => {
-                        currentType = "Признаки"
+                        rootwindow.currentType = "Признаки"
 
                     })
                 }
@@ -1767,7 +2088,7 @@ ApplicationWindow {
                     item.paramType = "Уставка"
                     item.listView = listView
                         item.addClicked.connect(() => {
-                        currentType = "Уставка"
+                        rootwindow.currentType = "Уставка"
 
                     })
                 }
@@ -1909,15 +2230,24 @@ ApplicationWindow {
 
             Button {
                 text: "Export to JSON"
-                onClicked: saveFileDialog.open()
+                onClicked: {
+                    saveFileDialog.open()
+                }
             }
             Button {
                 text: "Generate code"
                 onClicked: {
-                    fileHandler.runPythonScript()
+                    jsonSelectDialog.exportType = "code"
+                    onClicked: jsonSelectDialog.open()
                 }
             }
-
+            Button {
+                text: "Generate exel"
+                onClicked: {
+                    jsonSelectDialog.exportType = "exel"
+                    onClicked: jsonSelectDialog.open()
+                }
+            }
             Button {
                 text: "MEK indexing"
                 onClicked: {
@@ -2178,6 +2508,44 @@ ApplicationWindow {
 
         return { hasNameDuplicates, hasCodeNameDuplicates };
     }
+    function getFilteredUstavkaList() {
+        var filtered = [];
+        for (var i = 0; i < dataModel.count; i++) {
+            var item = dataModel.get(i);
+            if (item.paramType === "Уставка" && item.type === "unsigned short") {
+                filtered.push(item.tosp); // or whatever property you want to display
+            }
+        }
+        return filtered;
+    }
+    function updateFiltered() {
+        toModel.splice(0, toModel.length)
+        for (let i = 0; i < dataModel.count; i++) {
+            const item = dataModel.get(i)
+            if (item.paramType === "Уставка" &&
+                item.type === "unsigned short" &&
+                item.codeName !== "") {
+                toModel.push(item.codeName)
+            }
+        }
+    }
+    function updateTrigger() {
+        triggerModel.splice(0, triggerModel.length)
+
+        for (let i = 0; i < dataModel.count; i++) {
+            const item = dataModel.get(i)
+
+            if (
+                item.codeName !== "" &&
+                (
+                    item.paramType !== "Признаки" ||
+                    (item.paramType === "Признаки" && item.type === "bool")
+                )
+            ) {
+                triggerModel.push(item.codeName)
+            }
+        }
+    }
 
 }
 
@@ -2193,3 +2561,9 @@ ApplicationWindow {
 // удалять из мека/модбаса только
 // автоиндексация в модбасе
 // автосохранялку
+// в дискретных выходах выбор кор и дл импульса из уставок, выход = VAL_+англ название тип всегда uchar. колонка single/double point. если single то выход bool, если double, то uchar
+// рядом с колонкой сохранения номер сектора(?)
+//переименовить по умолчанию и АД=антибрежез
+//аналоговый выход пока не нужен
+//если double то 2 IO
+//номер сектора=триггер, выбор из списка всех других сигналов,  импульс ushort, в уставках нет триггера
