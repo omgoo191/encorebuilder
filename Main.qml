@@ -595,18 +595,16 @@ ApplicationWindow {
                             Label { text: "Single/Double"
                                 Layout.preferredWidth: 80
                                 }
-                            Label { text: "Тип"
-                                Layout.preferredWidth: 120}
                             Label { text: "Логика"
                                 Layout.preferredWidth: 100}
                             Label { text: "Выход"
                                 Layout.preferredWidth: 100
                             }
-                            Label { text: "Кор.имп"
-                                Layout.preferredWidth: 100
+                            Label { text: "Короткий импульс"
+                                Layout.preferredWidth: 160
                             }
-                            Label { text: "Дл.имп"
-                                Layout.preferredWidth: 100
+                            Label { text: "Длинный импульс"
+                                Layout.preferredWidth: 160
                             }
                             Label {
                                 text: ""
@@ -763,7 +761,6 @@ ApplicationWindow {
                             onCheckedChanged: {
                                 dataModel.setProperty(originalIndex, "sod", checked)
 
-                                // Найти дочерний элемент с VAL_ + codeName
                                 let parentCodeName = itemData.codeName
                                 let childCodeName = "VAL_" + parentCodeName
 
@@ -775,20 +772,6 @@ ApplicationWindow {
                                     }
                                 }
                             }
-                        }
-                        ComboBox {
-                            model: ["unsigned char"]
-                            currentIndex: {
-                                if (!itemData) return 0
-                                return model.indexOf(itemData.type || "unsigned char")
-                            }
-                            onCurrentTextChanged: {
-                                if (itemData) {
-                                    dataModel.setProperty(originalIndex, "type", currentText)
-                                }
-                            }
-                            Layout.preferredWidth: 120
-                            Layout.preferredHeight: 30
                         }
                         ComboBox {
                             model: ["Да", "Нет"]
@@ -812,7 +795,7 @@ ApplicationWindow {
                         }
                         ComboBox {
                             id: tospComboBox
-                            Layout.preferredWidth: 100
+                            Layout.preferredWidth: 160
                             Layout.preferredHeight: 30
 
                             editable: true
@@ -838,7 +821,7 @@ ApplicationWindow {
 
                         ComboBox {
                             id: tolpComboBox
-                            Layout.preferredWidth: 100
+                            Layout.preferredWidth: 160
                             Layout.preferredHeight: 30
 
                             editable: true
@@ -1390,7 +1373,7 @@ ApplicationWindow {
                         Layout.preferredWidth: 100
                         horizontalAlignment: Text.AlignHCenter
                     }
-                    Label { text: "Адрес ОИ"
+                    Label { text: "Тип данных"
                         Layout.preferredWidth: 100
                         horizontalAlignment: Text.AlignLeft
                     }
@@ -2567,3 +2550,4 @@ ApplicationWindow {
 //аналоговый выход пока не нужен
 //если double то 2 IO
 //номер сектора=триггер, выбор из списка всех других сигналов,  импульс ushort, в уставках нет триггера
+//добавляя 101

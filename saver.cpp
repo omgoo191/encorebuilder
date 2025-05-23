@@ -115,30 +115,34 @@ void FileHandler::runPythonScript(const QString &jsonFilePath, bool type)
 {
 	QFileInfo fileInfo(jsonFilePath);
 	if (!fileInfo.exists()) {
-		emit pythonError("Файл не существует: " + jsonFilePath);
+		emit pythonError("? ?? ?? бгй?бвўг?в: " + jsonFilePath);
 		return;
 	}
 
 	QString basePath = QCoreApplication::applicationDirPath();
 	QDir path(basePath);
 	path.cdUp();
-
-	QString pythonExec = path.filePath("venv/Scripts/python.exe");
+	QString pythonExec = QCoreApplication::applicationDirPath() + (type ? "/Generator.exe" : "/exel_generator.exe");
 	QString scriptPath = type ? path.filePath("Generator.py") : path.filePath("exel_generator.py");
 
 	if (!QFile::exists(pythonExec)) {
-		emit pythonError("Python не найден: " + pythonExec);
+		emit pythonError("Python ?? ? ?¤??: " + pythonExec);
 		return;
 	}
 	if (!QFile::exists(scriptPath)) {
-		emit pythonError("Скрипт не найден: " + scriptPath);
+		emit pythonError("?ЄаЁЇв ?? ? ?¤??: " + scriptPath);
 		return;
 	}
 
 	if (!m_process) {
 		m_process = new QProcess(this);
 	}
-
-	m_process->setWorkingDirectory(fileInfo.absolutePath());
-	m_process->start(pythonExec, QStringList() << scriptPath << jsonFilePath);
+	connect(m_process, &QProcess::readyReadStandardError, [=]() {
+		qDebug() << "stderr:" << m_process->readAllStandardError();
+	});
+	connect(m_process, &QProcess::readyReadStandardOutput, [=]() {
+		qDebug() << "stdout:" << m_process->readAllStandardOutput();
+	});
+	m_process->setWorkingDirectory(path.absolutePath());
+	m_process->start(pythonExec, QStringList() << jsonFilePath);
 }
