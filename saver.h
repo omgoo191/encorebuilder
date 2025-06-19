@@ -40,6 +40,7 @@ public:
 	 */
 	Q_INVOKABLE QVariant loadFromFile(const QString &filename);
 
+	Q_INVOKABLE void writeFile(const QString &path, const QString &content);
 	Q_INVOKABLE QString cleanPath(const QString &path) const;
 	static void registerType();
 

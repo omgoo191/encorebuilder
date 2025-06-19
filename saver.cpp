@@ -146,3 +146,15 @@ void FileHandler::runPythonScript(const QString &jsonFilePath, bool type)
 	m_process->setWorkingDirectory(path.absolutePath());
 	m_process->start(pythonExec, QStringList() << jsonFilePath);
 }
+
+void FileHandler::writeFile(const QString &path, const QString &content)
+{
+	QFile file(path);
+	if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+		file.write(content.toUtf8());
+		file.close();
+	} else {
+		emit pythonError("Ошибка при сохранении файла: " + path);
+	}
+}
+
