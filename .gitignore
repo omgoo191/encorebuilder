@@ -4,6 +4,7 @@
 /cmake-build-release/
 /output/
 /venv/
+/out/
 *~
 *.autosave
 *.a
@@ -35,6 +36,10 @@ Thumbs.db
 *.rc
 /.qmake.cache
 /.qmake.stash
+*.json
+*.blde
+*.zip
+*.xlsx
 
 # qtcreator generated files
 *.pro.user*
@@ -73,3 +78,12 @@ CMakeLists.txt.user*
 *.dll
 *.exe
 
+#Generated files
+communications.cpp
+defines.h
+info_objects.cpp
+saved_parameters.cpp
+telecommands.cpp
+telemeasurments.cpp
+telesignalizations.cpp
+test.qml

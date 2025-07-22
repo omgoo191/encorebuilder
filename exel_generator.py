@@ -15,7 +15,16 @@ def main(json_file):
 
     try:
         with json_path.open("r", encoding="utf-8") as file:
-            data = json.load(file)
+            json_data = json.load(file)
+
+            # Only process signals, ignore interfaces, objectModels, protocols
+            if "signals" not in json_data:
+                print("Error: No 'signals' array found in JSON", file=sys.stderr)
+                return 1
+
+            data = json_data["signals"]
+
+            # Clean string values - moved after extracting signals
             data = [
                 {k: v.replace('\n', '').strip() if isinstance(v, str) else v
                  for k, v in obj.items()}
@@ -95,10 +104,8 @@ def main(json_file):
             ws.cell(row=current_row, column=2, value=item.get("name", "").strip()).border = thin_border
             ws.cell(row=current_row, column=3, value=item.get("codeName", "").strip()).border = thin_border
             ws.cell(row=current_row, column=4, value=item.get("type", "")).border = thin_border
-
             logicuse = item.get("logicuse", "")
             ws.cell(row=current_row, column=5, value="Да" if logicuse == "Да" else "").border = thin_border
-
             saving = item.get("saving", "")
             ws.cell(row=current_row, column=6, value="Да" if saving == "Да" else "").border = thin_border
 
