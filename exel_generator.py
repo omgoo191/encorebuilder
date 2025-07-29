@@ -98,7 +98,6 @@ def main(json_file):
         group_cell.alignment = center_alignment
         current_row += 1
 
-        # Write items in group
         for item in items:
             ws.cell(row=current_row, column=1, value=item.get("ioIndex", "")).border = thin_border
             ws.cell(row=current_row, column=2, value=item.get("name", "").strip()).border = thin_border

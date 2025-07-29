@@ -27,6 +27,12 @@ def main(json_file):
                  for k, v in obj.items()}
                 for obj in data
             ]
+            protocols = json_data["protocols"]
+            protocols = [
+                {k: v.replace('\n', '').strip() if isinstance(v, str) else v
+                 for k, v in obj.items()}
+                for obj in protocols
+            ]
     except json.JSONDecodeError:
         print(f"Ошибка: Файл содержит некорректный JSON", file=sys.stderr)
         return 1
@@ -415,20 +421,38 @@ namespace core
             if(obj['oi_c_se_nb_1'] == 'true'):
                 communications_content += f"         mek_object_model->AssignIO_ForSE_NC({obj['codeName']}_MEK_IOA_ADDR);"
 
-            if(obj['allow_address_101'] == 'true'):
-                communications_content += f"        mek_101_server->AllowAddressUsage(true, {obj['codeName']}_MEK_IOA_ADDR);"
+            for prot in protocols:
+                if(prot['type'] == 'MEK_101'):
+                    if(obj['allow_address_101'] == 'true'):
+                        communications_content += f"        mek_101_server->AllowAddressUsage(true, {obj['codeName']}_MEK_IOA_ADDR);"
 
-            if(obj['survey_group_101'] == 'true'):
-                communications_content += f"        mek_101_server->DetermineGroupForIC(MEK::InterrogationGroup::{obj['survey_group_101']}, AI_I1_MEK_IOA_ADDR);"
+                    if(obj['survey_group_101'] == 'true'):
+                        communications_content += f"        mek_101_server->DetermineGroupForIC(MEK::InterrogationGroup::{obj['survey_group_101']}_MEK_IOA_ADDR);"
 
-            if(obj['use_in_back_104'] == 'true'):
-                communications_content += f"         mek_101_server->DetermineUsageInBC(true, {obj['codeName']}_MEK_IOA_ADDR);"
+                    if(obj['use_in_back_104'] == 'true'):
+                        communications_content += f"         mek_101_server->DetermineUsageInBC(true, {obj['codeName']}_MEK_IOA_ADDR);"
 
-            if(obj['use_in_spont_101'] == 'true'):
-                communications_content += f"         mek_101_server->DetermineUsageInST(true, {obj['codeName']}_MEK_IOA_ADDR);"
+                    if(obj['use_in_spont_101'] == 'true'):
+                        communications_content += f"         mek_101_server->DetermineUsageInST(true, {obj['codeName']}_MEK_IOA_ADDR);"
 
-            if(obj['use_in_percyc_101'] == 'true'):
-                communications_content += f"         mek_101_server->DetermineUsageInCP(true, {obj['codeName']}_MEK_IOA_ADDR);"
+                    if(obj['use_in_percyc_101'] == 'true'):
+                        communications_content += f"         mek_101_server->DetermineUsageInCP(true, {obj['codeName']}_MEK_IOA_ADDR);"
+
+                if(prot['type'] == 'MEK_104'):
+                    if(obj['allow_address_104'] == 'true'):
+                        communications_content += f"        mek_104_server->AllowAddressUsage(true, {obj['codeName']}_MEK_IOA_ADDR);"
+
+                    if(obj['survey_group_104'] == 'true'):
+                        communications_content += f"        mek_104_server->DetermineGroupForIC(MEK::InterrogationGroup::{obj['survey_group_101']}_MEK_IOA_ADDR);"
+
+                    if(obj['use_in_back_104'] == 'true'):
+                        communications_content += f"         mek_104_server->DetermineUsageInBC(true, {obj['codeName']}_MEK_IOA_ADDR);"
+
+                    if(obj['use_in_spont_104'] == 'true'):
+                        communications_content += f"         mek_104_server->DetermineUsageInST(true, {obj['codeName']}_MEK_IOA_ADDR);"
+
+                    if(obj['use_in_percyc_104'] == 'true'):
+                        communications_content += f"         mek_104_server->DetermineUsageInCP(true, {obj['codeName']}_MEK_IOA_ADDR);"
 
     # Добавление настроек RS485
     #     "        current_system_.RS485_interfaces[parameters::Interfaces::RS1_INDEX]->ChangeSettings(\n"

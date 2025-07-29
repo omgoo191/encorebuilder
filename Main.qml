@@ -691,7 +691,7 @@ ApplicationWindow {
     Platform.FileDialog {
         id: fileDialog
         title: "Выберите файл конфигурации"
-        nameFilters: ["JSON files (*.json)"]
+        // nameFilters: ["JSON files (*.json)"]
         onAccepted: {
             const cleanPath = fileHandler.cleanPath(String(file));
             const data = fileHandler.loadFromFile(cleanPath);
@@ -724,11 +724,8 @@ ApplicationWindow {
             initializeFilteredModels();
             updateFiltered();
             updateTrigger();
+            updateTabs();
 
-            modbus = dataModel.count > 0 && dataModel.get(0).hasOwnProperty("address");
-            mek = dataModel.count > 0 && dataModel.get(0).hasOwnProperty("ioa_address");
-            mek_101 = dataModel.count > 0 && dataModel.get(0).hasOwnProperty("use_in_spont_101");
-            mek_104 = dataModel.count > 0 && dataModel.get(0).hasOwnProperty("use_in_spont_104");
 
                 Qt.callLater(() => {
                 for (let i = 0; i < listView.count; ++i) {
@@ -5140,6 +5137,7 @@ ApplicationWindow {
                 interfaceModelsConfig.append({
                     id: newId,
                     type: "ETH",
+                    name: type + counter,
                     IP: config.ip || "",
                     MASK: config.mask || "",
                     GATE: config.gate || "",
@@ -5168,6 +5166,7 @@ ApplicationWindow {
                 interfaceModelsConfig.append({
                     id: newId,
                     type: "RS",
+                    name: type + counter,
                     PARITY: config.parity || "",
                     BAUDRATE: config.baudrate || "",
                     WORD_LEN: config.wordLen || "",
@@ -5200,9 +5199,21 @@ ApplicationWindow {
         // Добавляем протокол к объектной модели
         for (var i = 0; i < objectModelsConfig.count; i++) {
             if (objectModelsConfig.get(i).id === objectModelId) {
-                var protocols = objectModelsConfig.get(i).protocolIds || [];
-                protocols.push(newId);
-                objectModelsConfig.setProperty(i, "protocolIds", protocols);
+                var currentModel = objectModelsConfig.get(i);
+                var protocolsList = currentModel.protocolIds;
+
+                if (protocolsList && typeof protocolsList.append === 'function') {
+                    protocolsList.append({protocolId: newId});
+                } else {
+                    if (!protocolsList) {
+                        protocolsList = [newId];
+                    } else if (Array.isArray(protocolsList)) {
+                        protocolsList.push(newId);
+                    } else {
+                        protocolsList = [newId];
+                    }
+                    objectModelsConfig.setProperty(i, "protocolIds", protocolsList);
+                }
                 break;
             }
         }
@@ -5434,6 +5445,27 @@ ApplicationWindow {
 
             objectModelsConfig.append(model);
         }
+    }
+
+    function updateTabs() {
+        for (var i = 0; i < objectModelsConfig.count; i++) {
+            if (objectModelsConfig.get(i).type == "MEK") {
+                  mek = true
+            }
+            if (objectModelsConfig.get(i).type == "MODBUS") {
+                modbus = true
+            }
+        }
+        for (var i = 0; i < protocolModelsConfig.count; i++) {
+            if(protocolModelsConfig.get(i).type = "MEK_101") {
+                mek_101 = true
+            }
+            if(protocolModelsConfig.get(i).type = "MEK_104") {
+                mek_104 = true
+            }
+
+        }
+
     }
     //endregion
 }
