@@ -1,12 +1,43 @@
+# -*- coding: utf-8 -*-
+
+
 import json
 import sys
 from pathlib import Path
-import os
 from datetime import datetime
 
+# ---------- Helpers ----------
+
+def norm_str(s):
+    if isinstance(s, str):
+        return s.replace("\\n", "").strip()
+    return s
+
+def norm_bool(v):
+    if isinstance(v, bool):
+        return v
+    if v is None:
+        return False
+    s = str(v).strip().lower()
+    return s in ("1", "true", "yes", "да", "y", "on")
+
+def norm_paramtype(s):
+    s = norm_str(s) or ""
+    # unify singular/plural
+    return {"уставка": "Уставки", "уставки": "Уставки"}.get(s.lower(), s)
+
+def safe_get(d, key, default=None):
+    return d.get(key, default)
+
+def as_int(v, default=None):
+    try:
+        return int(v)
+    except Exception:
+        return default
+
+# ---------- Main ----------
 
 def main(json_file):
-
     json_path = Path(json_file).resolve()
     current_date = datetime.now().strftime("%d.%m.%Y")
     if not json_path.exists():
@@ -15,473 +46,466 @@ def main(json_file):
 
     try:
         with json_path.open("r", encoding="utf-8") as file:
-
             json_data = json.load(file)
             if "signals" not in json_data:
                 print("Error: No 'signals' array found in JSON", file=sys.stderr)
                 return 1
 
-            data = json_data["signals"]
-            data = [
-                {k: v.replace('\n', '').strip() if isinstance(v, str) else v
-                 for k, v in obj.items()}
-                for obj in data
-            ]
-            protocols = json_data["protocols"]
-            protocols = [
-                {k: v.replace('\n', '').strip() if isinstance(v, str) else v
-                 for k, v in obj.items()}
-                for obj in protocols
-            ]
-    except json.JSONDecodeError:
-        print(f"Ошибка: Файл содержит некорректный JSON", file=sys.stderr)
-        return 1
+            signals = json_data["signals"]
+            # normalize and clean
+            data = []
+            for obj in signals:
+                clean = {}
+                for k, v in obj.items():
+                    if isinstance(v, str):
+                        clean[k] = norm_str(v)
+                    else:
+                        clean[k] = v
+                # normalize booleans where keys typically boolean
+                for key in list(clean.keys()):
+                    if key.startswith("allow_address_") or key.startswith("use_in_") or key.startswith("oi_c_"):
+                        clean[key] = norm_bool(clean[key])
+                # normalize commonly boolean-ish
+                for key in ("saving", "logicuse"):
+                    if key in clean:
+                        # keep "Да"/"" for Excel elsewhere, but here we will keep original string and add bools
+                        clean[key + "_bool"] = norm_bool(clean[key])
+                # normalize paramType
+                if "paramType" in clean:
+                    clean["paramType"] = norm_paramtype(clean["paramType"])
+                data.append(clean)
 
+            protocols = json_data.get("protocols", [])
+            # normalize protocol entries too
+            protos = []
+            for p in protocols:
+                p2 = {k: norm_str(v) if isinstance(v, str) else v for k, v in p.items()}
+                p2["type"] = norm_str(p2.get("type"))
+                protos.append(p2)
+    except json.JSONDecodeError:
+        print("Ошибка: Файл содержит некорректный JSON", file=sys.stderr)
+        return 1
+    telecommand_count = sum(1 for obj in data if obj.get("paramType") in ("Аналоговый выход", "Дискретный выход"))
+    telesignal_count  = sum(1 for obj in data if obj.get("paramType") == "Дискретные входы" and obj.get("ad"))
+    # Type mappings for InfoObjects / Telemeasurements
     type_mapping_info = {
         "bool": "Bool",
         "float": "Float",
         "unsigned int": "UInt",
         "unsigned char": "UChar",
-        "unsigned short": "UShort"
+        "unsigned short": "UShort",
+        "unsigned long long": "ULong"
     }
-
     TM_mapping = {
         "bool": "BOOL",
         "float": "FLOAT",
         "unsigned int": "UINT",
         "unsigned char": "UCHAR",
-        "unsigned short": "USHORT"
+        "unsigned short": "USHORT",
+        "unsigned long long": "ULONG"
     }
-
     type_block_info = {
         "Coil": "coils",
         "Discrete input": "discrete_input",
         "Holding register": "holding_registers",
         "Input register": "input_registers"
     }
+    modbus_block_class = {
+        "Coil": "ModbusSingleBitDataBlock",
+        "Discrete input": "ModbusSingleBitDataBlock",
+        "Holding register": "ModbusHoldingRegisterBlock",  # adjust to your SDK
+        "Input register": "ModbusInputRegisterBlock",      # adjust to your SDK
+    }
 
-    # Начальные строки для каждого файла
-    defines_content = f""" /**
+    # --- тип -> InfoElement::CurrentType (строка enum'а)
+    CURRENT_TYPE = {
+        "bool": "BOOL",
+        "char": "CHAR",
+        "unsigned char": "UCHAR",
+        "short": "SHORT",
+        "unsigned short": "USHORT",
+        "int": "INT",
+        "unsigned int": "UINT",
+        "float": "FLOAT",
+    }
+
+# --- определить категорию (POINT / SETPOINT / MEAS)
+    def detect_category(paramType: str, typ: str) -> str | None:
+        t = (typ or "").strip().lower()
+        p = (paramType or "").strip()
+        # твоя текущая логика:
+        # - ТС: дискретные входы или признаки (bool)
+        if p in ("Дискретные входы", "Признаки") and t == "bool":
+            return "POINT"
+        if p == "Признаки" and t != "bool":
+            return "SETPOINT"
+        # - измерения: аналоговые входы
+        if p == "Аналоговые входы" and (obj.get("ktt") or obj.get("aperture")):
+            return "MEAS"
+        return None
+
+# --- дефолтные TypeID по категории и текущему типу
+# возвращает строку с именем перечисления без префикса: например "M_SP_NA_1"
+    def default_typeid_for(which: str, category: str, current_type: str) -> str | None:
+        # which ∈ {"REQ", "ST", "BC", "CP"}
+        # POINT (ТС)
+        if category == "POINT":
+            if current_type == "BOOL":
+                return {
+                    "REQ": "M_SP_NA_1",
+                    "ST":  "M_SP_TB_1",
+                    "BS": "M_SP_NA_1",
+                    # BC/CP конкретных дефолтов в твоём ObjectModel нет — оставляем None
+                }.get(which)
+            if current_type in ("CHAR", "UCHAR"):
+                return {
+                    "REQ": "M_DP_NA_1",
+                    "ST":  "M_DP_TB_1",
+                    "BS": "M_DP_NA_1",
+                }.get(which)
+            return None
+
+    # SETPOINT (уставки/команды трактуем по типу так же, как у тебя в AddSetpoint)
+        if category == "SETPOINT":
+            if current_type in ("CHAR", "UCHAR", "SHORT", "USHORT"):
+                return {
+                    "REQ": "M_ME_NA_1",
+                    "ST":  "M_ME_TD_1",
+                    "BS": "M_ME_NA_1",
+                }.get(which)
+            if current_type in ("BOOL", "INT", "UINT"):
+                return {
+                    "REQ": "M_BO_NA_1",
+                    "ST":  "M_BO_TB_1",
+                    "BS": "M_BO_NA_1",
+                }.get(which)
+            if current_type == "FLOAT":
+                return {
+                    "REQ": "M_ME_NC_1",
+                    "ST":  "M_ME_TF_1",
+                    "BS": "M_ME_NC_1",
+                }.get(which)
+            return None
+
+        # MEAS (измерения)
+        if category == "MEAS":
+            if current_type in ("SHORT", "USHORT"):
+                return {
+                    "REQ": "M_ME_NA_1",
+                    "ST":  "M_ME_TD_1",
+                    "PC":  "M_ME_NA_1",  # у тебя в AddMeasurement ставится PC = ME_NA_1
+                    "BS": "M_ME_NC_1",
+                }.get(which)
+            if current_type == "FLOAT":
+                return {
+                    "REQ": "M_ME_NC_1",
+                    "ST":  "M_ME_TF_1",
+                    "PC":  "M_ME_NC_1",  # PC = ME_NC_1
+                    "BS":  "M_ME_NC_1",  # PC = ME_NC_1
+                }.get(which)
+            return None
+
+        return None
+
+    # ---------- File headers ----------
+    defines_content = f"""/**
  * @file defines.h
- * @author Мизикин Владислав
- * @date 	{current_date}
- * @brief
+ * @date {current_date}
+ * @brief Auto-generated definitions
  */
-
-/* Directive to prevent recursive inclusion ----------------------------------*/
-
 #pragma once
 
-/* Defines -------------------------------------------------------------------*/
+// Capacity will be set below
+"""
 
-#define INFO_OBJECT_CAPACITY    1
-
-
-/* Includes ------------------------------------------------------------------*/
-
-/* Exported classes ----------------------------------------------------------*/
-
-    
-    """
     info_objects_content = f"""/**
  * @file info_objects.cpp
- * @author Мизикин Владислав
- * @date 	{current_date}
- * @brief
- *
- *
+ * @date {current_date}
+ * @brief Auto-generated
  */
-/* Includes ------------------------------------------------------------------*/
-
 #include "defines.h"
 #include "core.h"
 
-/* Private typedef -----------------------------------------------------------*/
+namespace core {{
+void Core::InitInfoObjects() {{
+"""
 
-/* Private define ------------------------------------------------------------*/
-
-/* Private variables ---------------------------------------------------------*/
-
-/* Private function prototypes -----------------------------------------------*/
-
-/* Private functions ---------------------------------------------------------*/
-
-/* Exported methods ----------------------------------------------------------*/
-
-namespace core
-{{
-	void Core::InitInfoObjects()
-	{{
-		info_objects_.reserve(INFO_OBJECT_CAPACITY);
-		
-    """
     tele_content = f"""/**
  * @file telesignalizations.cpp
- * @author Мизикин Владислав
- * @date 	{current_date}
- * @brief
- *
- *
+ * @date {current_date}
+ * @brief Auto-generated
  */
-/* Includes ------------------------------------------------------------------*/
-
 #include "defines.h"
 #include "core.h"
 
-/* Private typedef -----------------------------------------------------------*/
+namespace core {{
+void Core::InitTelesignalizations() {{
+GetCurrentSystem().ReserveTelesignalizations({telesignal_count});
+"""
 
-/* Private define ------------------------------------------------------------*/
-
-/* Private variables ---------------------------------------------------------*/
-
-/* Private function prototypes -----------------------------------------------*/
-
-/* Private functions ---------------------------------------------------------*/
-
-/* Exported methods ----------------------------------------------------------*/
-
-namespace core
-{{
-	void Core::InitTelesignalizations()
-	{{
-
-    """
-    telecommands_content = f"""/**	
- * @file telecommands.cpp	
- * @author Мизикин Владислав	
- * @date 	{current_date}
- * @brief	
- *	
- *	
+    telecommands_content = f"""/**
+ * @file telecommands.cpp
+ * @date {current_date}
+ * @brief Auto-generated
  */
-/* Includes ------------------------------------------------------------------*/
-
 #include "defines.h"
 #include "core.h"
 
-/* Private typedef -----------------------------------------------------------*/
+namespace core {{
+void Core::InitTelecommands() {{
+ GetCurrentSystem().ReserveTelecommands({telecommand_count});
+"""
 
-/* Private define ------------------------------------------------------------*/
-
-/* Private variables ---------------------------------------------------------*/
-
-/* Private function prototypes -----------------------------------------------*/
-
-/* Private functions ---------------------------------------------------------*/
-
-/* Exported methods ----------------------------------------------------------*/
-
-namespace core
-{{
-	void Core::InitTelecommands()
-	{{
-
-    """
     saved_parameters_content = f"""/**
  * @file saved_parameters.cpp
- * @author Мизикин Владислав
- * @date 	{current_date}
- * @brief
- *
- *
+ * @date {current_date}
+ * @brief Auto-generated
  */
-/* Includes ------------------------------------------------------------------*/
-
 #include "defines.h"
 #include "core.h"
 
-/* Private typedef -----------------------------------------------------------*/
+namespace core {{
+void Core::InitSavedParameters() {{
+"""
 
-/* Private define ------------------------------------------------------------*/
-
-/* Private variables ---------------------------------------------------------*/
-
-/* Private function prototypes -----------------------------------------------*/
-
-/* Private functions ---------------------------------------------------------*/
-
-/* Exported methods ----------------------------------------------------------*/
-
-namespace core
-{{
-	void Core::InitSavedParameters()
-	{{
-
-    """
-    communications_content = f"""
-    /**
-     * @file communications.cpp
-     * @author Мизикин Владислав
-     * @date {current_date}
-     * @brief
-     *
-     *
-     */
-    /* Includes ------------------------------------------------------------------*/
-    
-    #include "defines.h"
-    #include "core.h"
-    #include "modbus.h"
-    
-    /* Private typedef -----------------------------------------------------------*/
-    
-    /* Private define ------------------------------------------------------------*/
-    
-    /* Private variables ---------------------------------------------------------*/
-    
-    /* Private function prototypes -----------------------------------------------*/
-    
-    /* Private functions ---------------------------------------------------------*/
-    
-    /* Exported methods ----------------------------------------------------------*/
-    
-    namespace core {{
-        void Core::InitCommunications() {{
-    """
-
-    telemeasurments_content = f"""/**	
- * @file telecommands.cpp	
- * @author Мизикин Владислав	
- * @date 	{current_date}
- * @brief	
- *	
- *	
+    communications_content = f"""/**
+ * @file communications.cpp
+ * @date {current_date}
+ * @brief Auto-generated
  */
-/* Includes ------------------------------------------------------------------*/
+#include "defines.h"
+#include "core.h"
+#include "modbus.h"
 
+namespace core {{
+void Core::InitCommunications() {{
+"""
+
+    telemeasurements_content = f"""/**
+ * @file telemeasurements.cpp
+ * @date {current_date}
+ * @brief Auto-generated
+ */
 #include "defines.h"
 #include "core.h"
 
-/* Private typedef -----------------------------------------------------------*/
+namespace core {{
+void Core::InitTelemeasurements() {{
+"""
 
-/* Private define ------------------------------------------------------------*/
-
-/* Private variables ---------------------------------------------------------*/
-
-/* Private function prototypes -----------------------------------------------*/
-
-/* Private functions ---------------------------------------------------------*/
-
-/* Exported methods ----------------------------------------------------------*/
-
-namespace core
-{{
-	void Core::InitTelecommands()
-	{{
-
-    """
-    mek_asdu_addresses = f""" /**
+    mek_asdu_addresses = f"""/**
  * @file mek_asdu_addresses.h
- * @author Мизикин Владислав
- * @date 	{current_date}
- * @brief
+ * @date {current_date}
+ * @brief Auto-generated
  */
-
-/* Directive to prevent recursive inclusion ----------------------------------*/
-
 #pragma once
 
-/* Defines -------------------------------------------------------------------*/
+"""
 
-#define INFO_OBJECT_CAPACITY    1
-
-
-/* Includes ------------------------------------------------------------------*/
-
-/* Exported classes ----------------------------------------------------------*/
-
-    
-    """
-
-    mek_ioa_addresses = f""" /**
+    mek_ioa_addresses = f"""/**
  * @file mek_ioa_addresses.h
- * @author Мизикин Владислав
- * @date 	{current_date}
- * @brief
+ * @date {current_date}
+ * @brief Auto-generated
  */
-
-/* Directive to prevent recursive inclusion ----------------------------------*/
-
 #pragma once
 
-/* Defines -------------------------------------------------------------------*/
+"""
 
-#define INFO_OBJECT_CAPACITY    1
-
-
-/* Includes ------------------------------------------------------------------*/
-
-/* Exported classes ----------------------------------------------------------*/
-
-    
-    """
-
-    # Список блоков для communications.cpp
-    block_types = ["Input register", "Holding register", "Discrete input", "Coil"]
-
-    # Генерация макросов и вызовов функций по каждому объекту
+    # ---------- Generate by objects ----------
     for obj in data:
+        code = norm_str(obj.get("codeName", "")) or "NONAME"
+        name = norm_str(obj.get("name", "")) or code
+        io_idx = norm_str(obj.get("ioIndex", "")) or ""
+        asdu_addr = norm_str(obj.get("asdu_address", "")) or ""
+        ioa_addr = norm_str(obj.get("ioa_address", "")) or ""
+        blockName = norm_str(obj.get("blockName", "")) or ""
+        paramType = norm_str(obj.get("paramType", "")) or ""
+        typ = norm_str(obj.get("type", "")) or ""
+        saving_bool = bool(obj.get("saving_bool", False))
 
-        mek_asdu_addresses = f"#define {obj['codeName'].strip()}_ASDU_ADDR {obj['1'].strip()} /* {obj['name'].strip()} */\n"
+        # addresses headers
+        if asdu_addr:
+            mek_asdu_addresses += f"#define {code}_MEK_ASDU_ADDR {asdu_addr} /* {name} */\n"
+        if ioa_addr:
+            mek_ioa_addresses  += f"#define {code}_MEK_IOA_ADDR  {ioa_addr}  /* {name} */\n"
 
-        mek_ioa_addresses = f"#define {obj['codeName'].strip()}_IAO_ADDR {obj['ioa_address'].strip()} /* {obj['name'].strip()} */\n"
+        # defines.h indices
+        if io_idx != "":
+            defines_content += f"#define ind_{code} {io_idx} /* {name} */\n"
 
-        # Генерация макроса
-        defines_content += f"#define ind_{obj['codeName'].strip()} {obj['ioIndex'].strip()} /* {obj['name'].strip()} */\n"
+        # info objects
+        mapped_type = type_mapping_info.get(typ, typ if typ else "Float")
+        def_value = obj.get("def_value", None)
+        if def_value not in (None, ""):
+            info_objects_content += f"    Add{mapped_type}InfoObject(ind_{code}).SetValue({def_value}); // {name}\n"
+        else:
+            info_objects_content += f"    Add{mapped_type}InfoObject(ind_{code}); // {name}\n"
 
-        # Определение типа для info_objects (приведение к нужному виду)
-        orig_type = obj.get("type", "")
-        mapped_type = type_mapping_info.get(orig_type, orig_type)
-        def_value = f".SetValue({obj['def_value']})" if obj.get("def_value") else ""
-        info_objects_content += f"        Add{mapped_type}InfoObject(ind_{obj['codeName']}){def_value}; //{obj['name'].strip()}\n"
+        # telesignalizations: only discrete inputs with 'ad' mapping
+        if paramType == "Дискретные входы" and obj.get("ad"):
+            ad_code = norm_str(obj.get("ad"))
+            tele_content += f"    AddTelesignalization(ind_{code}, parameters::TelesignalizationIndexes::{code}, ind_{ad_code});\n"
 
-        # Генерация для telesignalizations.cpp (если paramType == \"Входные сигналы\" и поле \"ad\" задано)
-        if obj.get("paramType") == "Дискретные входы" and obj.get("ad"):
-            tele_content += (f"        AddTelesignalization(ind_{obj['codeName']}, parameters::TelesignalizationIndexes::{obj['codeName']}, ind_{obj['ad']});\n")
+        # telecommands: outputs only
+        if paramType in ("Аналоговый выход", "Дискретный выход"):
+            telecommands_content += f"    AddTelecommand(ind_{code}, parameters::TelecommandIndexes::{code});\n"
 
-        # Генерация для telecommands.cpp (если paramType == \"Выходные сигналы\")
-        if obj.get("paramType") == "Аналоговый выход" or "Дискретный выход":
-            telecommands_content += (f"        AddTelecommand(ind_{obj['codeName']}, parameters::TelecommandIndexes::{obj['codeName']});\n")
+        # saved parameters: 'Признаки' with saving flag OR 'Уставки'
+        if (paramType == "Признаки" and saving_bool) or (paramType == "Уставки") or (paramType == "Дискретный выход" and saving_bool):
+            saved_parameters_content += f"    AddStoredObject(ind_{code});\n"
 
-        # Генерация для saved_parameters.cpp (если paramType == \"Признаки\" и saving == \"Да\" или paramType == \"Уставки\")
-        if (obj.get("paramType") == "Признаки" and obj.get("saving") == "Да") or obj.get("paramType") == "Уставки":
-            saved_parameters_content += (f"        AddStoredObject(ind_{obj['codeName']});\n")
-
-        # Генерация для telemeasurments.cpp
-        if (obj.get("paramType") == "Аналоговые входы"):
+        # telemeasurements: only analog inputs
+        if paramType == "Аналоговые входы" and (obj.get("ktt") or obj.get("aperture")):
             ktt_param = f"ind_{obj['ktt']}" if obj.get("ktt") else "std::nullopt"
             aperture_param = f"ind_{obj['aperture']}" if obj.get("aperture") else "std::nullopt"
-            TM_type = obj.get("type", "")
-            TM_type_name = TM_mapping.get(TM_type, TM_type)
-            telemeasurments_content += (
-                f" AddTelemeasurment<InfoObject::InfoElement::CurrentType::{TM_type_name}>(ind_{obj['codeName']}, parameters::TelemeasurmentIndexes::{obj['codeName']}, {ktt_param}, " \
-                f"{aperture_param});\n")
+            TM_type = TM_mapping.get(typ, typ if typ else "FLOAT")
+            # Keep the original project method name to avoid linkage issues if it exists
+            telemeasurements_content += (
+        f"    AddTelemeasurement<info_object::InfoElement::CurrentType::{TM_type}>(ind_{code}, "
+        f"parameters::TelemeasurementIndexes::{code}, {ktt_param}, {aperture_param});\n"
+    )
 
-    # Формирование кода для communications.cpp:
+    # ---------- communications.cpp: Modbus data blocks ----------
+    block_types = ["Input register", "Holding register", "Discrete input", "Coil"]
     for block in block_types:
-        count = sum(1 for obj in data if obj.get("blockName") == block)
+        count = sum(1 for obj in data if norm_str(obj.get("blockName")) == block)
         if count > 0:
-            # Здесь имя поля формируется: все буквы в нижнем регистре, пробел заменяется на _ и добавляется ptr
             field_name = block.lower().replace(" ", "_") + "ptr"
-            communications_content += f"        modbus_object_model.{field_name} = std::make_shared<modbus::ModbusSingleBitDataBlock>({count});\n"
+            cls = modbus_block_class.get(block, "ModbusSingleBitDataBlock")
+            communications_content += f"    modbus_object_model.{field_name} = std::make_shared<modbus::{cls}>({count});\n"
 
+    # map elements by address
     for obj in data:
-        if obj.get("address"):
-            orig_block = obj.get("blockName", "")
+        address = obj.get("address")
+        if address not in (None, ""):
+            code = norm_str(obj.get("codeName", "")) or "NONAME"
+            orig_block = norm_str(obj.get("blockName", ""))
             mapped_block = type_block_info.get(orig_block, orig_block)
-            communications_content += f"        modbus_object_model.{mapped_block}_ptr->AddElement({obj['address']}, &GetInfoObject(ind_{obj['codeName']}), modbus::Format::FORMAT_BIG_ENDIAN);\n"
-        if obj.get("ioa_addres"):
+            communications_content += (
+                f"    modbus_object_model.{mapped_block}_ptr->AddElement({address}, &GetInfoObject(ind_{code}), "
+                f"modbus::Format::FORMAT_BIG_ENDIAN);\n"
+            )
 
-            if (obj['paramType'] == 'Дискретные входы') or (obj['paramType'] == 'Признаки' and obj['type'] == 'bool'):
+    # MEK mappings and protocol flags
+    for obj in data:
+        code = norm_str(obj.get("codeName", "")) or "NONAME"
+        name = norm_str(obj.get("name", "")) or code
+        ioa_addr = norm_str(obj.get("ioa_address", "")) or ""
+        paramType = norm_str(obj.get("paramType", "")) or ""
+        typ = norm_str(obj.get("type", "")) or ""
+        second_class = norm_str(obj.get("second_class_num", "NOT_USE")) or "NOT_USE"
+
+        if not ioa_addr:
+            continue
+
+        # Base info-object mapping
+        communications_content += (
+            f"    mek_object_model->AddInfoObject(&GetInfoObject(ind_{code}), MEK::Priority::{second_class}, "
+            f"{code}_MEK_IOA_ADDR, {code}_MEK_ASDU_ADDR);\n"
+        )
+
+        for key, func, which in (
+                ("type_spont",  "AssignTypeID_ForST",  "ST"),
+                ("type_back",   "AssignTypeID_ForBS",  "BS"),
+                ("type_percyc", "AssignTypeID_ForPC",  "PC"),
+                ("type_def",    "AssignTypeID_ForREQ", "REQ")
+        ):
+            tval = norm_str(obj.get(key))
+            if not tval or tval == "NOT_USE":
+                continue
+
+            category = detect_category(paramType, typ)
+            curr_type = CURRENT_TYPE.get(typ.lower() if typ else "", None)
+            default_tid = default_typeid_for(which, category, curr_type) if (category and curr_type) else None
+
+            if default_tid and tval == default_tid:
+                # совпало с дефолтом → пропускаем
+                continue
+
+            # если дефолта нет или оно другое → пишем
+            communications_content += (
+                f"    mek_object_model->{func}(MEK::M_TypeID::{tval}, {code}_MEK_IOA_ADDR);\n"
+            )
+
+        # Points / Commands based on param type
+        if paramType in ("Дискретные входы", "Признаки") and typ == "bool":
+            # Tele-signalization point (bool states)
+            communications_content += (
+                f"    mek_object_model->AddPoint({{&GetInfoObject(ind_{code}), MEK::Priority::{second_class}}}, "
+                f"{code}_MEK_IOA_ADDR, {code}_MEK_ASDU_ADDR);  // {name}\n"
+            )
+        elif paramType == "Признаки" and typ != "bool":
+            communications_content += (
+                f"    mek_object_model->AddSetpoint({{&GetInfoObject(ind_{code}), MEK::Priority::{second_class}}}, "
+                f"{code}_MEK_IOA_ADDR, {code}_MEK_ASDU_ADDR);  // {name}\n"
+            )
+        elif paramType == "Уставки":
+            if typ == "bool":
                 communications_content += (
-                    f"    mek_object_model->AddPoint({{&GetInfoObject(ind_{obj['codeName']}), MEK::Priority::{obj['second_class_num']}}}, "
-                    f"{obj['codeName']}_MEK_IOA_ADDR, {obj['codeName']}_MEK_ASDU_ADDR);  // {obj['name']}\n"
+                    f"    mek_object_model->AddSingleCommand({{&GetInfoObject(ind_{code}), std::nullopt}}, "
+                    f"{code}_MEK_IOA_ADDR, {code}_MEK_ASDU_ADDR);  // {name}\n"
                 )
-            if(obj['paramType'] == 'Дискретные входы' and obj['second_class_num'] == 'NOT_USE' ):
+            else:
                 communications_content += (
-                    f"    mek_object_model->AddSingleCommand({{&GetInfoObject(ind_{obj['codeName']}), std::nullopt}}, {obj['codeName']}_MEK_IOA_ADDR, {obj['codeName']}_MEK_ASDU_ADDR);  // {obj['name']}\n")
+                    f"    mek_object_model->AddSetpointCommand({{&GetInfoObject(ind_{code}), "
+                    f"{{{{&GetInfoObject(ind_{code}), MEK::Priority::{second_class}, {code}_MEK_IOA_ADDR+1, {code}_MEK_ASDU_ADDR}}}}}}, "
+                    f"{code}_MEK_IOA_ADDR, {code}_MEK_ASDU_ADDR);  // {name}\n"
+                )
 
-            if(obj['paramType'] == 'Дискретные входы'):
-                communications_content += (
-                    f"    mek_object_model->AddSingleCommand({{&GetInfoObject(ind_{obj['codeName']}), {{{{&GetInfoObject(ind_VAL_{obj['codeName']}, MEK::Priority::{obj['second_class_num']}, VAL_ {obj['codeName']}_MEK_IOA_ADDR, VAL_{obj['codeName']}_MEK_ASDU_ADDR,}}}}}}"
-                    f"{obj['codeName']}_MEK_IOA_ADDR, {obj['codeName']}_MEK_ASDU_ADDR);  // {obj['name']}\n")
+        # Map IO to command types by flags
+        if norm_bool(obj.get("oi_c_bo_na_1")):
+            communications_content += f"    mek_object_model->AssignIO_ForBO({code}_MEK_IOA_ADDR, {code}_MEK_ASDU_ADDR);\n"
+        if norm_bool(obj.get("oi_c_dc_na_1")):
+            communications_content += f"    mek_object_model->AssignIO_ForDC({code}_MEK_IOA_ADDR, {code}_MEK_ASDU_ADDR);\n"
+        if norm_bool(obj.get("oi_c_sc_na_1")):
+            communications_content += f"    mek_object_model->AssignIO_ForSC({code}_MEK_IOA_ADDR, {code}_MEK_ASDU_ADDR);\n"
+        if norm_bool(obj.get("oi_c_se_na_1")):
+            communications_content += f"    mek_object_model->AssignIO_ForSE_NA({code}_MEK_IOA_ADDR, {code}_MEK_ASDU_ADDR);\n"
+        if norm_bool(obj.get("oi_c_se_nb_1")):
+            communications_content += f"    mek_object_model->AssignIO_ForSE_NC({code}_MEK_IOA_ADDR, {code}_MEK_ASDU_ADDR);\n"
 
-            if (obj['paramType'] == 'Признаки' and obj['type'] != 'bool'):
-                communications_content += (
-                    f"    mek_object_model->AddSetpoint({{&GetInfoObject(ind_{obj['codeName']}), MEK::Priority::{obj['second_class_num']}}}, "
-                    f"{obj['codeName']}_MEK_IOA_ADDR, {obj['codeName']}_MEK_ASDU_ADDR);  // {obj['name']}\n")
+        # Protocol-specific configuration
+        for prot in protos:
+            ptype = prot.get("type")
+            if ptype == "MEK_104":
+                if not norm_bool(obj.get("allow_address_101")):
+                    communications_content += f"    mek_101_server->AllowAddressUsage(false, {code}_MEK_IOA_ADDR);\n"
+                sgrp = norm_str(obj.get("survey_group_101"))
+                if sgrp and sgrp != "NOT_USE":
+                    communications_content += f"    mek_101_server->DetermineGroupForIC(MEK::InterrogationGroup::{sgrp}, {code}_MEK_IOA_ADDR)   ;\n"
+                if not norm_bool(obj.get("use_in_back_101")):
+                    communications_content += f"    mek_101_server->DetermineUsageInBC(false, {code}_MEK_IOA_ADDR);\n"
+                if not norm_bool(obj.get("use_in_spont_101")):
+                    communications_content += f"    mek_101_server->DetermineUsageInST(false, {code}_MEK_IOA_ADDR);\n"
+                if not norm_bool(obj.get("use_in_percyc_101")):
+                    communications_content += f"    mek_101_server->DetermineUsageInCP(false, {code}_MEK_IOA_ADDR);\n"
 
-            if (obj['paramType'] == 'Уставка'):
-                if obj['type'] == 'bool':
-                    communications_content += (
-                        f"    mek_object_model->AddSingleCommand({{&GetInfoObject(ind_{obj['codeName']}), std::nullopt}}, "
-                        f"{obj['codeName']}_MEK_IOA_ADDR, {obj['codeName']}_MEK_ASDU_ADDR);  // {obj['name']}\n")
-                else:
-                    communications_content += (
-                        f"    mek_object_model->AddSetpointCommand({{&GetInfoObject(ind_{obj['codeName']}), {{{{&GetInfoObject(ind_{obj['codeName']}, MEK::Priority::{obj['second_class_num']}, {obj['codeName']}_MEK_IOA_ADDR+1, {obj['codeName']}_MEK_ASDU_ADDR,}}}}}}"
-                        f"{obj['codeName']}_MEK_IOA_ADDR, {obj['codeName']}_MEK_ASDU_ADDR);  // {obj['name']}\n")
-            communications_content += f"        mek_object_model->AddInfoObject(&GetInfoObject(ind_{obj['codeName']}), MEK::Priority::{obj['second_class_num']}, {obj['codeName']}_MEK_IOA_ADDR, {obj['codeName']}_MEK_ASDU_ADDR);"
-            communications_content += f"        mek_object_model->AssignTypeID_ForST(MEK::M_TypeID::{obj['type_spont']}, {obj['codeName']}_IOA_ADDR);" if obj['type_spont'] != 'NOT_USE' else ''
-            communications_content += f"        mek_object_model->AssignTypeID_ForBC(MEK::M_TypeID::{obj['type_back ']}, {obj['codeName']}_IOA_ADDR);" if obj['type_spont'] != 'NOT_USE' else ''
-            communications_content += f"        mek_object_model->AssignTypeID_ForCP(MEK::M_TypeID::{obj['type_percyc']}, {obj['codeName']}_IOA_ADDR);" if obj['type_spont'] != 'NOT_USE' else ''
-            communications_content += f"        mek_object_model->AssignTypeID_ForREQ(MEK::M_TypeID::{obj['type_def']}, {obj['codeName']}_IOA_ADDR);" if obj['type_spont'] != 'NOT_USE' else ''
+            # if ptype == "MEK_104":
+            #     if norm_bool(obj.get("allow_address_104")):
+            #         communications_content += f"    mek_104_server->AllowAddressUsage(true, {code}_MEK_IOA_ADDR;\n"
+            #     sgrp = norm_str(obj.get("survey_group_104"))
+            #     if sgrp and sgrp != "NOT_USE":
+            #         communications_content += f"    mek_104_server->DetermineGroupForIC(MEK::InterrogationGroup::{sgrp}, {code}_MEK_IOA_ADDR;\n"
+            #     if norm_bool(obj.get("use_in_back_104")):
+            #         communications_content += f"    mek_104_server->DetermineUsageInBC(true, {code}_MEK_IOA_ADDR;\n"
+            #     if norm_bool(obj.get("use_in_spont_104")):
+            #         communications_content += f"    mek_104_server->DetermineUsageInST(true, {code}_MEK_IOA_ADDR;\n"
+            #     if norm_bool(obj.get("use_in_percyc_104")):
+            #         communications_content += f"    mek_104_server->DetermineUsageInCP(true, {code}_MEK_IOA_ADDR;\n"
 
-            if(obj['oi_c_bo_na_1'] == 'true'):
-                communications_content += f"         mek_object_model->AssignIO_ForBO({obj['codeName']}_MEK_IOA_ADDR);"
+    # ---------- finalize contents ----------
+    total = len(data)
 
-            if(obj['oi_c_dc_na_1'] == 'true'):
-                communications_content += f"         mek_object_model->AssignIO_ForDC({obj['codeName']}_MEK_IOA_ADDR);"
-
-            if(obj['oi_c_sc_na_1'] == 'true'):
-                communications_content += f"         mek_object_model->AssignIO_ForSC({obj['codeName']}_MEK_IOA_ADDR);"
-
-            if(obj['oi_c_se_na_1'] == 'true'):
-                communications_content += f"         mek_object_model->AssignIO_ForSE_NA({obj['codeName']}_MEK_IOA_ADDR);"
-
-            if(obj['oi_c_se_nb_1'] == 'true'):
-                communications_content += f"         mek_object_model->AssignIO_ForSE_NC({obj['codeName']}_MEK_IOA_ADDR);"
-
-            for prot in protocols:
-                if(prot['type'] == 'MEK_101'):
-                    if(obj['allow_address_101'] == 'true'):
-                        communications_content += f"        mek_101_server->AllowAddressUsage(true, {obj['codeName']}_MEK_IOA_ADDR);"
-
-                    if(obj['survey_group_101'] == 'true'):
-                        communications_content += f"        mek_101_server->DetermineGroupForIC(MEK::InterrogationGroup::{obj['survey_group_101']}_MEK_IOA_ADDR);"
-
-                    if(obj['use_in_back_104'] == 'true'):
-                        communications_content += f"         mek_101_server->DetermineUsageInBC(true, {obj['codeName']}_MEK_IOA_ADDR);"
-
-                    if(obj['use_in_spont_101'] == 'true'):
-                        communications_content += f"         mek_101_server->DetermineUsageInST(true, {obj['codeName']}_MEK_IOA_ADDR);"
-
-                    if(obj['use_in_percyc_101'] == 'true'):
-                        communications_content += f"         mek_101_server->DetermineUsageInCP(true, {obj['codeName']}_MEK_IOA_ADDR);"
-
-                if(prot['type'] == 'MEK_104'):
-                    if(obj['allow_address_104'] == 'true'):
-                        communications_content += f"        mek_104_server->AllowAddressUsage(true, {obj['codeName']}_MEK_IOA_ADDR);"
-
-                    if(obj['survey_group_104'] == 'true'):
-                        communications_content += f"        mek_104_server->DetermineGroupForIC(MEK::InterrogationGroup::{obj['survey_group_101']}_MEK_IOA_ADDR);"
-
-                    if(obj['use_in_back_104'] == 'true'):
-                        communications_content += f"         mek_104_server->DetermineUsageInBC(true, {obj['codeName']}_MEK_IOA_ADDR);"
-
-                    if(obj['use_in_spont_104'] == 'true'):
-                        communications_content += f"         mek_104_server->DetermineUsageInST(true, {obj['codeName']}_MEK_IOA_ADDR);"
-
-                    if(obj['use_in_percyc_104'] == 'true'):
-                        communications_content += f"         mek_104_server->DetermineUsageInCP(true, {obj['codeName']}_MEK_IOA_ADDR);"
-
-    # Добавление настроек RS485
-    #     "        current_system_.RS485_interfaces[parameters::Interfaces::RS1_INDEX]->ChangeSettings(\n"
-    #     "            GetInfoObject(ind_PT_RS1_BAUDRATE).GetValue<unsigned int>(),\n"
-    #     "            static_cast<STM32::UART_Interface::WordLength>(GetInfoObject(ind_PT_RS1_WORD_LENGTH).GetValue<bool>()),\n"
-    #     "            static_cast<STM32::UART_Interface::StopBits>(GetInfoObject(ind_PT_RS1_STOP_BITS).GetValue<bool>()),\n"
-    #     "            static_cast<STM32::UART_Interface::Parity>(GetInfoObject(ind_PT_RS1_PARITY).GetValue<unsigned char>())\n"
-    #     "        );\n"
-    # )
-    # communications_content += ("")
-        # ("        current_system_.RS485_interfaces[parameters::Interfaces::RS2_INDEX]->ChangeSettings(\n"
-        #                        "            GetInfoObject(ind_PT_RS2_BAUDRATE).GetValue<unsigned int>(),\n"
-        #                        "            static_cast<STM32::UART_Interface::WordLength>(GetInfoObject(ind_PT_RS2_WORD_LENGTH).GetValue<bool>()),\n"
-        #                        "            static_cast<STM32::UART_Interface::StopBits>(GetInfoObject(ind_PT_RS2_STOP_BITS).GetValue<bool>()),\n"
-        #                        "            static_cast<STM32::UART_Interface::Parity>(GetInfoObject(ind_PT_RS2_PARITY).GetValue<unsigned char>())\n"
-        #                        "        );\n"
-        #                        )
-
-    # Завершающие строки файлов
-    defines_content += "\n"
-    info_objects_content += "    \n}\n}\n"
-    tele_content += "    \n}\n}\n"
-    telecommands_content += "    \n}\n}\n"
-    saved_parameters_content += "    \n}\n}\n"
-    communications_content += "    \n}\n}\n"
-    telemeasurments_content += "    \n}\n}\n"
+    info_objects_content += "}\n}\n"
+    tele_content += "}\n}\n"
+    telecommands_content += "}\n}\n"
+    saved_parameters_content += "}\n}\n"
+    communications_content += "}\n}\n"
+    telemeasurements_content += "}\n}\n"
     mek_asdu_addresses += "\n"
     mek_ioa_addresses += "\n"
-    # Запись в файлы
+
+    # ---------- write files ----------
     with open("defines.h", "w", encoding="utf-8") as f:
         f.write(defines_content)
     with open("info_objects.cpp", "w", encoding="utf-8") as f:
@@ -494,18 +518,18 @@ namespace core
         f.write(saved_parameters_content)
     with open("communications.cpp", "w", encoding="utf-8") as f:
         f.write(communications_content)
-    with open("telemeasurments.cpp", "w", encoding="utf-8") as f:
-        f.write(telemeasurments_content)
+    with open("telemeasurements.cpp", "w", encoding="utf-8") as f:
+        f.write(telemeasurements_content)
     with open("mek_asdu_addresses.h", "w", encoding="utf-8") as f:
         f.write(mek_asdu_addresses)
     with open("mek_ioa_addresses.h", "w", encoding="utf-8") as f:
         f.write(mek_ioa_addresses)
-    print("Все файлы сгенерированы!")
 
+    print("Генерация завершена (patched).")
+    return 0
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python Generator.py <json_file>", file=sys.stderr)
+        print("Usage: python Generator_patched.py <json_file>", file=sys.stderr)
         sys.exit(1)
-
     sys.exit(main(sys.argv[1]))

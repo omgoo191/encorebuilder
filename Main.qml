@@ -128,7 +128,141 @@ ApplicationWindow {
                 onTriggered: protocolManagerDialog.open()
             }
         }
+
+        Menu{
+            title: "Дополнительно"
+            MenuItem{
+                text: "Добавить ТУ"
+                onTriggered: pickTelecommandHeader.open()
+            }
+            MenuItem{
+                text: "Добавить ТC"
+                onTriggered: pickTelesignalHeader.open()
+            }
+            MenuItem{
+                text: "Добавить ТИ"
+                onTriggered: pickTelemeasureHeader.open()
+            }
+        }
     }
+
+    // ===== МОДЕЛИ =====
+    ListModel { id: telecommandModel }       // TelecommandIndexes
+    ListModel { id: telesignalModel }        // TelesignalizationIndexes
+    ListModel { id: telemeasureModel }       // Telemeasurement/TelemeasurmentIndexes
+
+    // ===== УНИВЕРСАЛЬНЫЙ ПАРСЕР КЛАССА С ИНДЕКСАМИ =====
+    // Ищет класс вида class <ClassName> { ... static constexpr TYPE NAME = N; ... };
+    function parseIndexesFromHeader(headerText, className) {
+        // тело класса
+        const clsRe = new RegExp("class\\s+" + className + "[\\s\\S]*?\\{([\\s\\S]*?)\\};", "m");
+        const cls = clsRe.exec(headerText);
+        if (!cls) return [];
+        const body = cls[1];
+
+        // строки со статическими индексами
+        const re = /static\s+constexpr\s+TYPE\s+([A-Za-z_]\w*)\s*=\s*(\d+)\s*;/g;
+        let m, items = [];
+        while ((m = re.exec(body)) !== null) {
+            items.push({ text: m[1], value: Number(m[2]) });
+        }
+            items.sort((a,b) => a.value - b.value);
+        return items;
+    }
+
+    // Попытаться распарсить по нескольким возможным именам класса (на случай разного нейминга)
+    function parseAnyOf(headerText, classNamesArray) {
+        for (let i = 0; i < classNamesArray.length; ++i) {
+            const items = parseIndexesFromHeader(headerText, classNamesArray[i]);
+            if (items.length > 0) return items;
+        }
+        return [];
+    }
+
+    // ===== ЗАПОЛНЕНИЕ МОДЕЛЕЙ =====
+    function fillModel(model, items) {
+        model.clear();
+        for (let i = 0; i < items.length; ++i) model.append(items[i]);  // {text, value}
+    }
+
+    // ===== ЧТЕНИЕ ТЕКСТА ПО URL (подходит и для file://) =====
+    function readTextUrl(url, onOk, onErr) {
+        try {
+            const xhr = new XMLHttpRequest();
+            xhr.open("GET", url); // сюда подаём именно URL
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === XMLHttpRequest.DONE) {
+                    if (xhr.status === 0 || (xhr.status >= 200 && xhr.status < 300)) {
+                        onOk(xhr.responseText);
+                    } else {
+                            onErr && onErr("HTTP status " + xhr.status);
+                    }
+                }
+            }
+            xhr.send();
+        } catch (e) {
+                onErr && onErr(e);
+        }
+    }
+    // Диалог выбора .h файла
+    // ===== DIALOG: Telecommands =====
+    FileDialog {
+        id: pickTelecommandHeader
+        title: "Выберите заголовок с TelecommandIndexes"
+        nameFilters: ["C/C++ headers (*.h)", "All files (*)"]
+        onAccepted: {
+            const url = (typeof selectedFile !== "undefined" && selectedFile) ? selectedFile
+                : (typeof fileUrl !== "undefined" ? fileUrl : null);
+            if (!url) { console.warn("Не удалось получить URL выбранного файла"); return; }
+
+            readTextUrl(url.toString(), function(text) {
+                // поддержка разных именований
+                const items = parseAnyOf(text, ["TelecommandIndexes"]);
+                fillModel(telecommandModel, items);
+                if (items.length === 0) console.warn("В файле нет TelecommandIndexes");
+            }, function(err){ console.error("Ошибка чтения файла:", err);});
+        }
+    }
+
+    // ===== DIALOG: Telesignalizations =====
+    FileDialog {
+        id: pickTelesignalHeader
+        title: "Выберите заголовок с TelesignalizationIndexes"
+        nameFilters: ["C/C++ headers (*.h)", "All files (*)"]
+        onAccepted: {
+            const url = (typeof selectedFile !== "undefined" && selectedFile) ? selectedFile
+                : (typeof fileUrl !== "undefined" ? fileUrl : null);
+            if (!url) { console.warn("Не удалось получить URL выбранного файла"); return; }
+
+            readTextUrl(url.toString(), function(text) {
+                // иногда пишут TelesignalizationIndexes или TsiIndexes — добавь свои варианты при необходимости
+                const items = parseAnyOf(text, ["TelesignalizationIndexes"]);
+                fillModel(telesignalModel, items);
+                if (items.length === 0) console.warn("В файле нет TelesignalizationIndexes");
+            }, function(err){ console.error("Ошибка чтения файла:", err);});
+        }
+    }
+
+    // ===== DIALOG: Telemeasurements =====
+    FileDialog {
+        id: pickTelemeasureHeader
+        title: "Выберите заголовок с TelemeasurementIndexes"
+        nameFilters: ["C/C++ headers (*.h)", "All files (*)"]
+        onAccepted: {
+            const url = (typeof selectedFile !== "undefined" && selectedFile) ? selectedFile
+                : (typeof fileUrl !== "undefined" ? fileUrl : null);
+            if (!url) { console.warn("Не удалось получить URL выбранного файла"); return; }
+
+            readTextUrl(url.toString(), function(text) {
+                // иногда в проекте опечатка: TelemeasurmentIndexes — учитываем оба
+                const items = parseAnyOf(text, ["TelemeasurementIndexes", "TelemeasurmentIndexes"]);
+                fillModel(telemeasureModel, items);
+                if (items.length === 0) console.warn("В файле нет Telemeasurement/TelemeasurmentIndexes");
+            }, function(err){ console.error("Ошибка чтения файла:", err);});
+        }
+    }
+
+
     Dialog {
         id: removeInterfaceDialog
         title: "Удалить интерфейс"
@@ -410,15 +544,88 @@ ApplicationWindow {
         modal: true
         standardButtons: Dialog.NoButton
         anchors.centerIn: parent
+        width: 400
+        height: 200
+
+        background: Rectangle {
+            color: "#ffffff"
+            radius: 8
+            antialiasing: true
+            border.color: "#e2e8f0"
+            border.width: 1
+
+            // Subtle shadow effect
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: -2
+                color: "transparent"
+                border.color: "#00000010"
+                border.width: 2
+                radius: 10
+                z: -1
+            }
+        }
+
+        header: Rectangle {
+            width: parent.width
+            height: 50
+            color: "#f8fafc"
+            radius: 8
+            antialiasing: true
+
+            Rectangle {
+                anchors.bottom: parent.bottom
+                width: parent.width
+                height: 1
+                color: "#e2e8f0"
+            }
+
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: "#f8fafc" }
+                GradientStop { position: 1.0; color: "#f1f5f9" }
+            }
+
+            Label {
+                anchors.centerIn: parent
+                text: startDialog.title
+                font.pixelSize: 16
+                font.weight: Font.DemiBold
+                color: "#1e293b"
+            }
+        }
 
         GridLayout {
+            anchors.fill: parent
+            anchors.margins: 20
             columns: 1
             columnSpacing: 10
-            rowSpacing: 10
+            rowSpacing: 15
 
             Button {
                 text: "Создать новую конфигурацию"
                 Layout.fillWidth: true
+                Layout.preferredHeight: 40
+                font.pixelSize: 14
+                font.weight: Font.Medium
+
+                background: Rectangle {
+                    color: parent.pressed ? "#059669" : (parent.hovered ? "#10b981" : "#22c55e")
+                    radius: 6
+                    antialiasing: true
+
+                    Behavior on color {
+                        ColorAnimation { duration: 150 }
+                    }
+                }
+
+                contentItem: Text {
+                    text: parent.text
+                    font: parent.font
+                    color: "#ffffff"
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+
                 onClicked: {
                     dataModel.clear()
                     startDialog.close()
@@ -428,7 +635,28 @@ ApplicationWindow {
             Button {
                 text: "Открыть существующую"
                 Layout.fillWidth: true
-                Layout.preferredWidth: parent.width
+                Layout.preferredHeight: 40
+                font.pixelSize: 14
+                font.weight: Font.Medium
+
+                background: Rectangle {
+                    color: parent.pressed ? "#1d4ed8" : (parent.hovered ? "#2563eb" : "#3b82f6")
+                    radius: 6
+                    antialiasing: true
+
+                    Behavior on color {
+                        ColorAnimation { duration: 150 }
+                    }
+                }
+
+                contentItem: Text {
+                    text: parent.text
+                    font: parent.font
+                    color: "#ffffff"
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+
                 onClicked: {
                     fileDialog.open()
                     startDialog.close()
@@ -440,57 +668,277 @@ ApplicationWindow {
     Dialog {
         id: rsConfigDialog
         width: 500
-        height: 500
+        height: 600
         anchors.centerIn: parent
         title: "Настройка RS"
+        modal: true
+        standardButtons: Dialog.NoButton
+
+        background: Rectangle {
+            color: "#ffffff"
+            radius: 8
+            antialiasing: true
+            border.color: "#e2e8f0"
+            border.width: 1
+
+            // Subtle shadow effect
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: -2
+                color: "transparent"
+                border.color: "#00000010"
+                border.width: 2
+                radius: 10
+                z: -1
+            }
+        }
+
+        header: Rectangle {
+            width: parent.width
+            height: 50
+            color: "#f8fafc"
+            radius: 8
+            antialiasing: true
+            Rectangle {
+                anchors.bottom: parent.bottom
+                width: parent.width
+                height: 1
+                color: "#e2e8f0"
+            }
+
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: "#f8fafc" }
+                GradientStop { position: 1.0; color: "#f1f5f9" }
+            }
+
+            Label {
+                anchors.centerIn: parent
+                text: rsConfigDialog.title
+                font.pixelSize: 16
+                font.weight: Font.DemiBold
+                color: "#1e293b"
+            }
+        }
+
         ColumnLayout {
             anchors.fill: parent
-            spacing: 10
+            anchors.margins: 20
+            spacing: 15
+
             GridLayout {
                 columns: 2
-                columnSpacing: 10
-                rowSpacing: 10
-                anchors.fill: parent
+                columnSpacing: 15
+                rowSpacing: 15
+                Layout.fillWidth: true
 
-                Label { text: "Четность" }
+                Label {
+                    text: "Четность"
+                    color: "#374151"
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                }
                 ComboBox {
                     id: parityField
                     model: ["None", "Even", "Odd"]
+                    Layout.preferredHeight: 32
+                    Layout.preferredWidth: 120
+                    font.pixelSize: 13
+
+                    background: Rectangle {
+                        color: enabled ? "#ffffff" : "#f8fafc"
+                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                        border.width: 1
+                        radius: 4
+                        antialiasing: true
+
+                        Behavior on border.color {
+                            ColorAnimation { duration: 150 }
+                        }
+                    }
                 }
-                Label { text: "Скорость" }
+
+                Label {
+                    text: "Скорость"
+                    color: "#374151"
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                }
                 ComboBox {
                     id: baudrateField
                     model: [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200]
+                    Layout.preferredHeight: 32
+                    Layout.preferredWidth: 120
+                    font.pixelSize: 13
+
+                    background: Rectangle {
+                        color: enabled ? "#ffffff" : "#f8fafc"
+                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                        border.width: 1
+                        radius: 4
+                        antialiasing: true
+
+                        Behavior on border.color {
+                            ColorAnimation { duration: 150 }
+                        }
+                    }
                 }
-                Label { text: "Длина слова" }
+
+                Label {
+                    text: "Длина слова"
+                    color: "#374151"
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                }
                 TextField {
                     id: lenField
+                    Layout.preferredHeight: 32
+                    color: "#1e293b"
+                    font.pixelSize: 13
+                    font.weight: Font.Normal
+
+                    leftPadding: 8
+                    rightPadding: 8
+                    topPadding: 6
+                    bottomPadding: 6
+
+                    selectByMouse: true
+                    verticalAlignment: TextInput.AlignVCenter
+
+                    background: Rectangle {
+                        color: enabled ? "#ffffff" : "#f8fafc"
+                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                        border.width: 1
+                        radius: 4
+                        antialiasing: true
+
+                        // Subtle shadow when focused
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.margins: -1
+                            color: "transparent"
+                            border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                            border.width: 2
+                            radius: 5
+                            visible: parent.parent.activeFocus
+                        }
+
+                        Behavior on border.color {
+                            ColorAnimation { duration: 150 }
+                        }
+                    }
                 }
-                Label { text: "Стоп-бит" }
+                Label {
+                    text: "Стоп-бит"
+                    color: "#374151"
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                }
                 ComboBox {
                     id: stopField
-                    model: ["1", "1.5", "2"]
+                    model: ["1", "2"]
+                    Layout.preferredHeight: 32
+                    font.pixelSize: 13
+                    Layout.preferredWidth: 120
+                    background: Rectangle {
+                        color: enabled ? "#ffffff" : "#f8fafc"
+                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                        border.width: 1
+                        radius: 4
+                        antialiasing: true
+
+                        Behavior on border.color {
+                            ColorAnimation { duration: 150 }
+                        }
+                    }
                 }
-                Label { text: "Адрес устройства"  }
+
+                Label {
+                    text: "Адрес устройства"
+                    color: "#374151"
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                }
                 TextField {
                     id: addField
-                }
-                Button {
-                    text: "Сохранить"
-                    Layout.alignment: Qt.AlignRight
-                    onClicked: {
-                        createInterface("RS", {
-                            parity: parityField.currentText,
-                            baudrate: baudrateField.currentText,
-                            wordLen: lenField.text,
-                            stopBits: stopField.currentText,
-                            addr: addField.text
-                        });
-                        rsConfigDialog.close();
+                    Layout.preferredHeight: 32
+                    color: "#1e293b"
+                    font.pixelSize: 13
+                    font.weight: Font.Normal
+
+                    leftPadding: 8
+                    rightPadding: 8
+                    topPadding: 6
+                    bottomPadding: 6
+
+                    selectByMouse: true
+                    verticalAlignment: TextInput.AlignVCenter
+
+                    background: Rectangle {
+                        color: enabled ? "#ffffff" : "#f8fafc"
+                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                        border.width: 1
+                        radius: 4
+                        antialiasing: true
+
+                        // Subtle shadow when focused
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.margins: -1
+                            color: "transparent"
+                            border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                            border.width: 2
+                            radius: 5
+                            visible: parent.parent.activeFocus
+                        }
+
+                        Behavior on border.color {
+                            ColorAnimation { duration: 150 }
+                        }
                     }
                 }
             }
 
+            Item {
+                Layout.fillHeight: true
+            }
+
+            Button {
+                text: "Сохранить"
+                Layout.alignment: Qt.AlignRight
+                Layout.preferredWidth: 120
+                Layout.preferredHeight: 40
+                font.pixelSize: 14
+                font.weight: Font.Medium
+
+                background: Rectangle {
+                    color: parent.pressed ? "#059669" : (parent.hovered ? "#10b981" : "#22c55e")
+                    radius: 6
+                    antialiasing: true
+
+                    Behavior on color {
+                        ColorAnimation { duration: 150 }
+                    }
+                }
+
+                contentItem: Text {
+                    text: parent.text
+                    font: parent.font
+                    color: "#ffffff"
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+
+                onClicked: {
+                    createInterface("RS", {
+                        parity: parityField.currentIndex,
+                        baudrate: baudrateField.currentText,
+                        wordLen: lenField.text,
+                        stopBits: stopField.currentIndex,
+                        addr: addField.text
+                    });
+                    rsConfigDialog.close();
+                }
+            }
         }
         function addToModel(name, value, codename, type, saving, logicuse) {
             dataModel.append({
@@ -511,114 +959,675 @@ ApplicationWindow {
             });
         }
     }
-
     Dialog {
         id: ethConfigDialog
         width: 500
-        height: 1080
+        height: 800
         anchors.centerIn: parent
         title: "Настройка ETH"
+        modal: true
+        standardButtons: Dialog.NoButton
+
+        background: Rectangle {
+            color: "#ffffff"
+            radius: 8
+            antialiasing: true
+            border.color: "#e2e8f0"
+            border.width: 1
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: -2
+                color: "transparent"
+                border.color: "#00000010"
+                border.width: 2
+                radius: 10
+                z: -1
+            }
+        }
+
+        header: Rectangle {
+            width: parent.width
+            height: 50
+            color: "#f8fafc"
+            radius: 8
+            antialiasing: true
+
+            Rectangle {
+                anchors.bottom: parent.bottom
+                width: parent.width
+                height: 1
+                color: "#e2e8f0"
+            }
+
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: "#f8fafc" }
+                GradientStop { position: 1.0; color: "#f1f5f9" }
+            }
+
+            Label {
+                anchors.centerIn: parent
+                text: ethConfigDialog.title
+                font.pixelSize: 16
+                font.weight: Font.DemiBold
+                color: "#1e293b"
+            }
+        }
+
         ColumnLayout {
             anchors.fill: parent
-            spacing: 10
-        GridLayout {
-            columns: 2
-            columnSpacing: 10
-            rowSpacing: 10
-            anchors.fill: parent
+            anchors.margins: 20
+            spacing: 15
 
-            Label { text: "IP адрес" }
-            TextField {
-                id: ipAddressField
-                inputMask: "000.000.000.000;_"
-                placeholderText: "192.168.0.1"
-            }
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                contentWidth: availableWidth
 
-            Label { text: "Маска подсети" }
-            TextField {
-                id: subnetMaskField
-                inputMask: "000.000.000.000;_"
-                placeholderText: "255.255.255.0"
-            }
+                GridLayout {
+                    width: parent.width
+                    columns: 2
+                    columnSpacing: 15
+                    rowSpacing: 15
 
-            Label { text: "Шлюз" }
-            TextField {
-                id: gatewayField
-                inputMask: "000.000.000.000;_"
-                placeholderText: "192.168.0.254"
-            }
+                    Label {
+                        text: "IP адрес"
+                        color: "#374151"
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                    }
+                    TextField {
+                        id: ipAddressField
+                        inputMask: "000.000.000.000;_"
+                        placeholderText: "192.168.0.1"
+                        Layout.preferredHeight: 32
+                        color: "#1e293b"
+                        font.pixelSize: 13
 
-            Label { text: "Старшие 3 байта MAC адреса" }
-            TextField {
-                id: macHighField
-                inputMask: "HH:HH:HH;_"
-                placeholderText: "00:1A:2B"
-            }
+                        leftPadding: 8
+                        rightPadding: 8
+                        selectByMouse: true
+                        verticalAlignment: TextInput.AlignVCenter
 
-            Label { text: "Младшие 3 байта MAC адреса" }
-            TextField {
-                id: macLowField
-                inputMask: "HH:HH:HH;_"
-                placeholderText: "3C:4D:5E"
-            }
+                        background: Rectangle {
+                            color: enabled ? "#ffffff" : "#f8fafc"
+                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            border.width: 1
+                            radius: 4
+                            antialiasing: true
 
-            Label { text: "IP адрес клиента 1" }
-            TextField {
-                id: clientIp1Field
-                inputMask: "000.000.000.000;_"
-                placeholderText: "192.168.0.10"
-            }
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: -1
+                                color: "transparent"
+                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.width: 2
+                                radius: 5
+                                visible: parent.parent.activeFocus
+                            }
 
-            Label { text: "IP адрес клиента 2" }
-            TextField {
-                id: clientIp2Field
-                inputMask: "000.000.000.000;_"
-                placeholderText: "192.168.0.11"
-            }
+                            Behavior on border.color {
+                                ColorAnimation { duration: 150 }
+                            }
+                        }
+                    }
 
-            Label { text: "IP адрес клиента 3" }
-            TextField {
-                id: clientIp3Field
-                inputMask: "000.000.000.000;_"
-                placeholderText: "192.168.0.12"
-            }
+                    Label {
+                        text: "Маска подсети"
+                        color: "#374151"
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                    }
+                    TextField {
+                        id: subnetMaskField
+                        inputMask: "000.000.000.000;_"
+                        placeholderText: "255.255.255.0"
+                        Layout.preferredHeight: 32
+                        color: "#1e293b"
+                        font.pixelSize: 13
 
-            Label { text: "IP адрес клиента 4" }
-            TextField {
-                id: clientIp4Field
-                inputMask: "000.000.000.000;_"
-                placeholderText: "192.168.0.13"
-            }
-            Label { text: "ETH адрес устройства"}
-            TextField {
-                id: addrField
-            }
-            Label { text: "Порт 1" }
-            TextField {
-                id: port1Field
-                validator: IntValidator { bottom: 1; top: 65535 }
-            }
+                        leftPadding: 8
+                        rightPadding: 8
+                        selectByMouse: true
+                        verticalAlignment: TextInput.AlignVCenter
 
-            Label { text: "Порт 2" }
-            TextField {
-                id: port2Field
-                validator: IntValidator { bottom: 1; top: 65535 }
-            }
+                        background: Rectangle {
+                            color: enabled ? "#ffffff" : "#f8fafc"
+                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            border.width: 1
+                            radius: 4
+                            antialiasing: true
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: -1
+                                color: "transparent"
+                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.width: 2
+                                radius: 5
+                                visible: parent.parent.activeFocus
+                            }
 
-            Label { text: "Порт 3" }
-            TextField {
-                id: port3Field
-                validator: IntValidator { bottom: 1; top: 65535 }
-            }
+                            Behavior on border.color {
+                                ColorAnimation { duration: 150 }
+                            }
+                        }
+                    }
 
-            Label { text: "Порт 4" }
-            TextField {
-                id: port4Field
-                validator: IntValidator { bottom: 1; top: 65535 }
-            }
+                    Label {
+                        text: "Шлюз"
+                        color: "#374151"
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                    }
+                    TextField {
+                        id: gatewayField
+                        inputMask: "000.000.000.000;_"
+                        placeholderText: "192.168.0.254"
+                        Layout.preferredHeight: 32
+                        color: "#1e293b"
+                        font.pixelSize: 13
+
+                        leftPadding: 8
+                        rightPadding: 8
+                        selectByMouse: true
+                        verticalAlignment: TextInput.AlignVCenter
+
+                        background: Rectangle {
+                            color: enabled ? "#ffffff" : "#f8fafc"
+                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            border.width: 1
+                            radius: 4
+                            antialiasing: true
+
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: -1
+                                color: "transparent"
+                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.width: 2
+                                radius: 5
+                                visible: parent.parent.activeFocus
+                            }
+
+                            Behavior on border.color {
+                                ColorAnimation { duration: 150 }
+                            }
+                        }
+                    }
+
+                    Label {
+                        text: "Старшие 3 байта MAC адреса"
+                        color: "#374151"
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                    }
+                    TextField {
+                        id: macHighField
+                        inputMask: "HH:HH:HH;_"
+                        placeholderText: "00:1A:2B"
+                        Layout.preferredHeight: 32
+                        color: "#1e293b"
+                        font.pixelSize: 13
+
+                        leftPadding: 8
+                        rightPadding: 8
+                        selectByMouse: true
+                        verticalAlignment: TextInput.AlignVCenter
+
+                        background: Rectangle {
+                            color: enabled ? "#ffffff" : "#f8fafc"
+                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            border.width: 1
+                            radius: 4
+                            antialiasing: true
+
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: -1
+                                color: "transparent"
+                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.width: 2
+                                radius: 5
+                                visible: parent.parent.activeFocus
+                            }
+
+                            Behavior on border.color {
+                                ColorAnimation { duration: 150 }
+                            }
+                        }
+                    }Label {
+                        text: "Младшие 3 байта MAC адреса"
+                        color: "#374151"
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                    }
+                    TextField {
+                        id: macLowField
+                        inputMask: "HH:HH:HH;_"
+                        placeholderText: "3C:4D:5E"
+                        Layout.preferredHeight: 32
+                        color: "#1e293b"
+                        font.pixelSize: 13
+
+                        leftPadding: 8
+                        rightPadding: 8
+                        selectByMouse: true
+                        verticalAlignment: TextInput.AlignVCenter
+
+                        background: Rectangle {
+                            color: enabled ? "#ffffff" : "#f8fafc"
+                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            border.width: 1
+                            radius: 4
+                            antialiasing: true
+
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: -1
+                                color: "transparent"
+                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.width: 2
+                                radius: 5
+                                visible: parent.parent.activeFocus
+                            }
+
+                            Behavior on border.color {
+                                ColorAnimation { duration: 150 }
+                            }
+                        }
+                    }
+
+                    Label {
+                        text: "IP адрес клиента 1"
+                        color: "#374151"
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                    }
+                    TextField {
+                        id: clientIp1Field
+                        inputMask: "000.000.000.000;_"
+                        placeholderText: "192.168.0.10"
+                        Layout.preferredHeight: 32
+                        color: "#1e293b"
+                        font.pixelSize: 13
+
+                        leftPadding: 8
+                        rightPadding: 8
+                        selectByMouse: true
+                        verticalAlignment: TextInput.AlignVCenter
+
+                        background: Rectangle {
+                            color: enabled ? "#ffffff" : "#f8fafc"
+                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            border.width: 1
+                            radius: 4
+                            antialiasing: true
+
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: -1
+                                color: "transparent"
+                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.width: 2
+                                radius: 5
+                                visible: parent.parent.activeFocus
+                            }
+
+                            Behavior on border.color {
+                                ColorAnimation { duration: 150 }
+                            }
+                        }
+                    }
+
+                    Label {
+                        text: "IP адрес клиента 2"
+                        color: "#374151"
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                    }
+                    TextField {
+                        id: clientIp2Field
+                        inputMask: "000.000.000.000;_"
+                        placeholderText: "192.168.0.11"
+                        Layout.preferredHeight: 32
+                        color: "#1e293b"
+                        font.pixelSize: 13
+
+                        leftPadding: 8
+                        rightPadding: 8
+                        selectByMouse: true
+                        verticalAlignment: TextInput.AlignVCenter
+                        background: Rectangle {
+                            color: enabled ? "#ffffff" : "#f8fafc"
+                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            border.width: 1
+                            radius: 4
+                            antialiasing: true
+
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: -1
+                                color: "transparent"
+                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.width: 2
+                                radius: 5
+                                visible: parent.parent.activeFocus
+                            }
+
+                            Behavior on border.color {
+                                ColorAnimation { duration: 150 }
+                            }
+                        }
+                    }
+
+                    Label {
+                        text: "IP адрес клиента 3"
+                        color: "#374151"
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                    }
+                    TextField {
+                        id: clientIp3Field
+                        inputMask: "000.000.000.000;_"
+                        placeholderText: "192.168.0.12"
+                        Layout.preferredHeight: 32
+                        color: "#1e293b"
+                        font.pixelSize: 13
+
+                        leftPadding: 8
+                        rightPadding: 8
+                        selectByMouse: true
+                        verticalAlignment: TextInput.AlignVCenter
+
+                        background: Rectangle {
+                            color: enabled ? "#ffffff" : "#f8fafc"
+                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            border.width: 1
+                            radius: 4
+                            antialiasing: true
+
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: -1
+                                color: "transparent"
+                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.width: 2
+                                radius: 5
+                                visible: parent.parent.activeFocus
+                            }
+
+                            Behavior on border.color {
+                                ColorAnimation { duration: 150 }
+                            }
+                        }
+                    }
+
+                    Label {
+                        text: "IP адрес клиента 4"
+                        color: "#374151"
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                    }
+                    TextField {
+                        id: clientIp4Field
+                        inputMask: "000.000.000.000;_"
+                        placeholderText: "192.168.0.13"
+                        Layout.preferredHeight: 32
+                        color: "#1e293b"
+                        font.pixelSize: 13
+
+                        leftPadding: 8
+                        rightPadding: 8
+                        selectByMouse: true
+                        verticalAlignment: TextInput.AlignVCenter
+
+                        background: Rectangle {
+                            color: enabled ? "#ffffff" : "#f8fafc"
+                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            border.width: 1
+                            radius: 4
+                            antialiasing: true
+
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: -1
+                                color: "transparent"
+                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.width: 2
+                                radius: 5
+                                visible: parent.parent.activeFocus
+                            }Behavior on border.color {
+                                ColorAnimation { duration: 150 }
+                            }
+                        }
+                    }
+
+                    Label {
+                        text: "ETH адрес устройства"
+                        color: "#374151"
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                    }
+                    TextField {
+                        id: addrField
+                        Layout.preferredHeight: 32
+                        color: "#1e293b"
+                        font.pixelSize: 13
+
+                        leftPadding: 8
+                        rightPadding: 8
+                        selectByMouse: true
+                        verticalAlignment: TextInput.AlignVCenter
+
+                        background: Rectangle {
+                            color: enabled ? "#ffffff" : "#f8fafc"
+                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            border.width: 1
+                            radius: 4
+                            antialiasing: true
+
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: -1
+                                color: "transparent"
+                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.width: 2
+                                radius: 5
+                                visible: parent.parent.activeFocus
+                            }
+
+                            Behavior on border.color {
+                                ColorAnimation { duration: 150 }
+                            }
+                        }
+                    }
+
+                    Label {
+                        text: "Порт 1"
+                        color: "#374151"
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                    }
+                    TextField {
+                        id: port1Field
+                        validator: IntValidator { bottom: 1; top: 65535 }
+                        Layout.preferredHeight: 32
+                        color: "#1e293b"
+                        font.pixelSize: 13
+
+                        leftPadding: 8
+                        rightPadding: 8
+                        selectByMouse: true
+                        verticalAlignment: TextInput.AlignVCenter
+
+                        background: Rectangle {
+                            color: enabled ? "#ffffff" : "#f8fafc"
+                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            border.width: 1
+                            radius: 4
+                            antialiasing: true
+
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: -1
+                                color: "transparent"
+                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.width: 2
+                                radius: 5
+                                visible: parent.parent.activeFocus
+                            }
+
+                            Behavior on border.color {
+                                ColorAnimation { duration: 150 }
+                            }
+                        }
+                    }
+
+                    Label {
+                        text: "Порт 2"
+                        color: "#374151"
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                    }
+                    TextField {
+                        id: port2Field
+                        validator: IntValidator { bottom: 1; top: 65535 }
+                        Layout.preferredHeight: 32
+                        color: "#1e293b"
+                        font.pixelSize: 13
+
+                        leftPadding: 8
+                        rightPadding: 8
+                        selectByMouse: true
+                        verticalAlignment: TextInput.AlignVCenter
+
+                        background: Rectangle {
+                            color: enabled ? "#ffffff" : "#f8fafc"
+                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            border.width: 1
+                            radius: 4
+                            antialiasing: true
+
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: -1
+                                color: "transparent"
+                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.width: 2
+                                radius: 5
+                                visible: parent.parent.activeFocus
+                            }
+
+                            Behavior on border.color {
+                                ColorAnimation { duration: 150 }
+                            }
+                        }
+                    }
+                    Label {
+                        text: "Порт 3"
+                        color: "#374151"
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                    }
+                    TextField {
+                        id: port3Field
+                        validator: IntValidator { bottom: 1; top: 65535 }
+                        Layout.preferredHeight: 32
+                        color: "#1e293b"
+                        font.pixelSize: 13
+
+                        leftPadding: 8
+                        rightPadding: 8
+                        selectByMouse: true
+                        verticalAlignment: TextInput.AlignVCenter
+
+                        background: Rectangle {
+                            color: enabled ? "#ffffff" : "#f8fafc"
+                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            border.width: 1
+                            radius: 4
+                            antialiasing: true
+
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: -1
+                                color: "transparent"
+                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.width: 2
+                                radius: 5
+                                visible: parent.parent.activeFocus
+                            }
+
+                            Behavior on border.color {
+                                ColorAnimation { duration: 150 }
+                            }
+                        }
+                    }
+                    Label {
+                        text: "Порт 4"
+                        color: "#374151"
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                    }
+                    TextField {
+                        id: port4Field
+                        validator: IntValidator { bottom: 1; top: 65535 }
+                        Layout.preferredHeight: 32
+                        color: "#1e293b"
+                        font.pixelSize: 13
+
+                        leftPadding: 8
+                        rightPadding: 8
+                        selectByMouse: true
+                        verticalAlignment: TextInput.AlignVCenter
+
+                        background: Rectangle {
+                            color: enabled ? "#ffffff" : "#f8fafc"
+                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            border.width: 1
+                            radius: 4
+                            antialiasing: true
+
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: -1
+                                color: "transparent"
+                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.width: 2
+                                radius: 5
+                                visible: parent.parent.activeFocus
+                            }
+
+                            Behavior on border.color {
+                                ColorAnimation { duration: 150 }
+                            }
+                        }
+                    }
             Button {
                 text: "Сохранить"
                 Layout.alignment: Qt.AlignRight
+                Layout.preferredWidth: 120
+                Layout.preferredHeight: 40
+                font.pixelSize: 14
+                font.weight: Font.Medium
+
+                background: Rectangle {
+                    color: parent.pressed ? "#059669" : (parent.hovered ? "#10b981" : "#22c55e")
+                    radius: 6
+                    antialiasing: true
+
+                    Behavior on color {
+                        ColorAnimation { duration: 150 }
+                    }
+                }
+
+                contentItem: Text {
+                    text: parent.text
+                    font: parent.font
+                    color: "#ffffff"
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
                 onClicked: {
                     createInterface("ETH", {
                         ip: ipAddressField.text,
@@ -638,9 +1647,9 @@ ApplicationWindow {
                     });
                     ethConfigDialog.close();
                 }
-            }
         }
-
+        }
+        }
         }
         function addToModel(name, value, codename, type, saving, logicuse) {
             dataModel.append({
@@ -660,7 +1669,7 @@ ApplicationWindow {
                 "tolp": ""
             });
         }
-    }
+        }
 
     FileDialog {
         id: jsonSelectDialog
@@ -742,28 +1751,163 @@ ApplicationWindow {
     Dialog {
         id: createObjectModelDialog
         title: "Создать объектную модель"
+        height: 200
+        background: Rectangle {
+            color: "#ffffff"
+            radius: 8
+            antialiasing: true
+            border.color: "#e2e8f0"
+            border.width: 1
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: -2
+                color: "transparent"
+                border.color: "#00000010"
+                border.width: 2
+                radius: 10
+                z: -1
 
+            }
+        }
+        header: Rectangle {
+            width: parent.width
+            height: 50
+            color: "#f8fafc"
+            radius: 8
+            antialiasing: true
+
+            Rectangle {
+                anchors.bottom: parent.bottom
+                width: parent.width
+                height: 1
+                color: "#e2e8f0"
+            }
+
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: "#f8fafc" }
+                GradientStop { position: 1.0; color: "#f1f5f9" }
+            }
+
+            Label {
+                anchors.centerIn: parent
+                text: createObjectModelDialog.title
+                font.pixelSize: 16
+                font.weight: Font.DemiBold
+                color: "#1e293b"
+            }
+        }
         Column {
             TextField {
                 id: objectModelNameField
                 placeholderText: "Имя объектной модели"
+                Layout.preferredHeight: 32
+                color: "#1e293b"
+                font.pixelSize: 13
+
+                leftPadding: 8
+                rightPadding: 8
+                selectByMouse: true
+                verticalAlignment: TextInput.AlignVCenter
+
+                background: Rectangle {
+                    color: enabled ? "#ffffff" : "#f8fafc"
+                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                    border.width: 1
+                    radius: 4
+                    antialiasing: true
+
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: -1
+                        color: "transparent"
+                        border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                        border.width: 2
+                        radius: 5
+                        visible: parent.parent.activeFocus
+                    }
+
+                    Behavior on border.color {
+                        ColorAnimation { duration: 150 }
+                    }
+                }
             }
 
             ComboBox {
                 id: objectModelTypeCombo
                 model: ["MEK", "MODBUS"]
+                height: 32
+                font.pixelSize: 13
+                width: 120
+                background: Rectangle {
+                    color: enabled ? "#ffffff" : "#f8fafc"
+                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                    border.width: 1
+                    radius: 4
+                    antialiasing: true
+
+                    Behavior on border.color {
+                        ColorAnimation { duration: 150 }
+                    }
+                }
             }
 
             Row {
                 Button {
                     text: "Создать"
+                    Layout.alignment: Qt.AlignRight
+                    Layout.preferredWidth: 120
+                    Layout.preferredHeight: 40
+                    font.pixelSize: 14
+                    font.weight: Font.Medium
+
+                    background: Rectangle {
+                        color: parent.pressed ? "#059669" : (parent.hovered ? "#10b981" : "#22c55e")
+                        radius: 6
+                        antialiasing: true
+
+                        Behavior on color {
+                            ColorAnimation { duration: 150 }
+                        }
+                    }
+
+                    contentItem: Text {
+                        text: parent.text
+                        font: parent.font
+                        color: "#ffffff"
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
                     onClicked: {
                         createObjectModel(objectModelNameField.text, objectModelTypeCombo.currentText)
+                        initializeMekProperties();
                         createObjectModelDialog.close()
                     }
                 }
                 Button {
                     text: "Отмена"
+                    Layout.alignment: Qt.AlignRight
+                    Layout.preferredWidth: 120
+                    Layout.preferredHeight: 40
+                    font.pixelSize: 14
+                    font.weight: Font.Medium
+
+                    background: Rectangle {
+                        color: parent.pressed ? "#b91c1c" : (parent.hovered ? "#dc2626" : "#ef4444")
+                        radius: 6
+                        antialiasing: true
+
+                        Behavior on color {
+                            ColorAnimation { duration: 150 }
+                        }
+                    }
+
+                    contentItem: Text {
+                        text: parent.text
+                        font: parent.font
+                        color: "#ffffff"
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
                     onClicked: createObjectModelDialog.close()
                 }
             }
@@ -810,28 +1954,128 @@ ApplicationWindow {
             TextField {
                 id: protocolNameField
                 placeholderText: "Имя протокола"
+                Layout.preferredHeight: 32
+                color: "#1e293b"
+                font.pixelSize: 13
+                font.weight: Font.Normal
+
+                leftPadding: 8
+                rightPadding: 8
+                topPadding: 6
+                bottomPadding: 6
+
+                selectByMouse: true
+                verticalAlignment: TextInput.AlignVCenter
+
+                background: Rectangle {
+                    color: enabled ? "#ffffff" : "#f8fafc"
+                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                    border.width: 1
+                    radius: 4
+                    antialiasing: true
+
+                    // Subtle shadow when focused
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: -1
+                        color: "transparent"
+                        border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                        border.width: 2
+                        radius: 5
+                        visible: parent.parent.activeFocus
+                    }
+
+                    Behavior on border.color {
+                        ColorAnimation { duration: 150 }
+                    }
+                }
             }
 
             ComboBox {
                 id: protocolTypeCombo
                 model: ["MEK_101", "MEK_104"]
+                height: 32
+                font.pixelSize: 13
+                width: 120
+                background: Rectangle {
+                    color: enabled ? "#ffffff" : "#f8fafc"
+                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                    border.width: 1
+                    radius: 4
+                    antialiasing: true
+
+                    Behavior on border.color {
+                        ColorAnimation { duration: 150 }
+                    }
+                }
             }
 
             ComboBox {
                 id: objectModelCombo
                 textRole: "name"
                 model: objectModelsConfig
+                height: 32
+                font.pixelSize: 13
+                width: 120
+                background: Rectangle {
+                    color: enabled ? "#ffffff" : "#f8fafc"
+                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                    border.width: 1
+                    radius: 4
+                    antialiasing: true
+
+                    Behavior on border.color {
+                        ColorAnimation { duration: 150 }
+                    }
+                }
             }
 
             ComboBox {
                 id: interfaceCombo
                 textRole: "name"
                 model: interfaceModelsConfig
+                height: 32
+                font.pixelSize: 13
+                width: 120
+                background: Rectangle {
+                    color: enabled ? "#ffffff" : "#f8fafc"
+                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                    border.width: 1
+                    radius: 4
+                    antialiasing: true
+
+                    Behavior on border.color {
+                        ColorAnimation { duration: 150 }
+                    }
+                }
             }
 
             Row {
                 Button {
                     text: "Создать"
+                    Layout.alignment: Qt.AlignRight
+                    Layout.preferredWidth: 120
+                    Layout.preferredHeight: 40
+                    font.pixelSize: 14
+                    font.weight: Font.Medium
+
+                    background: Rectangle {
+                        color: parent.pressed ? "#059669" : (parent.hovered ? "#10b981" : "#22c55e")
+                        radius: 6
+                        antialiasing: true
+
+                        Behavior on color {
+                            ColorAnimation { duration: 150 }
+                        }
+                    }
+
+                    contentItem: Text {
+                        text: parent.text
+                        font: parent.font
+                        color: "#ffffff"
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
                     onClicked: {
                         createProtocol(
                             protocolNameField.text,
@@ -844,6 +2088,29 @@ ApplicationWindow {
                 }
                 Button {
                     text: "Отмена"
+                    Layout.alignment: Qt.AlignRight
+                    Layout.preferredWidth: 120
+                    Layout.preferredHeight: 40
+                    font.pixelSize: 14
+                    font.weight: Font.Medium
+
+                    background: Rectangle {
+                        color: parent.pressed ? "#b91c1c" : (parent.hovered ? "#dc2626" : "#ef4444")
+                        radius: 6
+                        antialiasing: true
+
+                        Behavior on color {
+                            ColorAnimation { duration: 150 }
+                        }
+                    }
+
+                    contentItem: Text {
+                        text: parent.text
+                        font: parent.font
+                        color: "#ffffff"
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
                     onClicked: createProtocolDialog.close()
                 }
             }
@@ -1036,10 +2303,17 @@ ApplicationWindow {
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
                             }
-
+                            Label{
+                                text: "Индекс ТУ"
+                                Layout.preferredWidth: 150
+                                color: "#374151"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCente
+                            }
                             Label {
-                                text: "Single/Double"
-                                Layout.preferredWidth: 80
+                                text: "S/D"
+                                Layout.preferredWidth: 44
                                 color: "#374151"
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
@@ -1056,8 +2330,25 @@ ApplicationWindow {
                             }
 
                             Label {
-                                text: "Выход"
+                                text: "Сохранение"
                                 Layout.preferredWidth: 100
+                                color: "#374151"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+
+                            Label {
+                                text: "Триггер"
+                                Layout.preferredWidth: 140
+                                color: "#374151"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            Label {
+                                text: "Выход"
+                                Layout.preferredWidth: 140
                                 color: "#374151"
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
@@ -1110,6 +2401,7 @@ ApplicationWindow {
                         property string oc
                         property string tosp
                         property string tolp
+                        property string sector
 
                         property int originalIndex: digitalOutputsModel.get(index).originalIndex
 
@@ -1306,6 +2598,39 @@ ApplicationWindow {
                                 Qt.callLater(rootwindow.checkForDuplicates)
                             }
                         }
+
+                        ComboBox {
+                            id: telecommandIndexBox
+                            Layout.preferredWidth: 150
+                            Layout.preferredHeight: 30
+                            model: telecommandModel
+                            textRole: "text"  // показываем имя константы из .h
+                            currentIndex: {
+                                if (!itemData) return 0
+                                return model.indexOf(itemData.TYindex || "bool")
+                            }
+                            onCurrentTextChanged: {
+                                if (itemData) {
+                                    dataModel.setProperty(originalIndex, "TYindex", currentText)
+                                }
+                            }
+                            background: Rectangle {
+                                color: enabled ? "#ffffff" : "#f8fafc"
+                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                border.width: 1
+                                radius: 4
+                                antialiasing: true
+
+                                Behavior on border.color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+                            // удобный аксессор для получения числового enum-значения
+                            function currentValue() {
+                                if (currentIndex < 0 || currentIndex >= count) return -1;
+                                return model.get(currentIndex).value; // size_t из .h
+                            }
+                        }
                         Switch {
                             implicitWidth: 44
                             implicitHeight: 24
@@ -1393,9 +2718,72 @@ ApplicationWindow {
                                 }
                             }
                         }
+                        ComboBox {
+                            model: ["Нет", "Да"]
+                            currentIndex: model.indexOf(itemData.saving || "Нет")
+                            onCurrentTextChanged: dataModel.setProperty(originalIndex, "saving", currentText)
+                            Layout.preferredWidth: 100
+                            Layout.preferredHeight: 30
+
+                            font.pixelSize: 13
+
+                            background: Rectangle {
+                                color: enabled ? "#ffffff" : "#f8fafc"
+                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                border.width: 1
+                                radius: 4
+                                antialiasing: true
+
+                                Behavior on border.color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+                        }
+                        ComboBox {
+                            editable: true
+                            model: triggerModel
+                            currentIndex: itemData ? triggerModel.indexOf(itemData.sector) : -1
+                            onCurrentTextChanged: {
+                                if (itemData && dataModel) {
+                                    dataModel.setProperty(originalIndex, "sector", currentText)
+                                }
+                            }
+                            Layout.preferredWidth: 140
+                            Layout.preferredHeight: 32
+
+                            font.pixelSize: 13
+
+                            // Add the search functionality
+                            property string searchText: ""
+
+                            onEditTextChanged: {
+                                searchText = editText.toLowerCase()
+
+                                // Find first matching item
+                                for (let i = 0; i < model.length; i++) {
+                                    if (model[i].toString().toLowerCase().startsWith(searchText)) {
+                                        highlightedIndex = i
+                                        break
+                                    }
+                                }
+                            }
+
+                            background: Rectangle {
+                                color: enabled ? "#ffffff" : "#f8fafc"
+                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                border.width: 1
+                                radius: 4
+                                antialiasing: true
+
+                                Behavior on border.color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+                        }
+
                         TextField {
                             text: "VAL_" + codeNameField.text
-                            Layout.preferredWidth: 100
+                            Layout.preferredWidth: 140
                             Layout.preferredHeight: 30
                             color: "#1e293b"
                             font.pixelSize: 13
@@ -1562,7 +2950,7 @@ ApplicationWindow {
                         "name": "",
                         "codeName": "",
                         "sod": false,
-                        "type": "unsigned char",
+                        "type": "bool",
                         "logicuse": "Да",
                         "saving": "Да",
                         "aperture": "",
@@ -1573,6 +2961,7 @@ ApplicationWindow {
                         "tosp": "",
                         "tolp": "",
                         "sector": "",
+                        "TYindex": "",
                         "address": "",
                         "blockName": "",
                         "ioa_address": "",
@@ -1687,6 +3076,16 @@ ApplicationWindow {
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
                             }
+                            Label{
+                                text: "Индекс ТУ"
+                                Layout.preferredWidth: 150
+                                color: "#374151"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                                visible: rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Дискретные входы"
+
+                            }
                             Label { text: "Тип"
                                 Layout.preferredWidth: 120
                                 color: "#1e293b"
@@ -1703,8 +3102,7 @@ ApplicationWindow {
                             }
                             Label {
                                 text: "Сохран."
-                                visible: rootwindow.currentType === "Признаки" || rootwindow.currentType === "Уставка
-                               "
+                                visible: rootwindow.currentType === "Признаки" || rootwindow.currentType === "Уставка" || paramType === "Уставка"
                                 Layout.preferredWidth: 140
                                 color: "#1e293b"
                                 font.pixelSize: 13
@@ -1722,8 +3120,7 @@ ApplicationWindow {
                             }
                             Label {
                                 text: "Апертура"
-                                visible: rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Уставка
-                               "
+                                visible: rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Уставка" || paramType === "Уставка"
                                 Layout.preferredWidth: 120
                                 color: "#1e293b"
                                 font.pixelSize: 13
@@ -1732,8 +3129,7 @@ ApplicationWindow {
                             }
                             Label {
                                 text: "КТТ"
-                                visible: rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Уставка
-                               "
+                                visible: rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Уставка" || paramType === "Уставка"
                                 Layout.preferredWidth: 100
                                 color: "#1e293b"
                                 font.pixelSize: 13
@@ -1916,8 +3312,42 @@ ApplicationWindow {
                         }
 
                         ComboBox {
+                            id: telecommandIndexBox
+                            visible: rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Дискретные входы"
+                            Layout.preferredWidth: 150
+                            Layout.preferredHeight: 30
+                            model: rootwindow.currentType === "Аналоговые входы" ? telemeasureModel : telesignalModel
+                            textRole: "text"  // показываем имя константы из .h
+                            currentIndex: {
+                                if (!itemData) return 0
+                                return model.indexOf(itemData.TYindex || "bool")
+                            }
+                            onCurrentTextChanged: {
+                                if (itemData) {
+                                    dataModel.setProperty(originalIndex, "TYindex", currentText)
+                                }
+                            }
+                            background: Rectangle {
+                                color: enabled ? "#ffffff" : "#f8fafc"
+                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                border.width: 1
+                                radius: 4
+                                antialiasing: true
+
+                                Behavior on border.color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+                            // удобный аксессор для получения числового enum-значения
+                            function currentValue() {
+                                if (currentIndex < 0 || currentIndex >= count) return -1;
+                                return model.get(currentIndex).value; // size_t из .h
+                            }
+                        }
+
+                        ComboBox {
                             editable: true
-                            model: ["bool", "float", "unsigned int", "unsigned short", "unsigned char"]
+                            model: ["bool", "float", "unsigned int", "unsigned short", "unsigned char", "unsigned long long"]
                             currentIndex: model.indexOf(itemData.type || "bool")
                             onCurrentTextChanged: dataModel.setProperty(originalIndex, "type", currentText)
                             Layout.preferredWidth: 120
@@ -1961,8 +3391,7 @@ ApplicationWindow {
                         }
 
                         ComboBox {
-                            visible: rootwindow.currentType === "Признаки" || rootwindow.currentType === "Уставка
-                           "
+                            visible: rootwindow.currentType === "Признаки" || rootwindow.currentType === "Уставка"
                             model: ["Нет", "Да"]
                             currentIndex: model.indexOf(itemData.saving || "Нет")
                             onCurrentTextChanged: dataModel.setProperty(originalIndex, "saving", currentText)
@@ -2009,8 +3438,7 @@ ApplicationWindow {
                         }
 
                         TextField {
-                            visible: rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Уставка
-                           "
+                            visible: rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Уставка" || paramType === "Уставка"
                             text: itemData.aperture
                             Layout.preferredWidth: 120
                             Layout.preferredHeight: 32
@@ -2043,8 +3471,7 @@ ApplicationWindow {
                         }
 
                         TextField {
-                            visible: rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Уставка
-                           "
+                            visible: rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Уставка"
                             text: itemData.ktt
                             Layout.preferredWidth: 100
                             Layout.preferredHeight: 32
@@ -2218,6 +3645,7 @@ ApplicationWindow {
                         "tolp": "",
                         "sector": "",
                         "address": "",
+                        "TYindex": "",
                         "blockName": "",
                         "ioa_address": "",
                         "asdu_address": 1,
@@ -2226,11 +3654,11 @@ ApplicationWindow {
                         "type_back": "",
                         "type_percyc": "",
                         "type_def": "",
-                        "oi_c_sc_na_1": false,
-                        "oi_c_se_na_1": false,
-                        "oi_c_se_nb_1": false,
-                        "oi_c_dc_na_1": false,
-                        "oi_c_bo_na_1": false,
+                        "oi_c_sc_na_1": 'false',
+                        "oi_c_se_na_1": 'false',
+                        "oi_c_se_nb_1": 'false',
+                        "oi_c_dc_na_1": 'false',
+                        "oi_c_bo_na_1": 'false',
                         "use_in_spont_101": false,
                         "use_in_back_101": false,
                         "use_in_percyc_101": false,
@@ -2763,6 +4191,7 @@ ApplicationWindow {
 
                     delegate: Rectangle {
                         width: listView.width
+                        id: rowItem
                         height: 40
                         color: index % 2 === 0 ? "#ffffff" : "#f8fafc"
                         required property int index
@@ -2908,217 +4337,248 @@ ApplicationWindow {
 
                             ComboBox {
                                 id: bufferCombo
-                                model: ["NOT_USE", "DEFAULT", "SECOND_CLASS_1", "SECOND_CLASS_2", "SECOND_CLASS_3", "SECOND_CLASS_4",
-                                    "SECOND_CLASS_5", "SECOND_CLASS_6", "SECOND_CLASS_7", "SECOND_CLASS_8"]
+
+                                // 1) опции держим в отдельном свойстве и подаём в model:
+                                property var choices: [
+                                    "NOT_USE","DEFAULT","SECOND_CLASS_1","SECOND_CLASS_2","SECOND_CLASS_3",
+                                    "SECOND_CLASS_4","SECOND_CLASS_5","SECOND_CLASS_6","SECOND_CLASS_7","SECOND_CLASS_8"
+                                ]
+                                model: choices
+
                                 Layout.preferredWidth: 130
                                 Layout.preferredHeight: 32
                                 font.pixelSize: 13
+                                editable: true
 
-                                background: Rectangle {
-                                    color: enabled ? "#ffffff" : "#f8fafc"
-                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                    border.width: 1
-                                    radius: 4
-                                    antialiasing: true
-
-                                    Behavior on border.color {
-                                        ColorAnimation { duration: 150 }
-                                    }
-                                }
-
-                                property string _currentValue: model.second_class_num || "DEFAULT"
-                                property bool _initialized: false
+                                // 2) данные строки берём ЯВНО у корня делегата:
+                                property var row: rowItem.model
+                                property bool _init: false
 
                                 Component.onCompleted: {
-                                    var idx = model.indexOf(_currentValue);
-                                    currentIndex = idx >= 0 ? idx : 0;
-                                    _initialized = true;
-                                }
-
-                                on_CurrentValueChanged: {
-                                    if (_initialized) {
-                                        var idx = model.indexOf(_currentValue);
-                                        currentIndex = idx >= 0 ? idx : 0;
-                                    }
+                                    const wanted = (row.second_class_num && row.second_class_num.length)
+                                        ? row.second_class_num : "DEFAULT";
+                                    const idx = choices.indexOf(wanted);
+                                    currentIndex = idx >= 0 ? idx : 1; // 1 = "DEFAULT"
+                                    _init = true;
                                 }
 
                                 onCurrentIndexChanged: {
-                                    if (_initialized && currentIndex >= 0) {
-                                        dataModel.setProperty(index, "second_class_num", model[currentIndex]);
+                                    if (_init && currentIndex >= 0) {
+                                        dataModel.setProperty(rowItem.index, "second_class_num", choices[currentIndex]);
                                     }
+                                }
+
+                                // если данные в модели меняются после импорта — подтягиваем индекс
+                                Connections {
+                                    target: dataModel
+                                    function onDataChanged() {
+                                        if (!_init) return;
+                                        const idx = choices.indexOf(rowItem.model.second_class_num || "DEFAULT");
+                                        if (idx >= 0 && idx !== currentIndex) currentIndex = idx;
+                                    }
+                                }
+
+                                background: Rectangle {
+                                    color: enabled ? "#ffffff" : "#f8fafc"
+                                    border.color: parent.activeFocus ? "#3b82f6" :
+                                        (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    border.width: 1; radius: 4; antialiasing: true
+                                    Behavior on border.color { ColorAnimation { duration: 150 } }
                                 }
                             }
 
+                            // === SPONT ===
                             ComboBox {
                                 id: spontCombo
-                                model: ["NOT_USE", "DEFAULT", "M_SP_NA_1", "M_SP_TA1", "M_DP_NA_1", "M_DP_TA_1", "M_BO_NA_1",
+
+                                // отдельный список опций
+                                property var choices: [
+                                    "NOT_USE", "DEFAULT", "M_SP_NA_1", "M_SP_TA1", "M_DP_NA_1", "M_DP_TA_1", "M_BO_NA_1",
                                     "M_BO_TA_1", "M_ME_NA_1", "M_ME_TA_1", "M_ME_NB1", "M_ME_TB_1", "M_ME_NC_1",
-                                    "M_ME_TC_1", "M_ME_ND_1", "M_SP_TB_1", "M_DP_TB_1", "M_BO_TB_1", "M_ME_TD_1", "M_ME_TF_1"]
+                                    "M_ME_TC_1", "M_ME_ND_1", "M_SP_TB_1", "M_DP_TB_1", "M_BO_TB_1", "M_ME_TD_1", "M_ME_TF_1"
+                                ]
+                                model: choices
+
                                 Layout.preferredWidth: 130
                                 Layout.preferredHeight: 32
                                 font.pixelSize: 13
+                                editable: true
+
+                                // доступ к данным строки делегата
+                                property var row: rowItem.model
+                                property bool _init: false
+
+                                Component.onCompleted: {
+                                    const wanted = (row.type_spont && row.type_spont.length) ? row.type_spont : "DEFAULT";
+                                    const idx = choices.indexOf(wanted);
+                                    currentIndex = idx >= 0 ? idx : choices.indexOf("DEFAULT");
+                                    _init = true;
+                                }
+
+                                onCurrentIndexChanged: {
+                                    if (_init && currentIndex >= 0) {
+                                        dataModel.setProperty(rowItem.index, "type_spont", choices[currentIndex]);
+                                    }
+                                }
+
+                                Connections {
+                                    target: dataModel
+                                    function onDataChanged() {
+                                        if (!_init) return;
+                                        const idx = choices.indexOf(rowItem.model.type_spont || "DEFAULT");
+                                        if (idx >= 0 && idx !== currentIndex) currentIndex = idx;
+                                    }
+                                }
 
                                 background: Rectangle {
                                     color: enabled ? "#ffffff" : "#f8fafc"
                                     border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                    border.width: 1
-                                    radius: 4
-                                    antialiasing: true
-
-                                    Behavior on border.color {
-                                        ColorAnimation { duration: 150 }
-                                    }
-                                }
-
-                                property string _currentValue: model.type_spont || "DEFAULT"
-                                property bool _initialized: false
-
-                                Component.onCompleted: {
-                                    var idx = model.indexOf(_currentValue);
-                                    currentIndex = idx >= 0 ? idx : 0;
-                                    _initialized = true;
-                                }
-
-                                on_CurrentValueChanged: {
-                                    if (_initialized) {
-                                        var idx = model.indexOf(_currentValue);
-                                        currentIndex = idx >= 0 ? idx : 0;
-                                    }
-                                }
-
-                                onCurrentIndexChanged: {
-                                    if (_initialized && currentIndex >= 0) {
-                                        dataModel.setProperty(index, "type_spont", model[currentIndex]);
-                                    }
+                                    border.width: 1; radius: 4; antialiasing: true
+                                    Behavior on border.color { ColorAnimation { duration: 150 } }
                                 }
                             }
 
+                            // === BACK ===
                             ComboBox {
                                 id: backCombo
-                                model: ["NOT_USE", "DEFAULT", "M_SP_NA_1", "M_DP_NA_1", "M_BO_NA_1", "M_ME_NA_1",
-                                    "M_ME_NB_1", "M_ME_NC_1", "M_ME_ND_1"]
+
+                                property var choices: [
+                                    "NOT_USE", "DEFAULT", "M_SP_NA_1", "M_DP_NA_1", "M_BO_NA_1", "M_ME_NA_1",
+                                    "M_ME_NB_1", "M_ME_NC_1", "M_ME_ND_1"
+                                ]
+                                model: choices
+
                                 Layout.preferredWidth: 130
                                 Layout.preferredHeight: 32
                                 font.pixelSize: 13
+                                editable: true
+
+                                property var row: rowItem.model
+                                property bool _init: false
+
+                                Component.onCompleted: {
+                                    const wanted = (row.type_back && row.type_back.length) ? row.type_back : "DEFAULT";
+                                    const idx = choices.indexOf(wanted);
+                                    currentIndex = idx >= 0 ? idx : choices.indexOf("DEFAULT");
+                                    _init = true;
+                                }
+
+                                onCurrentIndexChanged: {
+                                    if (_init && currentIndex >= 0) {
+                                        dataModel.setProperty(rowItem.index, "type_back", choices[currentIndex]);
+                                    }
+                                }
+
+                                Connections {
+                                    target: dataModel
+                                    function onDataChanged() {
+                                        if (!_init) return;
+                                        const idx = choices.indexOf(rowItem.model.type_back || "DEFAULT");
+                                        if (idx >= 0 && idx !== currentIndex) currentIndex = idx;
+                                    }
+                                }
 
                                 background: Rectangle {
                                     color: enabled ? "#ffffff" : "#f8fafc"
                                     border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                    border.width: 1
-                                    radius: 4
-                                    antialiasing: true
-
-                                    Behavior on border.color {
-                                        ColorAnimation { duration: 150 }
-                                    }
-                                }
-
-                                property string _currentValue: model.type_back || "DEFAULT"
-                                property bool _initialized: false
-
-                                Component.onCompleted: {
-                                    var idx = model.indexOf(_currentValue);
-                                    currentIndex = idx >= 0 ? idx : 0;
-                                    _initialized = true;
-                                }
-
-                                on_CurrentValueChanged: {
-                                    if (_initialized) {
-                                        var idx = model.indexOf(_currentValue);
-                                        currentIndex = idx >= 0 ? idx : 0;
-                                    }
-                                }
-
-                                onCurrentIndexChanged: {
-                                    if (_initialized && currentIndex >= 0) {
-                                        dataModel.setProperty(index, "type_back", model[currentIndex]);
-                                    }
+                                    border.width: 1; radius: 4; antialiasing: true
+                                    Behavior on border.color { ColorAnimation { duration: 150 } }
                                 }
                             }
 
+                            // === PERCYC ===
                             ComboBox {
                                 id: percycCombo
-                                model: ["NOT_USE", "DEFAULT", "M_ME_NA_1", "M_ME_NB_1", "M_ME_NC_1", "M_ME_ND_1"]
+
+                                property var choices: [
+                                    "NOT_USE", "DEFAULT", "M_ME_NA_1", "M_ME_NB_1", "M_ME_NC_1", "M_ME_ND_1"
+                                ]
+                                model: choices
+
                                 Layout.preferredWidth: 130
                                 Layout.preferredHeight: 32
                                 font.pixelSize: 13
+                                editable: true
+
+                                property var row: rowItem.model
+                                property bool _init: false
+
+                                Component.onCompleted: {
+                                    const wanted = (row.type_percyc && row.type_percyc.length) ? row.type_percyc : "DEFAULT";
+                                    const idx = choices.indexOf(wanted);
+                                    currentIndex = idx >= 0 ? idx : choices.indexOf("DEFAULT");
+                                    _init = true;
+                                }
+
+                                onCurrentIndexChanged: {
+                                    if (_init && currentIndex >= 0) {
+                                        dataModel.setProperty(rowItem.index, "type_percyc", choices[currentIndex]);
+                                    }
+                                }
+
+                                Connections {
+                                    target: dataModel
+                                    function onDataChanged() {
+                                        if (!_init) return;
+                                        const idx = choices.indexOf(rowItem.model.type_percyc || "DEFAULT");
+                                        if (idx >= 0 && idx !== currentIndex) currentIndex = idx;
+                                    }
+                                }
 
                                 background: Rectangle {
                                     color: enabled ? "#ffffff" : "#f8fafc"
                                     border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                    border.width: 1
-                                    radius: 4
-                                    antialiasing: true
-
-                                    Behavior on border.color {
-                                        ColorAnimation { duration: 150 }
-                                    }
-                                }
-
-                                property string _currentValue: model.type_percyc || "DEFAULT"
-                                property bool _initialized: false
-
-                                Component.onCompleted: {
-                                    var idx = model.indexOf(_currentValue);
-                                    currentIndex = idx >= 0 ? idx : 0;
-                                    _initialized = true;
-                                }
-
-                                on_CurrentValueChanged: {
-                                    if (_initialized) {
-                                        var idx = model.indexOf(_currentValue);
-                                        currentIndex = idx >= 0 ? idx : 0;
-                                    }
-                                }
-
-                                onCurrentIndexChanged: {
-                                    if (_initialized && currentIndex >= 0) {
-                                        dataModel.setProperty(index, "type_percyc", model[currentIndex]);
-                                    }
+                                    border.width: 1; radius: 4; antialiasing: true
+                                    Behavior on border.color { ColorAnimation { duration: 150 } }
                                 }
                             }
 
+                            // === DEF ===
                             ComboBox {
                                 id: defCombo
-                                model: ["NOT_USE", "DEFAULT", "M_SP_NA_1", "M_SP_TA1", "M_DP_NA_1", "M_DP_TA_1", "M_BO_NA_1",
+
+                                property var choices: [
+                                    "NOT_USE", "DEFAULT", "M_SP_NA_1", "M_SP_TA1", "M_DP_NA_1", "M_DP_TA_1", "M_BO_NA_1",
                                     "M_BO_TA_1", "M_ME_NA_1", "M_ME_TA_1", "M_ME_NB1", "M_ME_TB_1", "M_ME_NC_1",
-                                    "M_ME_TC_1", "M_ME_ND_1", "M_SP_TB_1", "M_DP_TB_1", "M_BO_TB_1", "M_ME_TD_1", "M_ME_TF_1"]
+                                    "M_ME_TC_1", "M_ME_ND_1", "M_SP_TB_1", "M_DP_TB_1", "M_BO_TB_1", "M_ME_TD_1", "M_ME_TF_1"
+                                ]
+                                model: choices
+
                                 Layout.preferredWidth: 130
                                 Layout.preferredHeight: 32
                                 font.pixelSize: 13
+                                editable: true
+
+                                property var row: rowItem.model
+                                property bool _init: false
+
+                                Component.onCompleted: {
+                                    const wanted = (row.type_def && row.type_def.length) ? row.type_def : "DEFAULT";
+                                    const idx = choices.indexOf(wanted);
+                                    currentIndex = idx >= 0 ? idx : choices.indexOf("DEFAULT");
+                                    _init = true;
+                                }
+
+                                onCurrentIndexChanged: {
+                                    if (_init && currentIndex >= 0) {
+                                        dataModel.setProperty(rowItem.index, "type_def", choices[currentIndex]);
+                                    }
+                                }
+
+                                Connections {
+                                    target: dataModel
+                                    function onDataChanged() {
+                                        if (!_init) return;
+                                        const idx = choices.indexOf(rowItem.model.type_def || "DEFAULT");
+                                        if (idx >= 0 && idx !== currentIndex) currentIndex = idx;
+                                    }
+                                }
 
                                 background: Rectangle {
                                     color: enabled ? "#ffffff" : "#f8fafc"
                                     border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                    border.width: 1
-                                    radius: 4
-                                    antialiasing: true
-
-                                    Behavior on border.color {
-                                        ColorAnimation { duration: 150 }
-                                    }
-                                }
-
-                                property string _currentValue: model.type_def || "DEFAULT"
-                                property bool _initialized: false
-
-                                Component.onCompleted: {
-                                    var idx = model.indexOf(_currentValue);
-                                    currentIndex = idx >= 0 ? idx : 0;
-                                    _initialized = true;
-                                }
-
-                                on_CurrentValueChanged: {
-                                    if (_initialized) {
-                                        var idx = model.indexOf(_currentValue);
-                                        currentIndex = idx >= 0 ? idx : 0;
-                                    }
-                                }
-
-                                onCurrentIndexChanged: {
-                                    if (_initialized && currentIndex >= 0) {
-                                        dataModel.setProperty(index, "type_def", model[currentIndex]);
-                                    }
+                                    border.width: 1; radius: 4; antialiasing: true
+                                    Behavior on border.color { ColorAnimation { duration: 150 } }
                                 }
                             }
 
@@ -4677,8 +6137,7 @@ ApplicationWindow {
             Button {
                 text: "Настроить RS"
                 onClicked: {
-                    rscounter = rscounter + 1
-                    rsConfigDialog.open()
+                    initializeMekProperties()
                 }
             }
             Item {
@@ -4760,18 +6219,18 @@ ApplicationWindow {
     function initializeMekProperties() {
         for (var i = 0; i < dataModel.count; i++) {
             var item = dataModel.get(i)
-            if (item.paramType == "Выходные сигналы") {
-                dataModel.setProperty(i, "oi_c_sc_na_1", true)
+            if (item.paramType === "Аналоговый выход" || item.paramType === "Дискретный выход") {
+                dataModel.setProperty(i, "oi_c_sc_na_1", 'true')
             }
             else if (item.paramType === "Уставка") {
                 if (item.type === "bool") {
-                    dataModel.setProperty(i, "oi_c_sc_na_1", true)
+                    dataModel.setProperty(i, "oi_c_sc_na_1", 'true')
                 }
                 else if (item.type === "unsigned short" || item.type === "unsigned int") {
-                    dataModel.setProperty(i, "oi_c_se_na_1", true)
+                    dataModel.setProperty(i, "oi_c_se_na_1", 'true')
                 }
                 else if (item.type === "float") {
-                    dataModel.setProperty(i, "oi_c_se_nb_1", true)
+                    dataModel.setProperty(i, "oi_c_se_nb_1", 'true')
                 }
             }
         }
@@ -5490,6 +6949,6 @@ ApplicationWindow {
 //номер сектора=триггер, выбор из списка всех других сигналов,  импульс ushort, в Уставках нет триггера
 //добавляя 101
 
-
-//claude: дубликаты, другие вкладки(хедер, дизайн), индексация модбаса
-//связать добавление протокола к модели и интерейсяу
+ 
+//выбор тсов из подрузки параметров current system в дискретных выходах
+//настройки мека, big endian в модбасе
