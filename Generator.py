@@ -35,6 +35,8 @@ def as_int(v, default=None):
     except Exception:
         return default
 
+
+
 # ---------- Main ----------
 
 def main(json_file):
@@ -207,6 +209,15 @@ def main(json_file):
 
         return None
 
+
+    def get_ref(obj, key):
+        ref_code = norm_str(obj.get(key))
+        return by_code.get(ref_code) if ref_code else None
+
+    def get_ref_field(obj, ref_key, field, default=None):
+        ref = get_ref(obj, ref_key)
+        return ref.get(field, default) if ref else default
+
     # ---------- File headers ----------
     defines_content = f"""/**
  * @file defines.h
@@ -275,7 +286,8 @@ void Core::InitSavedParameters() {{
  */
 #include "defines.h"
 #include "core.h"
-#include "modbus.h"
+#include "modbus_server.h"
+#include "MEK101_server.h"
 
 namespace core {{
 void Core::InitCommunications() {{
@@ -394,15 +406,13 @@ void Core::InitTelemeasurements() {{
         paramType = norm_str(obj.get("paramType", "")) or ""
         typ = norm_str(obj.get("type", "")) or ""
         second_class = norm_str(obj.get("second_class_num", "NOT_USE")) or "NOT_USE"
-
+        asdu_addr = norm_str(obj.get("asdu_address", "")) or ""
+        aperture = norm_str(obj.get("aperture", "")) or ""
+        by_code = { norm_str(o.get("codeName")): o for o in data if o.get("codeName") }
         if not ioa_addr:
             continue
 
-        # Base info-object mapping
-        communications_content += (
-            f"    mek_object_model->AddInfoObject(&GetInfoObject(ind_{code}), MEK::Priority::{second_class}, "
-            f"{code}_MEK_IOA_ADDR, {code}_MEK_ASDU_ADDR);\n"
-        )
+
 
         for key, func, which in (
                 ("type_spont",  "AssignTypeID_ForST",  "ST"),
@@ -424,7 +434,7 @@ void Core::InitTelemeasurements() {{
 
             # если дефолта нет или оно другое → пишем
             communications_content += (
-                f"    mek_object_model->{func}(MEK::M_TypeID::{tval}, {code}_MEK_IOA_ADDR);\n"
+                f"    mek_object_model->{func}(MEK::M_TypeID::{tval}, {ioa_addr}, {asdu_addr});\n"
             )
 
         # Points / Commands based on param type
@@ -432,53 +442,64 @@ void Core::InitTelemeasurements() {{
             # Tele-signalization point (bool states)
             communications_content += (
                 f"    mek_object_model->AddPoint({{&GetInfoObject(ind_{code}), MEK::Priority::{second_class}}}, "
-                f"{code}_MEK_IOA_ADDR, {code}_MEK_ASDU_ADDR);  // {name}\n"
+                f"{ioa_addr}, {asdu_addr});  // {name}\n"
             )
         elif paramType == "Признаки" and typ != "bool":
             communications_content += (
                 f"    mek_object_model->AddSetpoint({{&GetInfoObject(ind_{code}), MEK::Priority::{second_class}}}, "
-                f"{code}_MEK_IOA_ADDR, {code}_MEK_ASDU_ADDR);  // {name}\n"
+                f"{ioa_addr}, {asdu_addr});  // {name}\n"
             )
         elif paramType == "Уставки":
             if typ == "bool":
                 communications_content += (
                     f"    mek_object_model->AddSingleCommand({{&GetInfoObject(ind_{code}), std::nullopt}}, "
-                    f"{code}_MEK_IOA_ADDR, {code}_MEK_ASDU_ADDR);  // {name}\n"
+                    f"{ioa_addr}, {asdu_addr});  // {name}\n"
                 )
+        elif paramType == "Аналоговые входы" and (obj.get("ktt") or obj.get("aperture")):
+            ap_code = norm_str(obj.get("aperture"))
+            ap_def_value = get_ref_field(obj, "aperture", "def_value", "")
+            ap_ioa = get_ref_field(obj, "aperture", "ioa_address", "")
+            ktt_param = f"ind_{obj['ktt']}" if obj.get("ktt") else "std::nullopt"
+            aperture_param = f"ind_{ap_code}" if ap_code else "std::nullopt"
+            communications_content += (
+                f"    mek_object_model->AddMeasurement({{&GetInfoObject(ind_{code}), MEK::Priority::{second_class}}}, "
+                f"{{{{{{&GetInfoObject(ind_{ap_code}), {{{{MEK::Priority::{second_class}),  aperture def_value: {ap_ioa}, {asdu_addr}}}}}}},\n"
+                f" "
+            )
             else:
                 communications_content += (
                     f"    mek_object_model->AddSetpointCommand({{&GetInfoObject(ind_{code}), "
-                    f"{{{{&GetInfoObject(ind_{code}), MEK::Priority::{second_class}, {code}_MEK_IOA_ADDR+1, {code}_MEK_ASDU_ADDR}}}}}}, "
-                    f"{code}_MEK_IOA_ADDR, {code}_MEK_ASDU_ADDR);  // {name}\n"
+                    f"{{{{&GetInfoObject(ind_{code}), MEK::Priority::{second_class}, {ioa_addr}, {asdu_addr}}}}}}}, "
+                    f"{ioa_addr}, {asdu_addr});  // {name}\n"
                 )
 
         # Map IO to command types by flags
         if norm_bool(obj.get("oi_c_bo_na_1")):
-            communications_content += f"    mek_object_model->AssignIO_ForBO({code}_MEK_IOA_ADDR, {code}_MEK_ASDU_ADDR);\n"
+            communications_content += f"    mek_object_model->AssignIO_ForBO({ioa_addr}, {asdu_addr});\n"
         if norm_bool(obj.get("oi_c_dc_na_1")):
-            communications_content += f"    mek_object_model->AssignIO_ForDC({code}_MEK_IOA_ADDR, {code}_MEK_ASDU_ADDR);\n"
+            communications_content += f"    mek_object_model->AssignIO_ForDC({ioa_addr}, {asdu_addr});\n"
         if norm_bool(obj.get("oi_c_sc_na_1")):
-            communications_content += f"    mek_object_model->AssignIO_ForSC({code}_MEK_IOA_ADDR, {code}_MEK_ASDU_ADDR);\n"
+            communications_content += f"    mek_object_model->AssignIO_ForSC({ioa_addr}, {asdu_addr});\n"
         if norm_bool(obj.get("oi_c_se_na_1")):
-            communications_content += f"    mek_object_model->AssignIO_ForSE_NA({code}_MEK_IOA_ADDR, {code}_MEK_ASDU_ADDR);\n"
+            communications_content += f"    mek_object_model->AssignIO_ForSE_NA({ioa_addr}, {asdu_addr});\n"
         if norm_bool(obj.get("oi_c_se_nb_1")):
-            communications_content += f"    mek_object_model->AssignIO_ForSE_NC({code}_MEK_IOA_ADDR, {code}_MEK_ASDU_ADDR);\n"
+            communications_content += f"    mek_object_model->AssignIO_ForSE_NC({ioa_addr}, {asdu_addr});\n"
 
         # Protocol-specific configuration
         for prot in protos:
             ptype = prot.get("type")
             if ptype == "MEK_104":
                 if not norm_bool(obj.get("allow_address_101")):
-                    communications_content += f"    mek_101_server->AllowAddressUsage(false, {code}_MEK_IOA_ADDR);\n"
+                    communications_content += f"    mek_101_server->AllowAddressUsage(false, {ioa_addr}, {asdu_addr});\n"
                 sgrp = norm_str(obj.get("survey_group_101"))
                 if sgrp and sgrp != "NOT_USE":
-                    communications_content += f"    mek_101_server->DetermineGroupForIC(MEK::InterrogationGroup::{sgrp}, {code}_MEK_IOA_ADDR)   ;\n"
+                    communications_content += f"    mek_101_server->DetermineGroupForIC(MEK::InterrogationGroup::{sgrp}, {ioa_addr}, {asdu_addr});\n"
                 if not norm_bool(obj.get("use_in_back_101")):
-                    communications_content += f"    mek_101_server->DetermineUsageInBC(false, {code}_MEK_IOA_ADDR);\n"
+                    communications_content += f"    mek_101_server->DetermineUsageInBC(false, {ioa_addr}, {asdu_addr});\n"
                 if not norm_bool(obj.get("use_in_spont_101")):
-                    communications_content += f"    mek_101_server->DetermineUsageInST(false, {code}_MEK_IOA_ADDR);\n"
+                    communications_content += f"    mek_101_server->DetermineUsageInST(false, {ioa_addr}, {asdu_addr});\n"
                 if not norm_bool(obj.get("use_in_percyc_101")):
-                    communications_content += f"    mek_101_server->DetermineUsageInCP(false, {code}_MEK_IOA_ADDR);\n"
+                    communications_content += f"    mek_101_server->DetermineUsageInCP(false, {ioa_addr}, {asdu_addr});\n"
 
             # if ptype == "MEK_104":
             #     if norm_bool(obj.get("allow_address_104")):

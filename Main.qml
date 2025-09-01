@@ -3137,6 +3137,24 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
+                                text: "Верхний предел"
+                                visible: rootwindow.currentType === "Аналоговые входы"
+                                Layout.preferredWidth: 150
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            Label {
+                                text: "Нижний предел"
+                                visible: rootwindow.currentType === "Аналоговые входы"
+                                Layout.preferredWidth: 150
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            Label {
                                 text: "Значение по умолч."
                                 visible: !(rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Дискретные входы")
                                 Layout.preferredWidth: 120
@@ -3501,6 +3519,76 @@ ApplicationWindow {
                             }
 
                             onTextChanged: dataModel.setProperty(originalIndex, "ktt", text)
+                        }
+
+                        TextField {
+                            visible: rootwindow.currentType === "Аналоговые входы"
+                            text: itemData.up
+                            Layout.preferredWidth: 150
+                            Layout.preferredHeight: 32
+
+                            font.pixelSize: 13
+                            font.weight: Font.Normal
+
+                            leftPadding: 8
+                            rightPadding: 8
+                            topPadding: 6
+                            bottomPadding: 6
+
+                            selectByMouse: true
+                            verticalAlignment: TextInput.AlignVCenter
+
+                            background: Rectangle {
+                                color: enabled ? "#ffffff" : "#f8fafc"
+                                border.color: (itemData.isCodeNameDuplicate || false) ? "#dc2626" :
+                                    (parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0"))
+                                border.width: 1
+                                radius: 4
+                                antialiasing: true
+
+                                Behavior on border.color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+
+                            onTextChanged: {
+                                dataModel.setProperty(originalIndex, "up", text)
+                            }
+                        }
+
+                        TextField {
+                            visible: rootwindow.currentType === "Аналоговые входы"
+                            text: itemData.down
+                            Layout.preferredWidth: 150
+                            Layout.preferredHeight: 32
+
+                            font.pixelSize: 13
+                            font.weight: Font.Normal
+
+                            leftPadding: 8
+                            rightPadding: 8
+                            topPadding: 6
+                            bottomPadding: 6
+
+                            selectByMouse: true
+                            verticalAlignment: TextInput.AlignVCenter
+
+                            background: Rectangle {
+                                color: enabled ? "#ffffff" : "#f8fafc"
+                                border.color: (itemData.isCodeNameDuplicate || false) ? "#dc2626" :
+                                    (parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0"))
+                                border.width: 1
+                                radius: 4
+                                antialiasing: true
+
+                                Behavior on border.color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+
+                            onTextChanged: {
+                                dataModel.setProperty(originalIndex, "down", text)
+                            }
                         }
 
                         TextField {
@@ -5821,14 +5909,13 @@ ApplicationWindow {
                 }
             }
             TabButton {
-                text: "Уставка"
+                text: "Команда уставки"
                 background: Rectangle {
                     color: parent.checked ? "#e2e8f0" : "transparent"
                     border.color: parent.checked ? "#cbd5e1" : "transparent"
                     border.width: parent.checked ? 1 : 0
                 }
             }
-
             TabButton {
                 visible: modbus
                 text: "Modbus"
@@ -6949,6 +7036,9 @@ ApplicationWindow {
 //номер сектора=триггер, выбор из списка всех других сигналов,  импульс ushort, в Уставках нет триггера
 //добавляя 101
 
- 
+
 //выбор тсов из подрузки параметров current system в дискретных выходах
 //настройки мека, big endian в модбасе
+//#include "MEK101_server.h" or 104///// modbus_server.h, числами адреса иоа и асду
+// верхний нижний предел измерений
+//если float, то всегда заканчивается f
