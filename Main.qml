@@ -23,6 +23,7 @@ ApplicationWindow {
     property bool loadingState: false
     property bool closeapp: false
     property string currentType: "Аналоговые входы"
+    property string currentProtocol: "Общее"
     property int ethcounter: 0
     property int rscounter: 0
     property int mekcounter:0
@@ -145,6 +146,191 @@ ApplicationWindow {
             }
         }
     }
+    // ===== Настройки единственного чекбокса Setpoint =====
+    property var val_sp: { "flag": "val_setpoint_enabled",
+        "buf":  "val_setpoint_def_value",
+        "prefix": "VAL_SETPOINT" }
+
+    // Имя уставки: VAL_SETPOINT_<codeName>_<ioIndex>
+    function makeValSetpointCode(srcItem) {
+        var prefix = val_sp.prefix;
+        var code   = (srcItem && srcItem.codeName ? String(srcItem.codeName) : "");
+        var io     = (srcItem && srcItem.ioIndex  ? String(srcItem.ioIndex)  : "");
+        return prefix + "_" + code + "_" + io;
+    }
+
+    // Найти уставку, связанную с исходной строкой (возвращает индекс в dataModel или -1)
+    function findValSetpointIndex(srcOriginalIndex) {
+        for (var i = 0; i < dataModel.count; ++i) {
+            var it = dataModel.get(i);
+            if (!it) continue;
+            if (it.paramType === "Уставки" &&
+                it.link_source_index === srcOriginalIndex &&
+                it.link_kind === "val_setpoint") {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    // Создать связанную уставку (если ещё нет). Вернёт её индекс.
+    function createValSetpoint(srcOriginalIndex) {
+        var src  = dataModel.get(srcOriginalIndex);
+        var code = makeValSetpointCode(src);
+        var name = code;
+        var bufv = (src && src[val_sp.buf]) ? src[val_sp.buf] : "";
+
+        dataModel.append({
+            paramType: "Уставка",
+            codeName:  code,
+            name:      name,
+            def_value: bufv,
+
+            // базовые поля — подставь то, что нужно твоему генератору
+            ioIndex: (typeof rootwindow !== "undefined" && rootwindow.nextIoIndex) ? String(rootwindow.nextIoIndex) : "",
+            type: "float",
+            logicuse: "Да",
+            saving: "Да",
+            sod: false,
+
+            // связь (важно для удаления/синхронизации)
+            link_source_index: srcOriginalIndex,
+            link_source_code:  (src && src.codeName) ? src.codeName : "",
+            link_source_io:    (src && src.ioIndex)  ? src.ioIndex  : "",
+            link_kind:         "val_setpoint"
+        });
+
+        if (typeof rootwindow !== "undefined" && rootwindow.incrementIoIndex)
+            rootwindow.incrementIoIndex();
+
+        return dataModel.count - 1;
+    }
+
+    // Удалить связанную уставку (если есть)
+    function removeValSetpoint(srcOriginalIndex) {
+        var idx = findValSetpointIndex(srcOriginalIndex);
+        if (idx >= 0) dataModel.remove(idx);
+    }
+
+    // (Опционально) вызвать один раз после импорта всех строк, если не сериализуешь автосозданные уставки
+    function restoreValSetpointsAfterImport() {
+        for (var i = 0; i < dataModel.count; ++i) {
+            var src = dataModel.get(i);
+            if (!src) continue;
+            if (!!src[val_sp.flag]) {
+                if (findValSetpointIndex(i) < 0) createValSetpoint(i);
+                syncValSetpointDefValue(i);
+            } else {
+                removeValSetpoint(i);
+            }
+        }
+    }
+    // === МЕТА для 4 чекбоксов ===
+    // kind — внутр. ключ; flag — имя булевого флага в исходной строке;
+    // buf  — имя буфера исходной строки (для импорта/экспорта);
+    // prefix — кусок имени уставки (можешь поменять на свои).
+    property var meas_meta: [
+        { kind: "aperture", label: "Апертура",    flag: "meas_aperture_enabled",    buf: "meas_aperture_def_value",    prefix: "MEAS_AP" },
+        { kind: "ktt",      label: "КТТ",         flag: "meas_ktt_enabled",         buf: "meas_ktt_def_value",         prefix: "MEAS_KTT" },
+        { kind: "upper",    label: "Верх. предел",flag: "meas_upper_enabled",       buf: "meas_upper_def_value",       prefix: "MEAS_UP" },
+        { kind: "lower",    label: "Нижн. предел",flag: "meas_lower_enabled",       buf: "meas_lower_def_value",       prefix: "MEAS_LOW" },
+        { kind: "val_setpoint",    label: "Значение",flag: "val_setpoint_enabled",       buf: "meas_lower_def_value",       prefix: "VAL_SETPOINT" }
+    ]
+
+    // Сделай свою логику префикса, если надо
+    function makeMeasPrefix(kind, srcItem) {
+        // по умолчанию из меты
+        const m = meas_meta.find(x => x.kind === kind)
+        return m ? m.prefix : "MEAS"
+    }
+
+    // Итоговый код уставки: MEAS_<PREFIX>_<codeName>_<IO_INDEX>
+    function makeMeasCode(kind, srcItem) {
+        const prefix = makeMeasPrefix(kind, srcItem)
+        const code   = (srcItem.codeName || "").toString().trim()
+        const io     = (srcItem.ioIndex  || "").toString().trim()
+        return prefix + "_" + code + "_" + "IO_INDEX"
+    }
+
+    // Поиск уставки, связанной с исходной строкой и kind
+    function findLinkedMeasIndexFor(kind, srcOriginalIndex) {
+        for (let i = 0; i < dataModel.count; ++i) {
+            const it = dataModel.get(i)
+            if (it && it.paramType === "Уставка"    &&
+                it.link_source_index === srcOriginalIndex &&
+                it.link_kind === kind)
+                return i
+        }
+        return -1
+    }
+
+
+
+
+    // Создать уставку; вернуть индекс
+    function createLinkedMeasFor(kind, srcOriginalIndex) {
+        const src  = dataModel.get(srcOriginalIndex)
+        const code = makeMeasCode(kind, src)
+        const name = code
+        const meta = meas_meta.find(x => x.kind === kind)
+        const bufv = src[meta.buf] || ""
+        dataModel.setProperty(srcOriginalIndex, kind, code)
+        dataModel.append({
+            paramType: "Уставка",
+            codeName:  code,
+            name:      "Уставка " + code,
+            def_value: bufv,
+
+            // базовые поля — подставь, что нужно твоему генератору
+            ioIndex: (typeof rootwindow !== "undefined" && rootwindow.nextIoIndex) ? rootwindow.nextIoIndex.toString() : "",
+            type: "float", logicuse: "Да", saving: "Да", sod: false,
+
+            // связь
+            link_source_index: srcOriginalIndex,
+            link_source_code:  src.codeName || "",
+            link_source_io:    src.ioIndex  || "",
+            link_kind:         kind
+        })
+
+        if (typeof rootwindow !== "undefined" && rootwindow.incrementIoIndex)
+            rootwindow.incrementIoIndex()
+
+        return dataModel.count - 1
+    }
+
+    // Удалить уставку, если есть
+    function removeLinkedMeasFor(kind, srcOriginalIndex) {
+        dataModel.setProperty(srcOriginalIndex, kind, "")
+        const idx = findLinkedMeasIndexFor(kind, srcOriginalIndex)
+        if (idx >= 0) dataModel.remove(idx)
+    }
+
+    // Протянуть def_value из буфера строки-источника в связанную уставку
+    function syncMeasDefValue(kind, srcOriginalIndex) {
+        const src  = dataModel.get(srcOriginalIndex)
+        const meta = meas_meta.find(x => x.kind === kind)
+        const idx  = findLinkedMeasIndexFor(kind, srcOriginalIndex)
+        if (idx >= 0) dataModel.setProperty(idx, "def_value", src[meta.buf] || "")
+    }
+
+    // Восстановление после импорта (когда dataModel уже наполнен)
+    function restoreAutoMeasurementsAfterImport() {
+        for (let i = 0; i < dataModel.count; ++i) {
+            const src = dataModel.get(i)
+            if (!src) continue
+            for (const m of meas_meta) {
+                if (src[m.flag]) {
+                    if (findLinkedMeasIndexFor(m.kind, i) < 0)
+                        createLinkedMeasFor(m.kind, i)
+                    syncMeasDefValue(m.kind, i)
+                } else {
+                    removeLinkedMeasFor(m.kind, i)
+                }
+            }
+        }
+    }
+
+
 
     // ===== МОДЕЛИ =====
     ListModel { id: telecommandModel }       // TelecommandIndexes
@@ -3077,7 +3263,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label{
-                                text: "Индекс ТУ"
+                                text: "Индекс"
                                 Layout.preferredWidth: 150
                                 color: "#374151"
                                 font.pixelSize: 13
@@ -3120,7 +3306,7 @@ ApplicationWindow {
                             }
                             Label {
                                 text: "Апертура"
-                                visible: rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Уставка" || paramType === "Уставка"
+                                visible: rootwindow.currentType === "Аналоговые входы"
                                 Layout.preferredWidth: 120
                                 color: "#1e293b"
                                 font.pixelSize: 13
@@ -3129,7 +3315,7 @@ ApplicationWindow {
                             }
                             Label {
                                 text: "КТТ"
-                                visible: rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Уставка" || paramType === "Уставка"
+                                visible: rootwindow.currentType === "Аналоговые входы"
                                 Layout.preferredWidth: 100
                                 color: "#1e293b"
                                 font.pixelSize: 13
@@ -3166,6 +3352,14 @@ ApplicationWindow {
                             Label { text: "Антидребезг"
                                 Layout.preferredWidth: 170
                                 visible: rootwindow.currentType === "Дискретные входы"
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            Label { text: "Значение"
+                                Layout.preferredWidth: 70
+                                visible: rootwindow.currentType === "Уставка"
                                 color: "#1e293b"
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
@@ -3455,139 +3649,78 @@ ApplicationWindow {
                             }
                         }
 
-                        TextField {
-                            visible: rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Уставка" || paramType === "Уставка"
-                            text: itemData.aperture
-                            Layout.preferredWidth: 120
-                            Layout.preferredHeight: 32
+                        Repeater {
+                            model: meas_meta.length
 
-                            color: "#1e293b"
-                            font.pixelSize: 13
-                            font.weight: Font.Normal
-
-                            leftPadding: 8
-                            rightPadding: 8
-                            topPadding: 6
-                            bottomPadding: 6
-
-                            selectByMouse: true
-                            verticalAlignment: TextInput.AlignVCenter
-
-                            background: Rectangle {
-                                color: enabled ? "#ffffff" : "#f8fafc"
-                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
-                                radius: 4
-                                antialiasing: true
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
+                            RowLayout {
+                                id: rowMeas
+                                spacing: 6
+                                property var meta: meas_meta[index]
+                                visible: rootwindow.currentType === "Аналоговые входы"
+                                // локальная функция обновления UI из текущих данных строки
+                                function refreshFromModel() {
+                                    var src = itemData;                          // снимок строки
+                                    var f   = !!(src && src[rowMeas.meta.flag]); // bool-флаг
+                                    cb.checked = f;
+                                    // тянем буфер значения в поле (когда включено)
+                                    var bufv = (src && src[rowMeas.meta.buf]) ? src[rowMeas.meta.buf] : "";
+                                    if (val.text !== bufv) val.text = bufv;
+                                    val.visible = cb.checked;
                                 }
-                            }
 
-                            onTextChanged: dataModel.setProperty(originalIndex, "aperture", text)
-                        }
+                                CheckBox {
+                                    id: cb
+                                    text: rowMeas.meta.label
 
-                        TextField {
-                            visible: rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Уставка"
-                            text: itemData.ktt
-                            Layout.preferredWidth: 100
-                            Layout.preferredHeight: 32
+                                    // начальная инициализация по данным строки
+                                    Component.onCompleted: rowMeas.refreshFromModel()
 
-                            color: "#1e293b"
-                            font.pixelSize: 13
-                            font.weight: Font.Normal
-
-                            leftPadding: 8
-                            rightPadding: 8
-                            topPadding: 6
-                            bottomPadding: 6
-
-                            selectByMouse: true
-                            verticalAlignment: TextInput.AlignVCenter
-
-                            background: Rectangle {
-                                color: enabled ? "#ffffff" : "#f8fafc"
-                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
-                                radius: 4
-                                antialiasing: true
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
+                                    // запись флага + создание/удаление уставки
+                                    onToggled: {
+                                        if (originalIndex < 0) return;
+                                        dataModel.setProperty(originalIndex, rowMeas.meta.flag, checked);
+                                        if (checked) {
+                                            var has = findLinkedMeasIndexFor(rowMeas.meta.kind, originalIndex);
+                                            if (has < 0) createLinkedMeasFor(rowMeas.meta.kind, originalIndex);
+                                            syncMeasDefValue(rowMeas.meta.kind, originalIndex);
+                                        } else {
+                                            removeLinkedMeasFor(rowMeas.meta.kind, originalIndex);
+                                            // при желании можно очистить буфер:
+                                            // dataModel.setProperty(originalIndex, rowMeas.meta.buf, "");
+                                        }
+                                        // обновить видимость поля
+                                        val.visible = checked;
+                                    }
                                 }
-                            }
 
-                            onTextChanged: dataModel.setProperty(originalIndex, "ktt", text)
-                        }
+                                TextField {
+                                    id: val
+                                    Layout.preferredWidth: 120
+                                    placeholderText: "def_value"
 
-                        TextField {
-                            visible: rootwindow.currentType === "Аналоговые входы"
-                            text: itemData.up
-                            Layout.preferredWidth: 150
-                            Layout.preferredHeight: 32
+                                    // начальная инициализация в паре с чекбоксом
+                                    Component.onCompleted: rowMeas.refreshFromModel()
 
-                            font.pixelSize: 13
-                            font.weight: Font.Normal
+                                    // запись значения в буфер строки + проталкивание в def_value уставки
+                                    onTextChanged: {
+                                        if (originalIndex < 0) return;
+                                        dataModel.setProperty(originalIndex, rowMeas.meta.buf, text);
+                                        syncMeasDefValue(rowMeas.meta.kind, originalIndex);
+                                    }
 
-                            leftPadding: 8
-                            rightPadding: 8
-                            topPadding: 6
-                            bottomPadding: 6
-
-                            selectByMouse: true
-                            verticalAlignment: TextInput.AlignVCenter
-
-                            background: Rectangle {
-                                color: enabled ? "#ffffff" : "#f8fafc"
-                                border.color: (itemData.isCodeNameDuplicate || false) ? "#dc2626" :
-                                    (parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0"))
-                                border.width: 1
-                                radius: 4
-                                antialiasing: true
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
+                                    background: Rectangle {
+                                        color: enabled ? "#ffffff" : "#f8fafc"
+                                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                        border.width: 1; radius: 4; antialiasing: true
+                                        Behavior on border.color { ColorAnimation { duration: 150 } }
+                                    }
                                 }
-                            }
 
-                            onTextChanged: {
-                                dataModel.setProperty(originalIndex, "up", text)
-                            }
-                        }
-
-                        TextField {
-                            visible: rootwindow.currentType === "Аналоговые входы"
-                            text: itemData.down
-                            Layout.preferredWidth: 150
-                            Layout.preferredHeight: 32
-
-                            font.pixelSize: 13
-                            font.weight: Font.Normal
-
-                            leftPadding: 8
-                            rightPadding: 8
-                            topPadding: 6
-                            bottomPadding: 6
-
-                            selectByMouse: true
-                            verticalAlignment: TextInput.AlignVCenter
-
-                            background: Rectangle {
-                                color: enabled ? "#ffffff" : "#f8fafc"
-                                border.color: (itemData.isCodeNameDuplicate || false) ? "#dc2626" :
-                                    (parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0"))
-                                border.width: 1
-                                radius: 4
-                                antialiasing: true
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
+                                // ГЛОБАЛЬНАЯ синхронизация: как только dataModel меняется — подтягиваем UI
+                                Connections {
+                                    target: dataModel
+                                    function onDataChanged() { rowMeas.refreshFromModel(); }
                                 }
-                            }
-
-                            onTextChanged: {
-                                dataModel.setProperty(originalIndex, "down", text)
                             }
                         }
 
@@ -3655,6 +3788,54 @@ ApplicationWindow {
                             }
 
                             onTextChanged: dataModel.setProperty(originalIndex, "ad", text)
+                        }
+                        RowLayout {
+                            id: cellSetpoint
+                            spacing: 6
+
+                            CheckBox {
+                                id: spCheck
+                                // начальное состояние берём из исходной строки (для импорта/экспорта)
+                                Component.onCompleted: {
+                                    var v = !!(itemData && itemData[val_sp.flag]);
+                                    spCheck.checked = v;
+                                    val.visible = v;
+                                    // подтянем текст из буфера
+                                    var buf = (itemData && itemData[val_sp.buf]) ? itemData[val_sp.buf] : "";
+                                    if (val.text !== buf) val.text = buf;
+                                }
+
+                                onToggled: {
+                                    if (originalIndex < 0) return;
+
+                                    // 1) фиксируем флаг в исходной строке
+                                    dataModel.setProperty(originalIndex, val_sp.flag, checked);
+
+                                    if (checked) {
+                                        // 2) создать уставку (если нет) и синхронизировать def_value
+                                        var has = findValSetpointIndex(originalIndex);
+                                        if (has < 0) createValSetpoint(originalIndex);
+                                        syncValSetpointDefValue(originalIndex);
+                                    } else {
+                                        // 3) удалить уставку
+                                        removeValSetpoint(originalIndex);
+                                    }
+
+                                    // показать/спрятать поле
+                                    val.visible = checked;
+                                }
+                            }    Connections {
+                                target: dataModel
+                                function onDataChanged() {
+                                    var v = !!(itemData && itemData[val_sp.flag]);
+                                    if (spCheck.checked !== v) spCheck.checked = v;
+
+                                    var buf = (itemData && itemData[val_sp.buf]) ? itemData[val_sp.buf] : "";
+                                    if (val.text !== buf) val.text = buf;
+
+                                    val.visible = spCheck.checked;
+                                }
+                            }
                         }
 
                         Button {
@@ -3769,13 +3950,8 @@ ApplicationWindow {
     }
     Component {
         id: modbusPageComponent
+
         ColumnLayout {
-            property var typeIndexMap: {
-                "Coil": 0,
-                "Discrete input": 0,
-                "Input register": 0,
-                "Holding register": 0
-            }
             ScrollView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -3792,9 +3968,8 @@ ApplicationWindow {
                     width: parent.width - 30
                     height: parent.height
                     cacheBuffer: 200
-                    model: dataModel
+                    model: getFilteredModel(rootwindow.currentType)
                     spacing: 0
-                    interactive: true
                     clip: true
                     headerPositioning: ListView.OverlayHeader
 
@@ -3876,14 +4051,38 @@ ApplicationWindow {
 
                     delegate: RowLayout {
                         z: 1
-                        required property int index
-                        required property var model
+                        required property int index     // индекс в отфильтрованной модели
+                        required property var model     // данные из фильтра (не основной dataModel)
+
+                        // Мост к основному dataModel:
+                        property int originalIndex: {
+                            switch (rootwindow.currentType) {
+                                case "Аналоговые входы":
+                                    return analogInputsModel.get(index).originalIndex
+                                case "Дискретные входы":
+                                    return digitalInputsModel.get(index).originalIndex
+                                case "Аналоговый выход":
+                                    return analogOutputsModel.get(index).originalIndex
+                                case "Дискретный выход":
+                                    return digitalOutputsModel.get(index).originalIndex
+                                case "Признаки":
+                                    return flagsModel.get(index).originalIndex
+                                case "Уставка":
+                                    return settingsModel.get(index).originalIndex
+                                default:
+                                    return -1
+                            }
+                        }
+                        // Удобный объект строки:
+                        property var itemData: (originalIndex >= 0 ? dataModel.get(originalIndex) : ({}))
 
                         width: listView.width
                         spacing: 0
                         height: 34
+
+                        // === Общие колонки ===
                         Text {
-                            text: model.ioIndex
+                            text: itemData.ioIndex
                             Layout.preferredWidth: 50
                             color: "#1e293b"
                             font.pixelSize: 13
@@ -3892,7 +4091,7 @@ ApplicationWindow {
                             elide: Text.ElideRight
                         }
                         Text {
-                            text: model.name
+                            text: itemData.name
                             Layout.preferredWidth: 200
                             color: "#1e293b"
                             font.pixelSize: 13
@@ -3901,7 +4100,7 @@ ApplicationWindow {
                             elide: Text.ElideRight
                         }
                         Text {
-                            text: model.type
+                            text: itemData.type
                             Layout.preferredWidth: 100
                             color: "#1e293b"
                             font.pixelSize: 13
@@ -3909,19 +4108,22 @@ ApplicationWindow {
                             verticalAlignment: Text.AlignVCenter
                             elide: Text.ElideRight
                         }
+
+                        // === Modbus: Адрес ===
                         TextField {
-                            id: mbaddress
-
-                            property int itemIndex: index  // Capture the index as a property
-
-                            text: {
-                                const item = dataModel.get(itemIndex);
-                                return item ? (item.address || "") : "";
-                            }
-
+                            id: addressField
                             Layout.preferredWidth: 100
                             Layout.preferredHeight: 30
                             horizontalAlignment: Text.AlignHCenter
+
+
+                            text: {
+                                if (originalIndex >= 0) {
+                                    var addr = itemData.address
+                                    return (addr !== undefined && addr !== null) ? String(addr) : ""
+                                }
+                                return ""
+                            }
 
                             color: "#1e293b"
                             font.pixelSize: 13
@@ -3952,68 +4154,55 @@ ApplicationWindow {
                             }
 
                             onTextChanged: {
-                                if (text !== "") {
-                                    dataModel.setProperty(itemIndex, "address", text);
+                                if (originalIndex >= 0) {
+                                    dataModel.setProperty(originalIndex, "address", text)
                                 }
                             }
 
-                            // Clear address when text is manually cleared
                             onEditingFinished: {
-                                if (text === "") {
-                                    dataModel.setProperty(itemIndex, "address", "");
-                                    // Reassign addresses for this block type to fill gaps
-                                    const item = dataModel.get(itemIndex);
-                                    if (item && item.blockName) {
-                                        Qt.callLater(function() {
-                                            assignAddressByType(item.blockName);
-                                        });
+                                if (originalIndex < 0) return
+
+                                if (text === "" || text === null) {
+                                    const blk = itemData.blockName || ""
+                                    if (blk) {
+                                        dataModel.setProperty(originalIndex, "address", "")
+                                            Qt.callLater(() => mbAssignOne(blk, originalIndex, 1))
+                                    }
+                                }
+                            }
+
+                            // Force refresh when model changes
+                            Connections {
+                                target: dataModel
+                                function onDataChanged() {
+                                    if (originalIndex >= 0) {
+                                        var addr = itemData.address
+                                        addressField.text = (addr !== undefined && addr !== null) ? String(addr) : ""
                                     }
                                 }
                             }
                         }
 
-                        // Block Type ComboBox
+                        // === Modbus: Блок ===
                         ComboBox {
-                            id: combo
-                            model: ["Coil", "Discrete input", "Input register", "Holding register"]
-
-                            property int itemIndex: index  // Capture the index as a property
-
-                            currentIndex: {
-                                const item = dataModel.get(itemIndex);
-                                const blockName = item ? item.blockName : "";
-                                return model.indexOf(blockName || "Coil");
-                            }
-
                             Layout.preferredWidth: 150
                             Layout.preferredHeight: 30
-
-                            onActivated: { // Use activated instead of currentIndexChanged
-                                if (currentIndex >= 0) {
-                                    const newBlockType = model[currentIndex];
-                                    const oldBlockType = dataModel.get(itemIndex).blockName;
-
-                                    // Update the block type
-                                    dataModel.setProperty(itemIndex, "blockName", newBlockType);
-
-                                    // If block type changed, clear the address and reassign addresses
-                                    if (oldBlockType !== newBlockType) {
-                                        dataModel.setProperty(itemIndex, "address", "");
-                                        Qt.callLater(function() {
-                                            // Assign address to the changed item
-                                            assignAddressByType(newBlockType, itemIndex);
-                                            // Also reassign addresses for the old block type to close gaps
-                                            if (oldBlockType) {
-                                                assignAddressByType(oldBlockType);
-                                            }
-                                            // And reassign for the new block type to ensure proper ordering
-                                            assignAddressByType(newBlockType);
-                                        });
-                                    }
-                                }
+                            model: ["Coil", "Discrete input", "Input register", "Holding register"]
+                            currentIndex: {
+                                const bn = itemData.blockName || "Coil"
+                                const i = model.indexOf(bn)
+                                return (i >= 0 ? i : 0)
                             }
+                            onActivated: {
+                                if (originalIndex < 0) return
+                                const newBlock = model[currentIndex]
+                                const oldBlock = itemData.blockName || ""
+                                if (newBlock === oldBlock) return
 
-                            // Style the ComboBox to match your design
+                                dataModel.setProperty(originalIndex, "blockName", newBlock)
+                                dataModel.setProperty(originalIndex, "address", "")
+                                    Qt.callLater(()=> onModbusBlockChanged(originalIndex, newBlock, oldBlock))
+                            }
                             background: Rectangle {
                                 color: enabled ? "#ffffff" : "#f8fafc"
                                 border.color: parent.activeFocus ? "#3b82f6" :
@@ -4027,50 +4216,13 @@ ApplicationWindow {
                                 }
                             }
 
-                            contentItem: Text {
-                                text: combo.displayText
-                                font.pixelSize: 13
-                                font.weight: Font.Normal
-                                color: "#1e293b"
-                                verticalAlignment: Text.AlignVCenter
-                                leftPadding: 8
-                                rightPadding: 8
-                            }
-                        }
-
-
-                        Button {
-                            text: "Удалить"
-                            Layout.preferredWidth: 160
-                            Layout.preferredHeight: 32
-
-                            font.pixelSize: 13
-                            font.weight: Font.Medium
-
-                            background: Rectangle {
-                                color: parent.pressed ? "#b91c1c" : (parent.hovered ? "#dc2626" : "#ef4444")
-                                radius: 4
-                                antialiasing: true
-
-                                Behavior on color {
-                                    ColorAnimation { duration: 150 }
-                                }
-                            }
-
-                            contentItem: Text {
-                                text: parent.text
-                                font: parent.font
-                                color: "#ffffff"
-                                verticalAlignment: Text.AlignVCenter
-                            }
-
-                            onClicked: dataModel.remove(originalIndex)
-                        }
-                    }
+                        } 
                 }
             }
         }
     }
+    }
+
 
     Component {
         id: mekPageComponent
@@ -4142,7 +4294,7 @@ ApplicationWindow {
                     width: parent.width - 30
                     height: parent.height
                     cacheBuffer: 200
-                    model: dataModel
+                    model: getFilteredModel(rootwindow.currentType)
                     spacing: 0
                     interactive: true
                     clip: true
@@ -4284,7 +4436,26 @@ ApplicationWindow {
                         color: index % 2 === 0 ? "#ffffff" : "#f8fafc"
                         required property int index
                         required property var model
-
+                        property int originalIndex: {
+                            switch (rootwindow.currentType) {
+                                case "Аналоговые входы":
+                                    return analogInputsModel.get(index).originalIndex
+                                case "Дискретные входы":
+                                    return digitalInputsModel.get(index).originalIndex
+                                case "Аналоговый выход":
+                                    return analogOutputsModel.get(index).originalIndex
+                                case "Дискретный выход":
+                                    return digitalOutputsModel.get(index).originalIndex
+                                case "Признаки":
+                                    return flagsModel.get(index).originalIndex
+                                case "Уставка":
+                                    return settingsModel.get(index).originalIndex
+                                default:
+                                    return -1
+                            }
+                        }
+                        // Удобный объект строки:
+                        property var itemData: (originalIndex >= 0 ? dataModel.get(originalIndex) : ({}))
                         // Подсветка для выбранных сигналов
                         Rectangle {
                             anchors.fill: parent
@@ -4322,7 +4493,7 @@ ApplicationWindow {
                             }
 
                             Text {
-                                text: model.ioIndex || ""
+                                text: itemData.ioIndex || ""
                                 Layout.preferredWidth: 50
                                 Layout.preferredHeight: 32
                                 color: "#1e293b"
@@ -4332,7 +4503,7 @@ ApplicationWindow {
                                 leftPadding: 8
                             }
                             Text {
-                                text: model.name || ""
+                                text: itemData.name || ""
                                 Layout.preferredWidth: 200
                                 Layout.preferredHeight: 32
                                 color: "#1e293b"
@@ -4351,7 +4522,7 @@ ApplicationWindow {
                             }
 
                             Text {
-                                text: model.type || ""
+                                text: itemData.type || ""
                                 Layout.preferredWidth: 100
                                 Layout.preferredHeight: 32
                                 color: "#1e293b"
@@ -4362,7 +4533,7 @@ ApplicationWindow {
                             }
 
                             TextField {
-                                text: model.ioa_address || ""
+                                text: itemData.ioa_address || ""
                                 Layout.preferredWidth: 100
                                 Layout.preferredHeight: 32
 
@@ -4389,11 +4560,11 @@ ApplicationWindow {
                                         ColorAnimation { duration: 150 }
                                     }
                                 }
-                                onTextChanged: dataModel.setProperty(index, "ioa_address", text)
+                                onTextChanged: dataModel.setProperty(originalIndex, "ioa_address", text)
                             }
 
                             TextField {
-                                text: model.asdu_address || ""
+                                text: itemData.asdu_address || ""
                                 Layout.preferredWidth: 100
                                 Layout.preferredHeight: 32
 
@@ -4420,7 +4591,7 @@ ApplicationWindow {
                                         ColorAnimation { duration: 150 }
                                     }
                                 }
-                                onTextChanged: dataModel.setProperty(index, "asdu_address", text)
+                                onTextChanged: dataModel.setProperty(originalIndex, "asdu_address", text)
                             }
 
                             ComboBox {
@@ -4428,8 +4599,7 @@ ApplicationWindow {
 
                                 // 1) опции держим в отдельном свойстве и подаём в model:
                                 property var choices: [
-                                    "NOT_USE","DEFAULT","SECOND_CLASS_1","SECOND_CLASS_2","SECOND_CLASS_3",
-                                    "SECOND_CLASS_4","SECOND_CLASS_5","SECOND_CLASS_6","SECOND_CLASS_7","SECOND_CLASS_8"
+                                    "NOT_USE","DEFAULT", "1", "2", "3", "4", "5", "6", "7", "8"
                                 ]
                                 model: choices
 
@@ -4439,12 +4609,12 @@ ApplicationWindow {
                                 editable: true
 
                                 // 2) данные строки берём ЯВНО у корня делегата:
-                                property var row: rowItem.model
+                                property var row: rowItem.itemData
                                 property bool _init: false
 
                                 Component.onCompleted: {
-                                    const wanted = (row.second_class_num && row.second_class_num.length)
-                                        ? row.second_class_num : "DEFAULT";
+                                    const wanted = (itemData.second_class_num && itemData.second_class_num.length)
+                                        ? itemData.second_class_num : "DEFAULT";
                                     const idx = choices.indexOf(wanted);
                                     currentIndex = idx >= 0 ? idx : 1; // 1 = "DEFAULT"
                                     _init = true;
@@ -4452,7 +4622,7 @@ ApplicationWindow {
 
                                 onCurrentIndexChanged: {
                                     if (_init && currentIndex >= 0) {
-                                        dataModel.setProperty(rowItem.index, "second_class_num", choices[currentIndex]);
+                                        dataModel.setProperty(originalIndex, "second_class_num", choices[currentIndex]);
                                     }
                                 }
 
@@ -4461,7 +4631,7 @@ ApplicationWindow {
                                     target: dataModel
                                     function onDataChanged() {
                                         if (!_init) return;
-                                        const idx = choices.indexOf(rowItem.model.second_class_num || "DEFAULT");
+                                        const idx = choices.indexOf(itemData.model.second_class_num || "DEFAULT");
                                         if (idx >= 0 && idx !== currentIndex) currentIndex = idx;
                                     }
                                 }
@@ -4493,11 +4663,11 @@ ApplicationWindow {
                                 editable: true
 
                                 // доступ к данным строки делегата
-                                property var row: rowItem.model
+                                property var row: itemData.model
                                 property bool _init: false
 
                                 Component.onCompleted: {
-                                    const wanted = (row.type_spont && row.type_spont.length) ? row.type_spont : "DEFAULT";
+                                    const wanted = (itemData.type_spont && itemData.type_spont.length) ? itemData.type_spont : "DEFAULT";
                                     const idx = choices.indexOf(wanted);
                                     currentIndex = idx >= 0 ? idx : choices.indexOf("DEFAULT");
                                     _init = true;
@@ -4505,16 +4675,17 @@ ApplicationWindow {
 
                                 onCurrentIndexChanged: {
                                     if (_init && currentIndex >= 0) {
-                                        dataModel.setProperty(rowItem.index, "type_spont", choices[currentIndex]);
+                                        dataModel.setProperty(originalIndex, "type_spont", choices[currentIndex]);
                                     }
                                 }
 
                                 Connections {
                                     target: dataModel
                                     function onDataChanged() {
-                                        if (!_init) return;
-                                        const idx = choices.indexOf(rowItem.model.type_spont || "DEFAULT");
-                                        if (idx >= 0 && idx !== currentIndex) currentIndex = idx;
+                                        const v = itemData.type_spont && itemData.type_spont.length
+                                            ? itemData.type_spont : "DEFAULT"
+                                        const i = choices.indexOf(v)
+                                        if (i !== currentIndex && i >= 0) currentIndex = i
                                     }
                                 }
 
@@ -4541,11 +4712,11 @@ ApplicationWindow {
                                 font.pixelSize: 13
                                 editable: true
 
-                                property var row: rowItem.model
+                                property var row: itemData.model
                                 property bool _init: false
 
                                 Component.onCompleted: {
-                                    const wanted = (row.type_back && row.type_back.length) ? row.type_back : "DEFAULT";
+                                    const wanted = (itemData.type_back && itemData.type_back.length) ? itemData.type_back : "DEFAULT";
                                     const idx = choices.indexOf(wanted);
                                     currentIndex = idx >= 0 ? idx : choices.indexOf("DEFAULT");
                                     _init = true;
@@ -4553,7 +4724,7 @@ ApplicationWindow {
 
                                 onCurrentIndexChanged: {
                                     if (_init && currentIndex >= 0) {
-                                        dataModel.setProperty(rowItem.index, "type_back", choices[currentIndex]);
+                                        dataModel.setProperty(originalIndex, "type_back", choices[currentIndex]);
                                     }
                                 }
 
@@ -4561,7 +4732,7 @@ ApplicationWindow {
                                     target: dataModel
                                     function onDataChanged() {
                                         if (!_init) return;
-                                        const idx = choices.indexOf(rowItem.model.type_back || "DEFAULT");
+                                        const idx = choices.indexOf(itemData.model.type_back || "DEFAULT");
                                         if (idx >= 0 && idx !== currentIndex) currentIndex = idx;
                                     }
                                 }
@@ -4588,11 +4759,11 @@ ApplicationWindow {
                                 font.pixelSize: 13
                                 editable: true
 
-                                property var row: rowItem.model
+                                property var row: itemData.model
                                 property bool _init: false
 
                                 Component.onCompleted: {
-                                    const wanted = (row.type_percyc && row.type_percyc.length) ? row.type_percyc : "DEFAULT";
+                                    const wanted = (itemData.type_percyc && itemData.type_percyc.length) ? itemData.type_percyc : "DEFAULT";
                                     const idx = choices.indexOf(wanted);
                                     currentIndex = idx >= 0 ? idx : choices.indexOf("DEFAULT");
                                     _init = true;
@@ -4600,7 +4771,7 @@ ApplicationWindow {
 
                                 onCurrentIndexChanged: {
                                     if (_init && currentIndex >= 0) {
-                                        dataModel.setProperty(rowItem.index, "type_percyc", choices[currentIndex]);
+                                        dataModel.setProperty(originalIndex, "type_percyc", choices[currentIndex]);
                                     }
                                 }
 
@@ -4608,7 +4779,7 @@ ApplicationWindow {
                                     target: dataModel
                                     function onDataChanged() {
                                         if (!_init) return;
-                                        const idx = choices.indexOf(rowItem.model.type_percyc || "DEFAULT");
+                                        const idx = choices.indexOf(itemData.model.type_percyc || "DEFAULT");
                                         if (idx >= 0 && idx !== currentIndex) currentIndex = idx;
                                     }
                                 }
@@ -4637,11 +4808,11 @@ ApplicationWindow {
                                 font.pixelSize: 13
                                 editable: true
 
-                                property var row: rowItem.model
+                                property var row: itemData.model
                                 property bool _init: false
 
                                 Component.onCompleted: {
-                                    const wanted = (row.type_def && row.type_def.length) ? row.type_def : "DEFAULT";
+                                    const wanted = (itemData.type_def && itemData.type_def.length) ? itemData.type_def : "DEFAULT";
                                     const idx = choices.indexOf(wanted);
                                     currentIndex = idx >= 0 ? idx : choices.indexOf("DEFAULT");
                                     _init = true;
@@ -4649,7 +4820,7 @@ ApplicationWindow {
 
                                 onCurrentIndexChanged: {
                                     if (_init && currentIndex >= 0) {
-                                        dataModel.setProperty(rowItem.index, "type_def", choices[currentIndex]);
+                                        dataModel.setProperty(originalIndex, "type_def", choices[currentIndex]);
                                     }
                                 }
 
@@ -4657,7 +4828,7 @@ ApplicationWindow {
                                     target: dataModel
                                     function onDataChanged() {
                                         if (!_init) return;
-                                        const idx = choices.indexOf(rowItem.model.type_def || "DEFAULT");
+                                        const idx = choices.indexOf(itemData.model.type_def || "DEFAULT");
                                         if (idx >= 0 && idx !== currentIndex) currentIndex = idx;
                                     }
                                 }
@@ -4668,34 +4839,6 @@ ApplicationWindow {
                                     border.width: 1; radius: 4; antialiasing: true
                                     Behavior on border.color { ColorAnimation { duration: 150 } }
                                 }
-                            }
-
-                            Button {
-                                text: "Удалить"
-                                Layout.preferredWidth: 100
-                                Layout.preferredHeight: 32
-
-                                font.pixelSize: 13
-                                font.weight: Font.Medium
-
-                                background: Rectangle {
-                                    color: parent.pressed ? "#b91c1c" : (parent.hovered ? "#dc2626" : "#ef4444")
-                                    radius: 4
-                                    antialiasing: true
-
-                                    Behavior on color {
-                                        ColorAnimation { duration: 150 }
-                                    }
-                                }
-
-                                contentItem: Text {
-                                    text: parent.text
-                                    font: parent.font
-                                    color: "#ffffff"
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-
-                                onClicked: dataModel.remove(index)
                             }
                         }
                     }
@@ -4810,7 +4953,7 @@ ApplicationWindow {
                     width: parent.width - 30
                     height: parent.height
                     cacheBuffer: 200
-                    model: dataModel
+                    model: getFilteredModel(rootwindow.currentType)
                     spacing: 0
                     interactive: true
                     clip: true
@@ -4933,12 +5076,31 @@ ApplicationWindow {
                         z: 1
                         required property int index
                         required property var model
-
+                        property int originalIndex: {
+                            switch (rootwindow.currentType) {
+                                case "Аналоговые входы":
+                                    return analogInputsModel.get(index).originalIndex
+                                case "Дискретные входы":
+                                    return digitalInputsModel.get(index).originalIndex
+                                case "Аналоговый выход":
+                                    return analogOutputsModel.get(index).originalIndex
+                                case "Дискретный выход":
+                                    return digitalOutputsModel.get(index).originalIndex
+                                case "Признаки":
+                                    return flagsModel.get(index).originalIndex
+                                case "Уставка":
+                                    return settingsModel.get(index).originalIndex
+                                default:
+                                    return -1
+                            }
+                        }
+                        // Удобный объект строки:
+                        property var itemData: (originalIndex >= 0 ? dataModel.get(originalIndex) : ({}))
                         width: listView.width
                         spacing: 0
                         height: 34
                         Text {
-                            text: model.ioIndex
+                            text: itemData.ioIndex
                             Layout.preferredWidth: 50
                             Layout.preferredHeight: 32
                             color: "#1e293b"
@@ -4947,28 +5109,37 @@ ApplicationWindow {
                             verticalAlignment: Text.AlignVCenter
                             leftPadding: 8
                         }
+                        ColumnLayout {
+                            id: paramColumn
+                            spacing: 4
+                            Layout.preferredWidth: 50
+                            Text {
+                                text: itemData.name
+                                Layout.preferredWidth: 200
+                                Layout.preferredHeight: 32
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.Normal
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
+                                leftPadding: 8
 
-                        Text {
-                            text: model.name
-                            Layout.preferredWidth: 200
-                            Layout.preferredHeight: 32
-                            color: "#1e293b"
-                            font.pixelSize: 13
-                            font.weight: Font.Normal
-                            verticalAlignment: Text.AlignVCenter
-                            elide: Text.ElideRight
-                            leftPadding: 8
-
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                ToolTip.visible: containsMouse && parent.text.length > 0
-                                ToolTip.text: dataModel.name || ""
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    ToolTip.visible: containsMouse && parent.text.length > 0
+                                    ToolTip.text: dataModel.name || ""
+                                }
                             }
+                            Text { text: itemData.codeName; Layout.preferredWidth: 100 }
+                            Text { text: itemData.aperture; Layout.preferredWidth: 100 }
+                            Text { text: itemData.ktt; Layout.preferredWidth: 100 }
+                            Text { text: itemData.lower; Layout.preferredWidth: 100 }
+                            Text { text: itemData.upper; Layout.preferredWidth: 100 }
                         }
 
                         TextField {
-                            text: model.ioa_address
+                            text: itemData.ioa_address
                             Layout.preferredWidth: 100
                             Layout.preferredHeight: 32
 
@@ -4999,7 +5170,7 @@ ApplicationWindow {
                         }
 
                         TextField {
-                            text: model.asdu_address
+                            text: itemData.asdu_address
                             Layout.preferredWidth: 100
                             Layout.preferredHeight: 32
 
@@ -5027,7 +5198,7 @@ ApplicationWindow {
                                 }
                             }
 
-                            onTextChanged: dataModel.setProperty(index, "asdu_address", text)
+                            onTextChanged: dataModel.setProperty(originalIndex, "asdu_address", text)
                         }
 
                         Switch {
@@ -5076,12 +5247,12 @@ ApplicationWindow {
                                     }
                                 }
                             }
-                            checked: model.use_in_spont_101 || false
-                            onCheckedChanged: dataModel.setProperty(index, "use_in_spont_101", checked)
+                            checked: itemData.use_in_spont_101 || false
+                            onCheckedChanged: dataModel.setProperty(originalIndex, "use_in_spont_101", checked)
                         }
 
                         Switch {
-                            checked: model.use_in_back_101 || false
+                            checked: itemData.use_in_back_101 || false
                             implicitWidth: 44
                             implicitHeight: 24
                             Layout.preferredWidth: 100
@@ -5127,11 +5298,11 @@ ApplicationWindow {
                                     }
                                 }
                             }
-                            onCheckedChanged: dataModel.setProperty(index, "use_in_back_101", checked)
+                            onCheckedChanged: dataModel.setProperty(originalIndex, "use_in_back_101", checked)
                         }
 
                         Switch {
-                            checked: model.use_in_percyc_101 || false
+                            checked: itemData.use_in_percyc_101 || false
                             implicitWidth: 44
                             implicitHeight: 24
                             Layout.preferredWidth: 100
@@ -5177,11 +5348,11 @@ ApplicationWindow {
                                     }
                                 }
                             }
-                            onCheckedChanged: dataModel.setProperty(index, "use_in_percyc_101", checked)
+                            onCheckedChanged: dataModel.setProperty(originalIndex, "use_in_percyc_101", checked)
                         }
 
                         Switch {
-                            checked: model.allow_address_101 || false
+                            checked: itemData.allow_address_101 || false
                             implicitWidth: 44
                             implicitHeight: 24
                             Layout.preferredWidth: 100
@@ -5227,7 +5398,7 @@ ApplicationWindow {
                                     }
                                 }
                             }
-                            onCheckedChanged: dataModel.setProperty(index, "allow_address_101", checked)
+                            onCheckedChanged: dataModel.setProperty(originalIndex, "allow_address_101", checked)
                         }
 
                         ComboBox {
@@ -5250,12 +5421,12 @@ ApplicationWindow {
                                 }
                             }
 
-                            property string _currentValue: model.survey_group_101 || ""
+                            property string _currentValue: itemData.survey_group_101 || ""
                             property bool _initialized: false
 
                             Component.onCompleted: {
                                 if (_currentValue) {
-                                    var idx = model.indexOf(_currentValue);
+                                    var idx = itemData.indexOf(_currentValue);
                                     currentIndex = idx >= 0 ? idx : 0;
                                 } else {
                                     currentIndex = 0;
@@ -5265,45 +5436,18 @@ ApplicationWindow {
 
                             on_CurrentValueChanged: {
                                 if (_initialized && _currentValue) {
-                                    var idx = model.indexOf(_currentValue);
+                                    var idx = itemData.indexOf(_currentValue);
                                     currentIndex = idx >= 0 ? idx : 0;
                                 }
                             }
 
                             onCurrentIndexChanged: {
                                 if (_initialized && currentIndex >= 0) {
-                                    dataModel.setProperty(index, "survey_group_101", model[currentIndex]);
+                                    dataModel.setProperty(originalIndex, "survey_group_101", model[currentIndex]);
                                 }
                             }
                         }
 
-                        Button {
-                            text: "Удалить"
-                            Layout.preferredWidth: 120
-                            Layout.preferredHeight: 32
-
-                            font.pixelSize: 13
-                            font.weight: Font.Medium
-
-                            background: Rectangle {
-                                color: parent.pressed ? "#b91c1c" : (parent.hovered ? "#dc2626" : "#ef4444")
-                                radius: 4
-                                antialiasing: true
-
-                                Behavior on color {
-                                    ColorAnimation { duration: 150 }
-                                }
-                            }
-
-                            contentItem: Text {
-                                text: parent.text
-                                font: parent.font
-                                color: "#ffffff"
-                                verticalAlignment: Text.AlignVCenter
-                            }
-
-                            onClicked: dataModel.remove(index)
-                        }
                     }
                 }
             }
@@ -5332,12 +5476,11 @@ ApplicationWindow {
                     width: parent.width - 30
                     height: parent.height
                     cacheBuffer: 200
-                    model: dataModel
+                    model: getFilteredModel(rootwindow.currentType)
                     spacing: 0
                     interactive: true
                     clip: true
                     headerPositioning: ListView.OverlayHeader
-
                     header: Rectangle {
                         z: 2
                         width: listView.width
@@ -5455,12 +5598,31 @@ ApplicationWindow {
                         z: 1
                         required property int index
                         required property var model
-
+                        property int originalIndex: {
+                            switch (rootwindow.currentType) {
+                                case "Аналоговые входы":
+                                    return analogInputsModel.get(index).originalIndex
+                                case "Дискретные входы":
+                                    return digitalInputsModel.get(index).originalIndex
+                                case "Аналоговый выход":
+                                    return analogOutputsModel.get(index).originalIndex
+                                case "Дискретный выход":
+                                    return digitalOutputsModel.get(index).originalIndex
+                                case "Признаки":
+                                    return flagsModel.get(index).originalIndex
+                                case "Уставка":
+                                    return settingsModel.get(index).originalIndex
+                                default:
+                                    return -1
+                            }
+                        }
+                        // Удобный объект строки:
+                        property var itemData: (originalIndex >= 0 ? dataModel.get(originalIndex) : ({}))
                         width: listView.width
                         spacing: 0
                         height: 34
                         Text {
-                            text: model.ioIndex
+                            text: itemData.ioIndex
                             Layout.preferredWidth: 50
                             Layout.preferredHeight: 32
                             color: "#1e293b"
@@ -5470,7 +5632,7 @@ ApplicationWindow {
                             leftPadding: 8
                         }
                         Text {
-                            text: model.name
+                            text: itemData.name
                             Layout.preferredWidth: 200
                             Layout.preferredHeight: 32
                             color: "#1e293b"
@@ -5489,7 +5651,7 @@ ApplicationWindow {
                         }
 
                         TextField {
-                            text: model.ioa_address
+                            text: itemData.ioa_address
                             Layout.preferredWidth: 100
                             Layout.preferredHeight: 32
 
@@ -5520,7 +5682,7 @@ ApplicationWindow {
                         }
 
                         TextField {
-                            text: model.asdu_address
+                            text: itemData.asdu_address
                             Layout.preferredWidth: 100
                             Layout.preferredHeight: 32
 
@@ -5548,7 +5710,7 @@ ApplicationWindow {
                                 }
                             }
 
-                            onTextChanged: dataModel.setProperty(index, "asdu_address", text)
+                            onTextChanged: dataModel.setProperty(originalIndex, "asdu_address", text)
                         }
 
                         Switch {
@@ -5597,12 +5759,12 @@ ApplicationWindow {
                                     }
                                 }
                             }
-                            checked: model.use_in_spont_104 || false
-                            onCheckedChanged: dataModel.setProperty(index, "use_in_spont_104", checked)
+                            checked: itemData.use_in_spont_104 || false
+                            onCheckedChanged: dataModel.setProperty(originalIndex, "use_in_spont_104", checked)
                         }
 
                         Switch {
-                            checked: model.use_in_back_104 || false
+                            checked: itemData.use_in_back_104 || false
                             implicitWidth: 44
                             implicitHeight: 24
                             Layout.preferredWidth: 100
@@ -5648,11 +5810,11 @@ ApplicationWindow {
                                     }
                                 }
                             }
-                            onCheckedChanged: dataModel.setProperty(index, "use_in_back_104", checked)
+                            onCheckedChanged: dataModel.setProperty(originalIndex, "use_in_back_104", checked)
                         }
 
                         Switch {
-                            checked: model.use_in_percyc_104 || false
+                            checked: itemData.use_in_percyc_104 || false
                             implicitWidth: 44
                             implicitHeight: 24
                             Layout.preferredWidth: 100
@@ -5698,11 +5860,11 @@ ApplicationWindow {
                                     }
                                 }
                             }
-                            onCheckedChanged: dataModel.setProperty(index, "use_in_percyc_104", checked)
+                            onCheckedChanged: dataModel.setProperty(originalIndex, "use_in_percyc_104", checked)
                         }
 
                         Switch {
-                            checked: model.allow_address_104 || false
+                            checked: itemData.allow_address_104 || false
                             implicitWidth: 44
                             implicitHeight: 24
                             Layout.preferredWidth: 100
@@ -5748,7 +5910,7 @@ ApplicationWindow {
                                     }
                                 }
                             }
-                            onCheckedChanged: dataModel.setProperty(index, "allow_address_104", checked)
+                            onCheckedChanged: dataModel.setProperty(originalIndex, "allow_address_104", checked)
                         }
 
                         ComboBox {
@@ -5776,7 +5938,7 @@ ApplicationWindow {
 
                             Component.onCompleted: {
                                 if (_currentValue) {
-                                    var idx = model.indexOf(_currentValue);
+                                    var idx = itemData.indexOf(_currentValue);
                                     currentIndex = idx >= 0 ? idx : 0;
                                 } else {
                                     currentIndex = 0;
@@ -5786,45 +5948,18 @@ ApplicationWindow {
 
                             on_CurrentValueChanged: {
                                 if (_initialized && _currentValue) {
-                                    var idx = model.indexOf(_currentValue);
+                                    var idx = itemData.indexOf(_currentValue);
                                     currentIndex = idx >= 0 ? idx : 0;
                                 }
                             }
 
                             onCurrentIndexChanged: {
                                 if (_initialized && currentIndex >= 0) {
-                                    dataModel.setProperty(index, "survey_group_104", model[currentIndex]);
+                                    dataModel.setProperty(originalIndex, "survey_group_104", model[currentIndex]);
                                 }
                             }
                         }
-
-                        Button {
-                            text: "Удалить"
-                            Layout.preferredWidth: 120
-                            Layout.preferredHeight: 32
-
-                            font.pixelSize: 13
-                            font.weight: Font.Medium
-
-                            background: Rectangle {
-                                color: parent.pressed ? "#b91c1c" : (parent.hovered ? "#dc2626" : "#ef4444")
-                                radius: 4
-                                antialiasing: true
-
-                                Behavior on color {
-                                    ColorAnimation { duration: 150 }
-                                }
-                            }
-
-                            contentItem: Text {
-                                text: parent.text
-                                font: parent.font
-                                color: "#ffffff"
-                                verticalAlignment: Text.AlignVCenter
-                            }
-
-                            onClicked: dataModel.remove(index)
-                        }
+                        
                     }
                 }
             }
@@ -5834,6 +5969,91 @@ ApplicationWindow {
         anchors.fill: parent
         spacing: 0
         anchors.bottomMargin: 70
+        TabBar {
+            id: protocolTabs
+            Layout.fillWidth: true
+            currentIndex: 0
+            property int tabWidth: 180
+
+            // Add background styling to match header
+            background: Rectangle {
+                color: "#f1f5f9"
+                antialiasing: true
+
+                // Top separator line
+                Rectangle {
+                    anchors.top: parent.top
+                    width: parent.width
+                    height: 1
+                    color: "#e2e8f0"
+                }
+
+                // Bottom separator line
+                Rectangle {
+                    anchors.bottom: parent.bottom
+                    width: parent.width
+                    height: 1
+                    color: "#cbd5e1"
+                }
+
+                // Gradient background
+                gradient: Gradient {
+                    GradientStop { position: 0.0; color: "#f8fafc" }
+                    GradientStop { position: 1.0; color: "#e2e8f0" }
+                }
+            }
+            TabButton{
+                text:"Общее"
+                background: Rectangle {
+                    color: parent.checked ? "#e2e8f0" : "transparent"
+                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    border.width: parent.checked ? 1 : 0
+                }
+            }
+            TabButton{text:"Modbus"
+                visible: modbus
+                background: Rectangle {
+                    color: parent.checked ? "#e2e8f0" : "transparent"
+                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    border.width: parent.checked ? 1 : 0
+                }
+                width: visible ? tabBar.tabWidth : 0
+            }
+            TabButton{
+                text:"MEK"
+                visible: mek
+                background: Rectangle {
+                    color: parent.checked ? "#e2e8f0" : "transparent"
+                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    border.width: parent.checked ? 1 : 0
+                }
+                width: visible ? tabBar.tabWidth : 0
+
+            }
+            TabButton{text:"MEK101"
+                visible: mek_101
+                background: Rectangle {
+                    color: parent.checked ? "#e2e8f0" : "transparent"
+                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    border.width: parent.checked ? 1 : 0
+                }
+                width: visible ? tabBar.tabWidth : 0
+            }
+            TabButton{
+                text:"MEK104"
+                visible: mek_104
+                background: Rectangle {
+                    color: parent.checked ? "#e2e8f0" : "transparent"
+                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    border.width: parent.checked ? 1 : 0
+                }
+                width: visible ? tabBar.tabWidth : 0
+            }
+            onCurrentIndexChanged: {
+                currentProtocol = protocolTabs.itemAt(currentIndex).text
+                console.log(currentProtocol)
+            }
+        }
         TabBar {
             id: tabBar
             Layout.fillWidth: true
@@ -5916,46 +6136,7 @@ ApplicationWindow {
                     border.width: parent.checked ? 1 : 0
                 }
             }
-            TabButton {
-                visible: modbus
-                text: "Modbus"
-                width: visible ? tabBar.tabWidth : 0
-                background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
-                    border.width: parent.checked ? 1 : 0
-                }
-            }
-            TabButton {
-                visible: mek
-                text: "MEK"
-                width: visible ? tabBar.tabWidth : 0
-                background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
-                    border.width: parent.checked ? 1 : 0
-                }
-            }
-            TabButton {
-                visible: mek && mek_101
-                text: "MEK_101"
-                width: visible ? tabBar.tabWidth : 0
-                background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
-                    border.width: parent.checked ? 1 : 0
-                }
-            }
-            TabButton {
-                visible: mek && mek_104
-                text: "MEK_104"
-                width: visible ? tabBar.tabWidth : 0
-                background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
-                    border.width: parent.checked ? 1 : 0
-                }
-            }function activateTab(tabName) {
+            function activateTab(tabName) {
                 for (var i = 0; i < count; i++) {
                     if (itemAt(i).text === tabName && itemAt(i).visible) {
                         currentIndex = i;
@@ -6014,7 +6195,15 @@ ApplicationWindow {
             Loader {
                 id: loader1
                 active: tabBar.currentIndex === 0
-                sourceComponent: parameterPageComponent
+                sourceComponent: {
+                    switch(currentProtocol) {
+                        case "Общее": return parameterPageComponent
+                        case "Modbus": return modbusPageComponent
+                        case "MEK": return mekPageComponent
+                        case "MEK101": return mek101PageComponent
+                        case "MEK104": return mek104PageComponent
+                    }
+                }
                 asynchronous: true
                 onLoaded: {
                     item.paramType = "Аналоговые входы"
@@ -6028,7 +6217,15 @@ ApplicationWindow {
             Loader {
                 id: loader2
                 active: tabBar.currentIndex === 1
-                sourceComponent: parameterPageComponent
+                sourceComponent: {
+                    switch(currentProtocol) {
+                        case "Общее": return parameterPageComponent
+                        case "Modbus": return modbusPageComponent
+                        case "MEK": return mekPageComponent
+                        case "MEK101": return mek101PageComponent
+                        case "MEK104": return mek104PageComponent
+                    }
+                }
                 asynchronous: true
                 onLoaded: {
                     item.paramType = "Дискретные входы"
@@ -6043,8 +6240,15 @@ ApplicationWindow {
             Loader {
                 id: loader3
                 active: tabBar.currentIndex === 2
-                sourceComponent: parameterPageComponent
-                asynchronous: true
+                sourceComponent: {
+                    switch(currentProtocol) {
+                        case "Общее": return parameterPageComponent
+                        case "Modbus": return modbusPageComponent
+                        case "MEK": return mekPageComponent
+                        case "MEK101": return mek101PageComponent
+                        case "MEK104": return mek104PageComponent
+                    }
+                }                asynchronous: true
                 onLoaded: {
                     item.paramType = "Аналоговый выход"
                     item.listView = listView
@@ -6058,8 +6262,15 @@ ApplicationWindow {
             Loader {
                 id: loader4
                 active: tabBar.currentIndex === 3
-                sourceComponent: parameterPageComponent1
-                asynchronous: true
+                sourceComponent: {
+                    switch(currentProtocol) {
+                        case "Общее": return parameterPageComponent1
+                        case "Modbus": return modbusPageComponent
+                        case "MEK": return mekPageComponent
+                        case "MEK101": return mek101PageComponent
+                        case "MEK104": return mek104PageComponent
+                    }
+                }                asynchronous: true
                 onLoaded: {
                     item.paramType = "Дискретный выход"
                     item.listView = listView1
@@ -6072,8 +6283,15 @@ ApplicationWindow {
             Loader {
                 id: loader5
                 active: tabBar.currentIndex === 4
-                sourceComponent: parameterPageComponent
-                asynchronous: true
+                sourceComponent: {
+                    switch(currentProtocol) {
+                        case "Общее": return parameterPageComponent
+                        case "Modbus": return modbusPageComponent
+                        case "MEK": return mekPageComponent
+                        case "MEK101": return mek101PageComponent
+                        case "MEK104": return mek104PageComponent
+                    }
+                }                asynchronous: true
                 onLoaded: {
                     item.paramType = "Признаки"
                     item.listView = listView
@@ -6086,7 +6304,15 @@ ApplicationWindow {
             Loader {
                 id: loader6
                 active: tabBar.currentIndex === 5
-                sourceComponent: parameterPageComponent
+                sourceComponent: {
+                    switch(currentProtocol) {
+                        case "Общее": return parameterPageComponent
+                        case "Modbus": return modbusPageComponent
+                        case "MEK": return mekPageComponent
+                        case "MEK101": return mek101PageComponent
+                        case "MEK104": return mek104PageComponent
+                    }
+                }
                 asynchronous: true
                 onLoaded: {
                     item.paramType = "Уставка"
@@ -6402,120 +6628,95 @@ ApplicationWindow {
         return item.paramType === "Дискретные входы" && item.type === "bool"
     }
 
-    // Fixed function for assigning addresses by block type
-    function assignAddressByType(type, itemIndex = -1) {
-        // Get all existing addresses for this block type
-        const existingAddresses = new Set();
+    // === ШАГ адреса (в регистрах/битах) по блоку и типу данных ===
+    function mbStep(blockType, dataType) {
+        const t = (dataType || "").toLowerCase()
+        if (blockType === "Coil" || blockType === "Discrete input") return 1  // битовые
+        switch (t) {
+            case "bool": case "uint16": case "int16": case "unsigned short": case "short":
+                return 1
+            case "uint32": case "int32": case "unsigned int": case "int": case "float":
+                return 2
+            case "uint64": case "int64": case "double":
+                return 4
+            default:
+                return 1
+        }
+    }
 
+    // === собрать занятые адреса в блоке ===
+    function mbOccupied(blockType) {
+        const occ = new Set()
         for (let i = 0; i < dataModel.count; i++) {
-            const item = dataModel.get(i);
-            if (item.blockName === type && item.address) {
-                const addr = parseInt(item.address);
-                if (!isNaN(addr) && addr > 0) {
-                    // For multi-register data types, we need to mark all occupied addresses
-                    const itemDataType = item.type || item.dataType || "unsigned short";
-                    const increment = getAddressIncrement(type, itemDataType);
-                    for (let j = 0; j < increment; j++) {
-                        existingAddresses.add(addr + j);
-                    }
-                }
-            }
+            const it = dataModel.get(i)
+            if (it.blockName !== blockType) continue
+            const base = parseInt(it.address)
+            if (!base || base <= 0) continue
+            const step = mbStep(blockType, it.type || it.dataType)
+            for (let j = 0; j < step; j++) occ.add(base + j)
         }
+        return occ
+    }
 
-        // Function to get address increment based on block type and data type
-        function getAddressIncrement(blockType, dataType) {
-            // Debug logging
-            console.log("getAddressIncrement called with:", blockType, dataType);
+    function mbFits(occ, start, step) {
+        for (let j = 0; j < step; j++) if (occ.has(start + j)) return false
+        return true
+    }
 
-            // Modbus addressing increments
-            switch (blockType) {
-                case "Coil":
-                case "Discrete input":
-                    return 1; // Single bit
-                case "Input register":
-                case "Holding register":
-                    // Depends on data type
-                    switch (dataType) {
-                        case "bool":
-                        case "unsigned char":
-                        case "unsigned short":
-                            console.log("Returning 1 for dataType:", dataType);
-                            return 1; // 1 register
-                        case "float":
-                        case "unsigned int":
-                            console.log("Returning 2 for dataType:", dataType);
-                            return 2; // 2 registers
-                        default:
-                            console.log("Default case hit for dataType:", dataType);
-                            return 1;
-                    }
-                default:
-                    return 1;
-            }
-        }
+    function mbNextFree(occ, step, fromAddr) {
+        let a = Math.max(1, fromAddr|0)
+        while (!mbFits(occ, a, step)) a++
+        return a
+    }
 
-        // Find next available address
-        function findNextAvailableAddress(startAddr, increment) {
-            let addr = startAddr;
-            while (addr <= 65535) {  // Add upper bound check
-                let isAvailable = true;
-                // Check if this address range is available
-                for (let i = 0; i < increment; i++) {
-                    if (existingAddresses.has(addr + i)) {
-                        isAvailable = false;
-                        break;
-                    }
-                }
-                if (isAvailable) {
-                    console.log("Found available address:", addr, "for increment:", increment);
-                    return addr;
-                }
-                addr++;  // Increment by 1 to find next possible slot
-            }
-            return startAddr; // Fallback
-        }
+    // === Назначить адрес конкретному элементу (по originalIndex) ===
+    function mbAssignOne(blockType, originalIndex, fromAddr) {
+        const it = dataModel.get(originalIndex)
+        if (!it || it.blockName !== blockType) return
+        const step = mbStep(blockType, it.type || it.dataType)
+        const occ = mbOccupied(blockType)
+        const addr = mbNextFree(occ, step, fromAddr || 1)
+        dataModel.setProperty(originalIndex, "address", String(addr))
+    }
 
-        // If specific item index provided, assign only to that item
-        if (itemIndex >= 0) {
-            const item = dataModel.get(itemIndex);
-            if (item && item.blockName === type && !item.address) {
-                const increment = getAddressIncrement(type, item.type || item.dataType);
-                const newAddress = findNextAvailableAddress(1, increment);
-                dataModel.setProperty(itemIndex, "address", newAddress.toString());
-            }
-            return;
-        }
-
-        // Otherwise, assign to all items of this type that don't have addresses
-        const itemsNeedingAddress = [];
+    // === Компактизировать блок: пронумеровать подряд (стабильно по порядку) ===
+    function mbCompactBlock(blockType) {
+        // Соберём индексы элементов этого блока в стабильном порядке (ioIndex -> number; иначе originalIndex)
+        const rows = []
         for (let i = 0; i < dataModel.count; i++) {
-            const item = dataModel.get(i);
-            if (item.blockName === type && (!item.address || item.address === "")) {
-                const dataType = item.type || item.dataType || "unsigned short";
-                console.log("Item", i, "has dataType:", dataType, "from item:", JSON.stringify(item));
-                itemsNeedingAddress.push({
-                    index: i,
-                    dataType: dataType
-                });
-            }
+            const it = dataModel.get(i)
+            if (it.blockName !== blockType) continue
+            const k = (it.ioIndex !== undefined && it.ioIndex !== null) ? (parseInt(it.ioIndex) || 0) : i
+            rows.push({orig: i, key: k})
         }
+            rows.sort((a,b)=>a.key-b.key)
 
-        // Assign addresses to items that need them
-        for (const { index, dataType } of itemsNeedingAddress) {
-            const increment = getAddressIncrement(type, dataType);
-            const newAddress = findNextAvailableAddress(1, increment);
-
-            console.log("Assigning address", newAddress, "to item", index, "with increment", increment);
-            console.log("Will mark addresses as used:", newAddress, "to", newAddress + increment - 1);
-
-            // Mark this address range as used
-            for (let i = 0; i < increment; i++) {
-                existingAddresses.add(newAddress + i);
-                console.log("Marked address", newAddress + i, "as used");
-            }
-
-            dataModel.setProperty(index, "address", newAddress.toString());
+        const occ = new Set()
+        for (const r of rows) {
+            const it = dataModel.get(r.orig)
+            const step = mbStep(blockType, it.type || it.dataType)
+            const addr = mbNextFree(occ, step, 1)
+            dataModel.setProperty(r.orig, "address", String(addr))
+            for (let j=0;j<step;j++) occ.add(addr+j)
         }
+    }
+
+    // === При смене блока у строки ===
+    function onModbusBlockChanged(originalIndex, newBlock, oldBlock) {
+        // Обновили блок и сбросили адрес у текущей строки уже в делегате → здесь выдаём адрес текущему
+        mbAssignOne(newBlock, originalIndex, 1)
+        // Приведём к порядку старый и новый блок (чтобы без дыр)
+        if (oldBlock && oldBlock !== newBlock) mbCompactBlock(oldBlock)
+        mbCompactBlock(newBlock)
+    }
+
+    // === При смене типа данных у строки (если зависит шаг) ===
+    function onModbusDataTypeChanged(originalIndex) {
+        const it = dataModel.get(originalIndex)
+        const blk = it.blockName || ""
+        if (!blk) return
+        // Просто пересоберём последовательность блока
+        mbCompactBlock(blk)
     }
 
     function assignIOA() {
