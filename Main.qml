@@ -31,6 +31,79 @@ ApplicationWindow {
     property string currentObjectModelId: ""
     property string currentProtocolId: ""
     property string currentBldePath: ""
+
+
+
+
+    // === Индексация по codeName и универсальный доступ к полю ===
+    property var __code2index: ({})
+    property var __refKeys: ["self", "ktt", "aperture", "upper", "lower"]
+
+    // === Индекс по codeName и универсальный доступ ===
+    property var __code2row: ({})
+    function __rebuildIndex() {
+        const m = {}
+        for (let i = 0; i < dataModel.count; ++i) {
+            const it = dataModel.get(i)
+            if (it && it.codeName) m[it.codeName] = i
+        }
+        __code2row = m
+    }
+    Component.onCompleted: {
+        startDialog.open()
+        __rebuildIndex()
+    }
+    Connections {
+        target: dataModel
+        function onCountChanged() { __rebuildIndex() }
+        function onDataChanged()  { __rebuildIndex() } // если у твоей модели есть сигнал
+    }
+
+    // вернуть массив codeName для колонки (ровно 5 элементов)
+    function __codesForRow(itemData) {
+        if (!itemData) return [""];
+
+        const t = rootwindow.currentType;
+
+        if (t === "Аналоговые входы") {
+            return [
+                itemData.codeName,
+                itemData.ktt,
+                itemData.aperture,
+                itemData.upper,
+                itemData.lower
+            ].map(c => c || "");
+        }
+
+        if (t === "Уставка") {
+            // Если уставка включена — показываем и сам элемент, и setpoint
+            const arr = [itemData.codeName];
+            if (itemData.val_setpoint_enabled && itemData.setpoint)
+                arr.push(itemData.setpoint);
+            return arr.map(c => c || "");
+        }
+
+        // По умолчанию — только текущий элемент
+        return [itemData.codeName || ""];
+    }
+
+    // чтение поля по codeName
+    function __getByRole(codeName, roleName) {
+        if (!codeName) return ""
+        const idx = __code2row[codeName]
+        if (idx === undefined) return ""
+        const row = dataModel.get(idx)
+        return row && roleName in row ? (row[roleName] ?? "") : ""
+    }
+
+    // запись поля по codeName
+    function __setByRole(codeName, roleName, value) {
+        if (!codeName) return false
+        const idx = __code2row[codeName]
+        return (idx !== undefined) ? dataModel.setProperty(idx, roleName, value) : false
+    }
+
+
 //endregion
     menuBar: MenuBar {
         Menu {
@@ -150,7 +223,10 @@ ApplicationWindow {
     property var val_sp: { "flag": "val_setpoint_enabled",
         "buf":  "val_setpoint_def_value",
         "prefix": "VAL_SETPOINT" }
-
+    function isSetpointCommand(itemData) {
+        return itemData && itemData.paramType === "Уставка" &&
+            itemData.link_kind === "val_setpoint";
+    }
     // Имя уставки: VAL_SETPOINT_<codeName>_<ioIndex>
     function makeValSetpointCode(srcItem) {
         var prefix = val_sp.prefix;
@@ -179,14 +255,14 @@ ApplicationWindow {
         var code = makeValSetpointCode(src);
         var name = code;
         var bufv = (src && src[val_sp.buf]) ? src[val_sp.buf] : "";
-
+        dataModel.setProperty(srcOriginalIndex, "setpoint", code)
         dataModel.append({
             paramType: "Уставка",
             codeName:  code,
             name:      name,
             def_value: bufv,
 
-            // базовые поля — подставь то, что нужно твоему генератору
+            // базовые поля
             ioIndex: (typeof rootwindow !== "undefined" && rootwindow.nextIoIndex) ? String(rootwindow.nextIoIndex) : "",
             type: "float",
             logicuse: "Да",
@@ -228,16 +304,14 @@ ApplicationWindow {
     // === МЕТА для 4 чекбоксов ===
     // kind — внутр. ключ; flag — имя булевого флага в исходной строке;
     // buf  — имя буфера исходной строки (для импорта/экспорта);
-    // prefix — кусок имени уставки (можешь поменять на свои).
+    // prefix — кусок имени уставки.
     property var meas_meta: [
         { kind: "aperture", label: "Апертура",    flag: "meas_aperture_enabled",    buf: "meas_aperture_def_value",    prefix: "MEAS_AP" },
         { kind: "ktt",      label: "КТТ",         flag: "meas_ktt_enabled",         buf: "meas_ktt_def_value",         prefix: "MEAS_KTT" },
         { kind: "upper",    label: "Верх. предел",flag: "meas_upper_enabled",       buf: "meas_upper_def_value",       prefix: "MEAS_UP" },
         { kind: "lower",    label: "Нижн. предел",flag: "meas_lower_enabled",       buf: "meas_lower_def_value",       prefix: "MEAS_LOW" },
-        { kind: "val_setpoint",    label: "Значение",flag: "val_setpoint_enabled",       buf: "meas_lower_def_value",       prefix: "VAL_SETPOINT" }
     ]
 
-    // Сделай свою логику префикса, если надо
     function makeMeasPrefix(kind, srcItem) {
         // по умолчанию из меты
         const m = meas_meta.find(x => x.kind === kind)
@@ -630,6 +704,7 @@ ApplicationWindow {
     ListModel { id: digitalOutputsModel }
     ListModel { id: flagsModel }
     ListModel { id: settingsModel }
+    ListModel { id: meksettingsModel }
 
     function initializeFilteredModels() {
         analogInputsModel.clear()
@@ -638,7 +713,7 @@ ApplicationWindow {
         digitalOutputsModel.clear()
         flagsModel.clear()
         settingsModel.clear()
-
+        meksettingsModel.clear()
         for (var i = 0; i < dataModel.count; i++) {
             syncFilteredModels()
         }
@@ -653,6 +728,7 @@ ApplicationWindow {
         digitalOutputsModel.clear()
         flagsModel.clear()
         settingsModel.clear()
+        meksettingsModel.clear()
 
         // Repopulate from main dataModel
         for (var i = 0; i < dataModel.count; i++) {
@@ -663,7 +739,11 @@ ApplicationWindow {
                 case "Аналоговый выход": analogOutputsModel.append({ "originalIndex": i }); break
                 case "Дискретный выход": digitalOutputsModel.append({ "originalIndex": i }); break
                 case "Признаки": flagsModel.append({ "originalIndex": i }); break
-                case "Уставка": settingsModel.append({ "originalIndex": i }); break
+                case "Уставка": settingsModel.append({ "originalIndex": i })
+                    var hide = (item.link_kind === "val_setpoint")
+                    if(!hide)
+                        meksettingsModel.append({originalIndex: i})
+                    break
             }
         }
     }
@@ -710,14 +790,14 @@ ApplicationWindow {
         }
     }
 
-    function getFilteredModel(type) {
+    function getFilteredModel(type, ismek) {
         switch(type) {
             case "Аналоговые входы": return analogInputsModel
             case "Дискретные входы": return digitalInputsModel
             case "Аналоговый выход": return analogOutputsModel
             case "Дискретный выход": return digitalOutputsModel
             case "Признаки": return flagsModel
-            case "Уставка": return settingsModel
+            case "Уставка": return ismek ? meksettingsModel : settingsModel
             default: return analogInputsModel
         }
     }
@@ -2349,9 +2429,6 @@ ApplicationWindow {
         }
     }
 
-    Component.onCompleted: {
-        startDialog.open()
-    }
 
 
     FileHandler {
@@ -3203,7 +3280,7 @@ ApplicationWindow {
                     width: parent.width - 30
                     height: parent.height
                     cacheBuffer: 200
-                    model: getFilteredModel(pageRoot.paramType)
+                    model: getFilteredModel(pageRoot.paramType, false)
                     spacing: 0
                     interactive: true
                     clip: true
@@ -3792,41 +3869,77 @@ ApplicationWindow {
                         RowLayout {
                             id: cellSetpoint
                             spacing: 6
+                            visible: rootwindow.currentType === "Уставка"
 
                             CheckBox {
                                 id: spCheck
-                                // начальное состояние берём из исходной строки (для импорта/экспорта)
+                                text: "Значение"
+
+                                // Запретить создание команды для команды
+                                enabled: !isSetpointCommand(itemData)
+
                                 Component.onCompleted: {
                                     var v = !!(itemData && itemData[val_sp.flag]);
                                     spCheck.checked = v;
                                     val.visible = v;
-                                    // подтянем текст из буфера
                                     var buf = (itemData && itemData[val_sp.buf]) ? itemData[val_sp.buf] : "";
                                     if (val.text !== buf) val.text = buf;
                                 }
 
                                 onToggled: {
-                                    if (originalIndex < 0) return;
+                                    if (originalIndex < 0 || isSetpointCommand(itemData)) return;
 
-                                    // 1) фиксируем флаг в исходной строке
                                     dataModel.setProperty(originalIndex, val_sp.flag, checked);
 
                                     if (checked) {
-                                        // 2) создать уставку (если нет) и синхронизировать def_value
                                         var has = findValSetpointIndex(originalIndex);
                                         if (has < 0) createValSetpoint(originalIndex);
                                         syncValSetpointDefValue(originalIndex);
                                     } else {
-                                        // 3) удалить уставку
                                         removeValSetpoint(originalIndex);
                                     }
 
-                                    // показать/спрятать поле
                                     val.visible = checked;
                                 }
-                            }    Connections {
+                            }
+
+                            TextField {id: val
+                                Layout.preferredWidth: 70
+                                Layout.preferredHeight: 32
+                                placeholderText: "значение"
+
+                                // Запретить редактирование для команд
+                                enabled: !isSetpointCommand(itemData)
+
+                                Component.onCompleted: {
+                                    var v = !!(itemData && itemData[val_sp.flag]);
+                                    val.visible = v;
+                                    var buf = (itemData && itemData[val_sp.buf]) ? itemData[val_sp.buf] : "";
+                                    if (val.text !== buf) val.text = buf;
+                                }
+
+                                onTextChanged: {
+                                    if (originalIndex < 0 || isSetpointCommand(itemData)) return;
+                                    dataModel.setProperty(originalIndex, val_sp.buf, text);
+                                    syncValSetpointDefValue(originalIndex);
+                                }
+
+                                background: Rectangle {
+                                    color: enabled ? "#ffffff" : "#f8fafc"
+                                    border.color: parent.activeFocus ? "#3b82f6"
+                                        : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    border.width: 1
+                                    radius: 4
+                                    antialiasing: true
+                                    Behavior on border.color { ColorAnimation { duration: 150 } }
+                                }
+                            }
+
+                            Connections {
                                 target: dataModel
                                 function onDataChanged() {
+                                    if (isSetpointCommand(itemData)) return;
+
                                     var v = !!(itemData && itemData[val_sp.flag]);
                                     if (spCheck.checked !== v) spCheck.checked = v;
 
@@ -3837,7 +3950,6 @@ ApplicationWindow {
                                 }
                             }
                         }
-
                         Button {
                             text: "Удалить"
                             Layout.preferredWidth: 160
@@ -3968,7 +4080,7 @@ ApplicationWindow {
                     width: parent.width - 30
                     height: parent.height
                     cacheBuffer: 200
-                    model: getFilteredModel(rootwindow.currentType)
+                    model: getFilteredModel(rootwindow.currentType, false)
                     spacing: 0
                     clip: true
                     headerPositioning: ListView.OverlayHeader
@@ -4294,7 +4406,7 @@ ApplicationWindow {
                     width: parent.width - 30
                     height: parent.height
                     cacheBuffer: 200
-                    model: getFilteredModel(rootwindow.currentType)
+                    model: getFilteredModel(rootwindow.currentType, true)
                     spacing: 0
                     interactive: true
                     clip: true
@@ -4343,16 +4455,16 @@ ApplicationWindow {
                                 horizontalAlignment: Text.AlignHCenter
                             }
                             Label {
-                                text: "IO"
-                                Layout.preferredWidth: 50
+                                text: "Наименование"
+                                Layout.preferredWidth: 200
                                 color: "#1e293b"
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Наименование"
-                                Layout.preferredWidth: 200
+                                text: "Параметры"
+                                Layout.preferredWidth: 150
                                 color: "#1e293b"
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
@@ -4432,10 +4544,11 @@ ApplicationWindow {
                     delegate: Rectangle {
                         width: listView.width
                         id: rowItem
-                        height: 40
+                        height: 180
                         color: index % 2 === 0 ? "#ffffff" : "#f8fafc"
                         required property int index
                         required property var model
+
                         property int originalIndex: {
                             switch (rootwindow.currentType) {
                                 case "Аналоговые входы":
@@ -4449,13 +4562,17 @@ ApplicationWindow {
                                 case "Признаки":
                                     return flagsModel.get(index).originalIndex
                                 case "Уставка":
-                                    return settingsModel.get(index).originalIndex
+                                    return meksettingsModel.get(index).originalIndex
                                 default:
                                     return -1
                             }
                         }
-                        // Удобный объект строки:
+
                         property var itemData: (originalIndex >= 0 ? dataModel.get(originalIndex) : ({}))
+
+                        // Проверка, является ли это командой уставки
+                        property bool isCommand: isSetpointCommand(itemData)
+
                         // Подсветка для выбранных сигналов
                         Rectangle {
                             anchors.fill: parent
@@ -4478,12 +4595,9 @@ ApplicationWindow {
                                 Layout.preferredWidth: 30
                                 Layout.alignment: Qt.AlignVCenter
                                 checked: isSignalInCurrentObjectModel(index)
-                                enabled: currentObjectModelId !== ""
+                                enabled: currentObjectModelId !== "" && !isCommand // Запретить выбор команд
 
                                 onClicked: {
-                                    console.log("Checkbox clicked, current checked state:", checked)
-                                    console.log("Signal index:", index)
-
                                     if (checked) {
                                         addSignalToCurrentObjectModel(index)
                                     } else {
@@ -4492,359 +4606,351 @@ ApplicationWindow {
                                 }
                             }
 
+                            // Название
                             Text {
-                                text: itemData.ioIndex || ""
-                                Layout.preferredWidth: 50
-                                Layout.preferredHeight: 32
-                                color: "#1e293b"
-                                font.pixelSize: 13
-                                font.weight: Font.Normal
-                                verticalAlignment: Text.AlignVCenter
-                                leftPadding: 8
-                            }
-                            Text {
-                                text: itemData.name || ""
+                                id: leftName
+                                text: itemData.name
                                 Layout.preferredWidth: 200
-                                Layout.preferredHeight: 32
-                                color: "#1e293b"
+                                Layout.alignment: Qt.AlignVCenter
+                                color: isCommand ? "#6b7280" : "#1e293b" // Серый цвет для команд
                                 font.pixelSize: 13
-                                font.weight: Font.Normal
-                                verticalAlignment: Text.AlignVCenter
                                 elide: Text.ElideRight
-                                leftPadding: 8
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    ToolTip.visible: containsMouse && parent.text.length > 0
-                                    ToolTip.text: model.name || ""
-                                }
                             }
 
-                            Text {
-                                text: itemData.type || ""
-                                Layout.preferredWidth: 100
-                                Layout.preferredHeight: 32
-                                color: "#1e293b"
-                                font.pixelSize: 13
-                                font.weight: Font.Normal
-                                verticalAlignment: Text.AlignVCenter
-                                leftPadding: 8
-                            }
-
-                            TextField {
-                                text: itemData.ioa_address || ""
-                                Layout.preferredWidth: 100
-                                Layout.preferredHeight: 32
-
-                                color: "#1e293b"
-                                font.pixelSize: 13
-                                font.weight: Font.Normal
-
-                                leftPadding: 8
-                                rightPadding: 8
-                                topPadding: 6
-                                bottomPadding: 6
-
-                                selectByMouse: true
-                                verticalAlignment: TextInput.AlignVCenter
-
-                                background: Rectangle {
-                                    color: enabled ? "#ffffff" : "#f8fafc"
-                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                    border.width: 1
-                                    radius: 4
-                                    antialiasing: true
-
-                                    Behavior on border.color {
-                                        ColorAnimation { duration: 150 }
-                                    }
-                                }
-                                onTextChanged: dataModel.setProperty(originalIndex, "ioa_address", text)
-                            }
-
-                            TextField {
-                                text: itemData.asdu_address || ""
-                                Layout.preferredWidth: 100
-                                Layout.preferredHeight: 32
-
-                                color: "#1e293b"
-                                font.pixelSize: 13
-                                font.weight: Font.Normal
-
-                                leftPadding: 8
-                                rightPadding: 8
-                                topPadding: 6
-                                bottomPadding: 6
-
-                                selectByMouse: true
-                                verticalAlignment: TextInput.AlignVCenter
-
-                                background: Rectangle {
-                                    color: enabled ? "#ffffff" : "#f8fafc"
-                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                    border.width: 1
-                                    radius: 4
-                                    antialiasing: true
-
-                                    Behavior on border.color {
-                                        ColorAnimation { duration: 150 }
-                                    }
-                                }
-                                onTextChanged: dataModel.setProperty(originalIndex, "asdu_address", text)
-                            }
-
-                            ComboBox {
-                                id: bufferCombo
-
-                                // 1) опции держим в отдельном свойстве и подаём в model:
-                                property var choices: [
-                                    "NOT_USE","DEFAULT", "1", "2", "3", "4", "5", "6", "7", "8"
-                                ]
-                                model: choices
-
-                                Layout.preferredWidth: 130
-                                Layout.preferredHeight: 32
-                                font.pixelSize: 13
-                                editable: true
-
-                                // 2) данные строки берём ЯВНО у корня делегата:
-                                property var row: rowItem.itemData
-                                property bool _init: false
-
-                                Component.onCompleted: {
-                                    const wanted = (itemData.second_class_num && itemData.second_class_num.length)
-                                        ? itemData.second_class_num : "DEFAULT";
-                                    const idx = choices.indexOf(wanted);
-                                    currentIndex = idx >= 0 ? idx : 1; // 1 = "DEFAULT"
-                                    _init = true;
-                                }
-
-                                onCurrentIndexChanged: {
-                                    if (_init && currentIndex >= 0) {
-                                        dataModel.setProperty(originalIndex, "second_class_num", choices[currentIndex]);
-                                    }
-                                }
-
-                                // если данные в модели меняются после импорта — подтягиваем индекс
-                                Connections {
-                                    target: dataModel
-                                    function onDataChanged() {
-                                        if (!_init) return;
-                                        const idx = choices.indexOf(itemData.model.second_class_num || "DEFAULT");
-                                        if (idx >= 0 && idx !== currentIndex) currentIndex = idx;
-                                    }
-                                }
-
-                                background: Rectangle {
-                                    color: enabled ? "#ffffff" : "#f8fafc"
-                                    border.color: parent.activeFocus ? "#3b82f6" :
-                                        (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                    border.width: 1; radius: 4; antialiasing: true
-                                    Behavior on border.color { ColorAnimation { duration: 150 } }
-                                }
-                            }
-
-                            // === SPONT ===
-                            ComboBox {
-                                id: spontCombo
-
-                                // отдельный список опций
-                                property var choices: [
-                                    "NOT_USE", "DEFAULT", "M_SP_NA_1", "M_SP_TA1", "M_DP_NA_1", "M_DP_TA_1", "M_BO_NA_1",
-                                    "M_BO_TA_1", "M_ME_NA_1", "M_ME_TA_1", "M_ME_NB1", "M_ME_TB_1", "M_ME_NC_1",
-                                    "M_ME_TC_1", "M_ME_ND_1", "M_SP_TB_1", "M_DP_TB_1", "M_BO_TB_1", "M_ME_TD_1", "M_ME_TF_1"
-                                ]
-                                model: choices
-
-                                Layout.preferredWidth: 130
-                                Layout.preferredHeight: 32
-                                font.pixelSize: 13
-                                editable: true
-
-                                // доступ к данным строки делегата
-                                property var row: itemData.model
-                                property bool _init: false
-
-                                Component.onCompleted: {
-                                    const wanted = (itemData.type_spont && itemData.type_spont.length) ? itemData.type_spont : "DEFAULT";
-                                    const idx = choices.indexOf(wanted);
-                                    currentIndex = idx >= 0 ? idx : choices.indexOf("DEFAULT");
-                                    _init = true;
-                                }
-
-                                onCurrentIndexChanged: {
-                                    if (_init && currentIndex >= 0) {
-                                        dataModel.setProperty(originalIndex, "type_spont", choices[currentIndex]);
-                                    }
-                                }
-
-                                Connections {
-                                    target: dataModel
-                                    function onDataChanged() {
-                                        const v = itemData.type_spont && itemData.type_spont.length
-                                            ? itemData.type_spont : "DEFAULT"
-                                        const i = choices.indexOf(v)
-                                        if (i !== currentIndex && i >= 0) currentIndex = i
-                                    }
-                                }
-
-                                background: Rectangle {
-                                    color: enabled ? "#ffffff" : "#f8fafc"
-                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                    border.width: 1; radius: 4; antialiasing: true
-                                    Behavior on border.color { ColorAnimation { duration: 150 } }
-                                }
-                            }
-
-                            // === BACK ===
-                            ComboBox {
-                                id: backCombo
-
-                                property var choices: [
-                                    "NOT_USE", "DEFAULT", "M_SP_NA_1", "M_DP_NA_1", "M_BO_NA_1", "M_ME_NA_1",
-                                    "M_ME_NB_1", "M_ME_NC_1", "M_ME_ND_1"
-                                ]
-                                model: choices
-
-                                Layout.preferredWidth: 130
-                                Layout.preferredHeight: 32
-                                font.pixelSize: 13
-                                editable: true
-
-                                property var row: itemData.model
-                                property bool _init: false
-
-                                Component.onCompleted: {
-                                    const wanted = (itemData.type_back && itemData.type_back.length) ? itemData.type_back : "DEFAULT";
-                                    const idx = choices.indexOf(wanted);
-                                    currentIndex = idx >= 0 ? idx : choices.indexOf("DEFAULT");
-                                    _init = true;
-                                }
-
-                                onCurrentIndexChanged: {
-                                    if (_init && currentIndex >= 0) {
-                                        dataModel.setProperty(originalIndex, "type_back", choices[currentIndex]);
-                                    }
-                                }
-
-                                Connections {
-                                    target: dataModel
-                                    function onDataChanged() {
-                                        if (!_init) return;
-                                        const idx = choices.indexOf(itemData.model.type_back || "DEFAULT");
-                                        if (idx >= 0 && idx !== currentIndex) currentIndex = idx;
-                                    }
-                                }
-
-                                background: Rectangle {
-                                    color: enabled ? "#ffffff" : "#f8fafc"
-                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                    border.width: 1; radius: 4; antialiasing: true
-                                    Behavior on border.color { ColorAnimation { duration: 150 } }
-                                }
-                            }
-
-                            // === PERCYC ===
-                            ComboBox {
-                                id: percycCombo
-
-                                property var choices: [
-                                    "NOT_USE", "DEFAULT", "M_ME_NA_1", "M_ME_NB_1", "M_ME_NC_1", "M_ME_ND_1"
-                                ]
-                                model: choices
-
-                                Layout.preferredWidth: 130
-                                Layout.preferredHeight: 32
-                                font.pixelSize: 13
-                                editable: true
-
-                                property var row: itemData.model
-                                property bool _init: false
-
-                                Component.onCompleted: {
-                                    const wanted = (itemData.type_percyc && itemData.type_percyc.length) ? itemData.type_percyc : "DEFAULT";
-                                    const idx = choices.indexOf(wanted);
-                                    currentIndex = idx >= 0 ? idx : choices.indexOf("DEFAULT");
-                                    _init = true;
-                                }
-
-                                onCurrentIndexChanged: {
-                                    if (_init && currentIndex >= 0) {
-                                        dataModel.setProperty(originalIndex, "type_percyc", choices[currentIndex]);
-                                    }
-                                }
-
-                                Connections {
-                                    target: dataModel
-                                    function onDataChanged() {
-                                        if (!_init) return;
-                                        const idx = choices.indexOf(itemData.model.type_percyc || "DEFAULT");
-                                        if (idx >= 0 && idx !== currentIndex) currentIndex = idx;
-                                    }
-                                }
-
-                                background: Rectangle {
-                                    color: enabled ? "#ffffff" : "#f8fafc"
-                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                    border.width: 1; radius: 4; antialiasing: true
-                                    Behavior on border.color { ColorAnimation { duration: 150 } }
-                                }
-                            }
-
-                            // === DEF ===
-                            ComboBox {
-                                id: defCombo
-
-                                property var choices: [
-                                    "NOT_USE", "DEFAULT", "M_SP_NA_1", "M_SP_TA1", "M_DP_NA_1", "M_DP_TA_1", "M_BO_NA_1",
-                                    "M_BO_TA_1", "M_ME_NA_1", "M_ME_TA_1", "M_ME_NB1", "M_ME_TB_1", "M_ME_NC_1",
-                                    "M_ME_TC_1", "M_ME_ND_1", "M_SP_TB_1", "M_DP_TB_1", "M_BO_TB_1", "M_ME_TD_1", "M_ME_TF_1"
-                                ]
-                                model: choices
-
-                                Layout.preferredWidth: 130
-                                Layout.preferredHeight: 32
-                                font.pixelSize: 13
-                                editable: true
-
-                                property var row: itemData.model
-                                property bool _init: false
-
-                                Component.onCompleted: {
-                                    const wanted = (itemData.type_def && itemData.type_def.length) ? itemData.type_def : "DEFAULT";
-                                    const idx = choices.indexOf(wanted);
-                                    currentIndex = idx >= 0 ? idx : choices.indexOf("DEFAULT");
-                                    _init = true;
-                                }
-
-                                onCurrentIndexChanged: {
-                                    if (_init && currentIndex >= 0) {
-                                        dataModel.setProperty(originalIndex, "type_def", choices[currentIndex]);
-                                    }
-                                }
-
-                                Connections {
-                                    target: dataModel
-                                    function onDataChanged() {
-                                        if (!_init) return;
-                                        const idx = choices.indexOf(itemData.model.type_def || "DEFAULT");
-                                        if (idx >= 0 && idx !== currentIndex) currentIndex = idx;
-                                    }
-                                }
-
-                                background: Rectangle {
-                                    color: enabled ? "#ffffff" : "#f8fafc"
-                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                    border.width: 1; radius: 4; antialiasing: true
-                                    Behavior on border.color { ColorAnimation { duration: 150 } }
+                            // Параметры
+                            ColumnLayout {
+                                spacing: 3
+                                Repeater {
+                                    model: rootwindow.currentType === "Аналоговые входы"
+                                        ? ["Значение","Апертура","КТТ","Upper","Lower"]
+                                        : rootwindow.currentType === "Уставка"
+                                            ? (itemData.val_setpoint_enabled && !isCommand
+                                                ? ["Команда", "Значение"]
+                                                : ["Значение"])
+                                            : [itemData.codeName]
+                                delegate: Text {
+                                    text: modelData
+                                    color: isCommand ? "#6b7280" : "#475569"
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                    Layout.preferredWidth: 100
+                                    verticalAlignment: Text.AlignVCenter
                                 }
                             }
                         }
+
+                        // Тип данных
+                        ColumnLayout {
+                            spacing: 4
+                            Repeater {
+                                model: __codesForRow(itemData)
+                                delegate: Text {
+                                    text: __getByRole(modelData, "type")
+                                    elide: Text.ElideRight
+                                    verticalAlignment: Text.AlignVCenter
+                                    color: isCommand ? "#6b7280" : "#1e293b"
+                                    font.pixelSize: 12
+                                    Layout.preferredWidth: 100
+                                }
+                            }
+                        }
+
+                        // === КОЛОНКА: Адрес ОИ ("ioa_address") ===
+                            ColumnLayout {
+                                spacing: 4
+                                Repeater {
+                                    model: __codesForRow(itemData)
+                                    delegate: TextField {
+                                        // Для первого элемента (основного значения) показываем его собственный IOA адрес
+                                        text: {
+                                            if (index === 0) {
+                                                // Основной элемент - показываем его собственный ioa_address
+                                                return itemData.ioa_address || ""
+                                            } else {
+                                                // Дополнительные элементы (апертура, КТТ и т.д.)
+                                                return __getByRole(modelData, "ioa_address") || ""
+                                            }
+                                        }
+                                        onEditingFinished: {
+                                            if (!isCommand) {
+                                                if (index === 0) {
+                                                    // Записываем в основной элемент
+                                                    dataModel.setProperty(originalIndex, "ioa_address", text)
+                                                } else {
+                                                    // Записываем в связанный элемент
+                                                    __setByRole(modelData, "ioa_address", text)
+                                                }
+                                            }
+                                        }
+                                        selectByMouse: true
+                                        Layout.preferredWidth: 100
+                                        Layout.preferredHeight: 32
+                                        color: isCommand ? "#6b7280" : "#1e293b"
+                                        font.pixelSize: 13
+                                        background: Rectangle {
+                                            color: enabled ? "#ffffff" : "#f8fafc"
+                                            border.color: parent.activeFocus ? "#3b82f6"
+                                                : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                            border.width: 1
+                                            radius: 4
+                                            antialiasing: true
+                                            Behavior on border.color { ColorAnimation { duration: 150 } }
+                                        }
+                                    }
+                                }
+                            }
+
+                        // === КОЛОНКА: Адрес АСДУ ("asdu_address") ===
+                        ColumnLayout {
+                            spacing: 4
+                            Repeater {
+                                model: __codesForRow(itemData)
+                                delegate: TextField {
+                                    text: __getByRole(modelData, "asdu_address") || ""
+                                    onEditingFinished: {
+                                        if (!isCommand) {
+                                            __setByRole(modelData, "asdu_address", text)
+                                        }
+                                    }
+                                    selectByMouse: true
+                                    Layout.preferredWidth: 100
+                                    Layout.preferredHeight: 32
+                                    color: isCommand ? "#6b7280" : "#1e293b"
+                                    font.pixelSize: 13
+                                    background: Rectangle {
+                                        color: enabled ? "#ffffff" : "#f8fafc"
+                                        border.color: parent.activeFocus ? "#3b82f6"
+                                            : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                        border.width: 1
+                                        radius: 4
+                                        antialiasing: true
+                                        Behavior on border.color { ColorAnimation { duration: 150 } }
+                                    }
+                                }
+                            }
+                        }
+
+                        // === КОЛОНКА: Номер буфера ("second_class_num") ===
+                        ColumnLayout {
+                            spacing: 4
+                            Repeater {
+                                model: __codesForRow(itemData)
+                                delegate: ComboBox {
+                                    property var choices: [
+                                        "NOT_USE","DEFAULT", "1", "2", "3", "4", "5", "6", "7", "8"
+                                    ]
+                                    model: choices
+                                    Layout.preferredWidth: 130
+                                    Layout.preferredHeight: 32
+                                    font.pixelSize: 13
+                                    property bool _init: false
+
+                                    Component.onCompleted: {
+                                        const wanted = __getByRole(modelData, "second_class_num") || "DEFAULT"
+                                        const idx = choices.indexOf(wanted)
+                                        currentIndex = idx >= 0 ? idx : choices.indexOf("DEFAULT")
+                                        _init = true
+                                    }
+
+                                    onCurrentIndexChanged: {
+                                        if (_init && currentIndex >= 0 && !isCommand) {
+                                            __setByRole(modelData, "second_class_num", choices[currentIndex])
+                                        }
+                                    }
+
+                                    background: Rectangle {
+                                        color: enabled ? "#ffffff" : "#f8fafc"
+                                        border.color: parent.activeFocus ? "#3b82f6"
+                                            : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                        border.width: 1
+                                        radius: 4
+                                        antialiasing: true
+                                        Behavior on border.color { ColorAnimation { duration: 150 } }
+                                    }
+                                }
+                            }
+                        }
+
+
+
+                        // === КОЛОНКА: Спорадика ("type_spont") ===
+                        ColumnLayout {
+                            spacing: 4
+                            Repeater {
+                                model: __codesForRow(itemData)
+                                delegate: ComboBox {
+                                    property var choices: [
+                                        "NOT_USE", "DEFAULT", "M_SP_NA_1", "M_SP_TA1", "M_DP_NA_1", "M_DP_TA_1",
+                                        "M_BO_NA_1", "M_BO_TA_1", "M_ME_NA_1", "M_ME_TA_1", "M_ME_NB1",
+                                        "M_ME_TB_1", "M_ME_NC_1", "M_ME_TC_1", "M_ME_ND_1", "M_SP_TB_1",
+                                        "M_DP_TB_1", "M_BO_TB_1", "M_ME_TD_1", "M_ME_TF_1"
+                                    ]
+                                    model: choices
+                                    editable: isCommand || index !== 0 // Только для не-команд
+                                    enabled: isCommand || index !== 0
+                                    Layout.preferredWidth: 130
+                                    Layout.preferredHeight: 32
+                                    font.pixelSize: 13
+                                    property bool _init: false
+
+                                    Component.onCompleted: {
+                                        const wanted = __getByRole(modelData, "type_spont") || "DEFAULT"
+                                        const idx = choices.indexOf(wanted)
+                                        currentIndex = idx >= 0 ? idx : choices.indexOf("DEFAULT")
+                                        _init = true
+                                    }
+
+                                    onCurrentIndexChanged: {
+                                        if (_init && currentIndex >= 0 && !isCommand) {
+                                            __setByRole(modelData, "type_spont", choices[currentIndex])
+                                        }
+                                    }
+
+                                    background: Rectangle {
+                                        color: enabled ? "#ffffff" : "#f8fafc"
+                                        border.color: parent.activeFocus ? "#3b82f6"
+                                            : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                        border.width: 1
+                                        radius: 4
+                                        antialiasing: true
+                                        Behavior on border.color { ColorAnimation { duration: 150 } }
+                                    }
+                                }
+                            }
+                        }
+                            ColumnLayout {
+                                spacing: 4
+                                Repeater {
+                                    model: __codesForRow(itemData)
+                                    delegate: ComboBox {
+                                        property var choices: [
+                                            "NOT_USE", "DEFAULT", "M_SP_NA_1", "M_DP_NA_1", "M_BO_NA_1", "M_ME_NA_1",
+                                            "M_ME_NB_1", "M_ME_NC_1", "M_ME_ND_1"
+                                        ]
+                                        model: choices
+                                        editable: isCommand || index !== 0 // Только для не-команд
+                                        enabled: isCommand || index !== 0
+                                        Layout.preferredWidth: 130
+                                        Layout.preferredHeight: 32
+                                        font.pixelSize: 13
+                                        property bool _init: false
+
+                                        Component.onCompleted: {
+                                            const wanted = __getByRole(modelData, "type_back") || "DEFAULT"
+                                            const idx = choices.indexOf(wanted)
+                                            currentIndex = idx >= 0 ? idx : choices.indexOf("DEFAULT")
+                                            _init = true
+                                        }
+
+                                        onCurrentIndexChanged: {
+                                            if (_init && currentIndex >= 0 && !isCommand) {
+                                                __setByRole(modelData, "type_back", choices[currentIndex])
+                                            }
+                                        }
+
+                                        background: Rectangle {
+                                            color: enabled ? "#ffffff" : "#f8fafc"
+                                            border.color: parent.activeFocus ? "#3b82f6"
+                                                : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                            border.width: 1
+                                            radius: 4
+                                            antialiasing: true
+                                            Behavior on border.color { ColorAnimation { duration: 150 } }
+                                        }
+                                    }
+                                }
+                            }
+                            ColumnLayout {
+                                spacing: 4
+                                Repeater {
+                                    model: __codesForRow(itemData)
+                                    delegate: ComboBox {
+                                        property var choices: [
+                                            "NOT_USE", "DEFAULT", "M_ME_NA_1", "M_ME_NB_1", "M_ME_NC_1", "M_ME_ND_1"
+                                        ]
+                                        model: choices
+                                        editable: isCommand || index !== 0 // Только для не-команд
+                                        enabled: isCommand || index !== 0
+                                        Layout.preferredWidth: 130
+                                        Layout.preferredHeight: 32
+                                        font.pixelSize: 13
+                                        property bool _init: false
+
+                                        Component.onCompleted: {
+                                            const wanted = __getByRole(modelData, "type_percyc") || "DEFAULT"
+                                            const idx = choices.indexOf(wanted)
+                                            currentIndex = idx >= 0 ? idx : choices.indexOf("DEFAULT")
+                                            _init = true
+                                        }
+
+                                        onCurrentIndexChanged: {
+                                            if (_init && currentIndex >= 0 && !isCommand) {
+                                                __setByRole(modelData, "type_percyc", choices[currentIndex])
+                                            }
+                                        }
+
+                                        background: Rectangle {
+                                            color: enabled ? "#ffffff" : "#f8fafc"
+                                            border.color: parent.activeFocus ? "#3b82f6"
+                                                : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                            border.width: 1
+                                            radius: 4
+                                            antialiasing: true
+                                            Behavior on border.color { ColorAnimation { duration: 150 } }
+                                        }
+                                    }
+                                }
+                            }
+                            ColumnLayout {
+                                spacing: 4
+                                Repeater {
+                                    model: __codesForRow(itemData)
+                                    delegate: ComboBox {
+                                        property var choices: [
+                                            "NOT_USE", "DEFAULT", "M_SP_NA_1", "M_SP_TA1", "M_DP_NA_1", "M_DP_TA_1",
+                                            "M_BO_NA_1", "M_BO_TA_1", "M_ME_NA_1", "M_ME_TA_1", "M_ME_NB1",
+                                            "M_ME_TB_1", "M_ME_NC_1", "M_ME_TC_1", "M_ME_ND_1", "M_SP_TB_1",
+                                            "M_DP_TB_1", "M_BO_TB_1", "M_ME_TD_1", "M_ME_TF_1"
+                                        ]
+                                        model: choices
+                                        editable: isCommand || index !== 0 // Только для не-команд
+                                        enabled: isCommand || index !== 0
+                                        Layout.preferredWidth: 130
+                                        Layout.preferredHeight: 32
+                                        font.pixelSize: 13
+                                        property bool _init: false
+
+                                        Component.onCompleted: {
+                                            const wanted = __getByRole(modelData, "type_def") || "DEFAULT"
+                                            const idx = choices.indexOf(wanted)
+                                            currentIndex = idx >= 0 ? idx : choices.indexOf("DEFAULT")
+                                            _init = true
+                                        }
+
+                                        onCurrentIndexChanged: {
+                                            if (_init && currentIndex >= 0 && !isCommand) {
+                                                __setByRole(modelData, "type_def", choices[currentIndex])
+                                            }
+                                        }
+
+                                        background: Rectangle {
+                                            color: enabled ? "#ffffff" : "#f8fafc"
+                                            border.color: parent.activeFocus ? "#3b82f6"
+                                                : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                            border.width: 1
+                                            radius: 4
+                                            antialiasing: true
+                                            Behavior on border.color { ColorAnimation { duration: 150 } }
+                                        }
+                                    }
+                                }
+                            }
+
                     }
                 }
             }
         }
+    }
     }
     Dialog {
         id: objectModelSelectorDialog
@@ -4953,7 +5059,7 @@ ApplicationWindow {
                     width: parent.width - 30
                     height: parent.height
                     cacheBuffer: 200
-                    model: getFilteredModel(rootwindow.currentType)
+                    model: getFilteredModel(rootwindow.currentType, false)
                     spacing: 0
                     interactive: true
                     clip: true
@@ -5476,7 +5582,7 @@ ApplicationWindow {
                     width: parent.width - 30
                     height: parent.height
                     cacheBuffer: 200
-                    model: getFilteredModel(rootwindow.currentType)
+                    model: getFilteredModel(rootwindow.currentType, false)
                     spacing: 0
                     interactive: true
                     clip: true
