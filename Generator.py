@@ -216,7 +216,7 @@ def main(json_file):
 
     def get_ref_field(obj, ref_key, field, default=None):
         ref = get_ref(obj, ref_key)
-        return ref.get(field, default) if ref else default
+        return ref.get(field, default) if ref else "std:nullopt"
 
     # ---------- File headers ----------
     defines_content = f"""/**
@@ -409,6 +409,7 @@ void Core::InitTelemeasurements() {{
         asdu_addr = norm_str(obj.get("asdu_address", "")) or ""
         aperture = norm_str(obj.get("aperture", "")) or ""
         by_code = { norm_str(o.get("codeName")): o for o in data if o.get("codeName") }
+        setpoint_val = typ = norm_str(obj.get("setpoint", "")) or "std::nullopt"
         if not ioa_addr:
             continue
 
@@ -457,21 +458,81 @@ void Core::InitTelemeasurements() {{
                 )
         elif paramType == "Аналоговые входы" and (obj.get("ktt") or obj.get("aperture")):
             ap_code = norm_str(obj.get("aperture"))
-            ap_def_value = get_ref_field(obj, "aperture", "def_value", "")
-            ap_ioa = get_ref_field(obj, "aperture", "ioa_address", "")
-            ktt_param = f"ind_{obj['ktt']}" if obj.get("ktt") else "std::nullopt"
-            aperture_param = f"ind_{ap_code}" if ap_code else "std::nullopt"
+            ap_setpoint = get_ref_field(obj, "aperture", "setpoint", "")
+            ktt_param = f"{obj['ktt']}_IOA_ADDR" if obj.get("ktt") else "std::nullopt"
+            ktt_setpoint = get_ref_field(obj, "ktt", "setpoint", "")
+            lower_param = f"{obj['lower']}_IOA_ADDR" if obj.get("lower") else "std::nullopt"
+            lower_setpoint = get_ref_field(obj, "lower", "setpoint", "")
+            upper_setpoint = get_ref_field(obj, "upper", "setpoint", "")
+            upper_param = f"{obj['upper']}_IOA_ADDR" if obj.get("upper") else "std::nullopt"
+            setpoint_val = f"{obj['setpoint']}_IOA_ADDR" if obj.get("setpoint") else "std::nullopt"
+            communications_content += f"""  mek_object_model->AddMeasurement(
+    {{
+            &GetInfoObject(ind_{code}),
+            MEK::Priority::{second_class},
+        
+            {{{{
+                {{
+                    &GetInfoObject(ind_{ap_code}),
+                    {{{{
+                        &GetInfoObject(ind_{ap_code}),
+                        MEK::Priority::{second_class},
+                        {ap_setpoint},
+                        {asdu_addr}
+                    }}}}
+                }},
+                {ap_code}_IOA_ADDR,
+                {asdu_addr}
+            }}}},
+            {{{{
+                {{
+                    &GetInfoObject(ind_{ktt_param}),
+                    {{{{
+                        &GetInfoObject(ind_{ktt_param}),
+                        MEK::Priority::{second_class},
+                        {ktt_setpoint},
+                        {asdu_addr}
+                    }}}}
+                }},
+                {ktt_param}_IOA_ADDR,
+                {asdu_addr}
+            }}}},
+            {{{{
+                {{
+                    &GetInfoObject(ind_{lower_param}),
+                    {{{{
+                        &GetInfoObject(ind_{lower_param}),
+                        MEK::Priority::{second_class},
+                        {lower_setpoint},
+                        {asdu_addr}
+                    }}}}
+                }},
+                {lower_param}_IOA_ADDR,
+                {asdu_addr}
+            }}}},
+            {{{{
+                {{
+                    &GetInfoObject(ind_{upper_param}),
+                    {{{{
+                        &GetInfoObject(ind_{upper_param}),
+                        MEK::Priority::{second_class},  
+                        {upper_setpoint},
+                        {asdu_addr}
+                    }}}}
+                }},
+                {upper_param}_IOA_ADDR,
+                {asdu_addr}
+            }}}}
+         ,
+        {code}_IOA_ADDR,
+        {asdu_addr});
+        """
+        else:
             communications_content += (
-                f"    mek_object_model->AddMeasurement({{&GetInfoObject(ind_{code}), MEK::Priority::{second_class}}}, "
-                f"{{{{{{&GetInfoObject(ind_{ap_code}), {{{{MEK::Priority::{second_class}),  aperture def_value: {ap_ioa}, {asdu_addr}}}}}}},\n"
-                f" "
+                f"    mek_object_model->AddSetpointCommand({{&GetInfoObject(ind_{code}), "
+                f"{{{{&GetInfoObject(ind_{code}), MEK::Priority::{second_class}, {ioa_addr}, {asdu_addr}}}}}}}, "
+                f"{ioa_addr}, {asdu_addr});  // {name}\n"
             )
-            else:
-                communications_content += (
-                    f"    mek_object_model->AddSetpointCommand({{&GetInfoObject(ind_{code}), "
-                    f"{{{{&GetInfoObject(ind_{code}), MEK::Priority::{second_class}, {ioa_addr}, {asdu_addr}}}}}}}, "
-                    f"{ioa_addr}, {asdu_addr});  // {name}\n"
-                )
 
         # Map IO to command types by flags
         if norm_bool(obj.get("oi_c_bo_na_1")):
@@ -488,7 +549,7 @@ void Core::InitTelemeasurements() {{
         # Protocol-specific configuration
         for prot in protos:
             ptype = prot.get("type")
-            if ptype == "MEK_104":
+            if ptype == "MEK_101":
                 if not norm_bool(obj.get("allow_address_101")):
                     communications_content += f"    mek_101_server->AllowAddressUsage(false, {ioa_addr}, {asdu_addr});\n"
                 sgrp = norm_str(obj.get("survey_group_101"))
