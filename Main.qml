@@ -32,7 +32,48 @@ ApplicationWindow {
     property string currentProtocolId: ""
     property string currentBldePath: ""
 
+    function setTypeCombo(choices, fieldName, item) {
+        if (!item || !choices || choices.length === 0) {
+            cb.currentIndex = -1
+            return
+        }
+        // если значение уже есть в itemData — используем его
 
+        // умные дефолты только для команд уставок
+        if (item.paramType === "Уставка" && item.link_kind !== "val_setpoint") {
+
+            const typ = item.type
+            let fallback = "DEFAULT"
+            console.log(item.paramType+item.link_kind+item.type )
+
+            if (fieldName === "type_spont" || fieldName === "type_def") {
+                if (typ === "bool")           fallback = "M_SP_TB_1"
+                else if (typ === "float")     fallback = "M_ME_TF_1"
+                else if (typ === "unsigned int")   fallback = "M_BO_TB_1"
+                else if (typ === "unsigned char")  fallback = "M_ME_TD_1"
+                else if (typ === "unsigned short") fallback = "M_ME_TD_1"
+            }
+            else if (fieldName === "type_back") {
+                fallback = "NOT_USE"
+            }
+            else if (fieldName === "type_percyc") {
+                if (typ === "bool")           fallback = "NOT_USE"
+                else if (typ === "float")     fallback = "M_ME_NC_1"
+                else if (typ === "unsigned int")   fallback = "NOT_USE"
+                else if (typ === "unsigned char")  fallback = "M_ME_NA_1"
+                else if (typ === "unsigned short") fallback = "M_ME_NA_1"
+            }
+
+            const fbIdx = choices.indexOf(fallback)
+            console.log(fallback)
+            if (fbIdx >= 0) return fbIdx
+        }
+
+        // иначе дефолт
+        const defIdx = choices.indexOf("DEFAULT")
+
+        return defIdx >= 0 ? defIdx : 0
+    }
 
 
     // === Индексация по codeName и универсальный доступ к полю ===
@@ -222,7 +263,7 @@ ApplicationWindow {
     // ===== Настройки единственного чекбокса Setpoint =====
     property var val_sp: { "flag": "val_setpoint_enabled",
         "buf":  "val_setpoint_def_value",
-        "prefix": "VAL_SETPOINT" }
+        "prefix": "VAL" }
     function isSetpointCommand(itemData) {
         return itemData && itemData.paramType === "Уставка" &&
             itemData.link_kind === "val_setpoint";
@@ -232,7 +273,7 @@ ApplicationWindow {
         var prefix = val_sp.prefix;
         var code   = (srcItem && srcItem.codeName ? String(srcItem.codeName) : "");
         var io     = (srcItem && srcItem.ioIndex  ? String(srcItem.ioIndex)  : "");
-        return prefix + "_" + code + "_" + io;
+        return prefix + "_" + code;
     }
 
     // Найти уставку, связанную с исходной строкой (возвращает индекс в dataModel или -1)
@@ -240,7 +281,7 @@ ApplicationWindow {
         for (var i = 0; i < dataModel.count; ++i) {
             var it = dataModel.get(i);
             if (!it) continue;
-            if (it.paramType === "Уставки" &&
+            if (it.paramType === "Уставка" &&
                 it.link_source_index === srcOriginalIndex &&
                 it.link_kind === "val_setpoint") {
                 return i;
@@ -263,12 +304,12 @@ ApplicationWindow {
             def_value: bufv,
 
             // базовые поля
-            ioIndex: (typeof rootwindow !== "undefined" && rootwindow.nextIoIndex) ? String(rootwindow.nextIoIndex) : "",
+            ioIndex: (typeof rootwindow !== "undefined" && rootwindow.nextIoIndex) ? String(src.ioIndex) : "",
             type: "float",
             logicuse: "Да",
             saving: "Да",
             sod: false,
-
+            asdu_address: 1,
             // связь (важно для удаления/синхронизации)
             link_source_index: srcOriginalIndex,
             link_source_code:  (src && src.codeName) ? src.codeName : "",
@@ -323,7 +364,7 @@ ApplicationWindow {
         const prefix = makeMeasPrefix(kind, srcItem)
         const code   = (srcItem.codeName || "").toString().trim()
         const io     = (srcItem.ioIndex  || "").toString().trim()
-        return prefix + "_" + code + "_" + "IO_INDEX"
+        return prefix + "_" + code
     }
 
     // Поиск уставки, связанной с исходной строкой и kind
@@ -358,7 +399,7 @@ ApplicationWindow {
             // базовые поля — подставь, что нужно твоему генератору
             ioIndex: (typeof rootwindow !== "undefined" && rootwindow.nextIoIndex) ? rootwindow.nextIoIndex.toString() : "",
             type: "float", logicuse: "Да", saving: "Да", sod: false,
-
+            asdu_address: 1,
             // связь
             link_source_index: srcOriginalIndex,
             link_source_code:  src.codeName || "",
@@ -1196,10 +1237,10 @@ ApplicationWindow {
 
                 onClicked: {
                     createInterface("RS", {
-                        parity: parityField.currentIndex,
+                        parity: parityField.currentValue,
                         baudrate: baudrateField.currentText,
                         wordLen: lenField.text,
-                        stopBits: stopField.currentIndex,
+                        stopBits: stopField.currentValue,
                         addr: addField.text
                     });
                     rsConfigDialog.close();
@@ -1225,6 +1266,7 @@ ApplicationWindow {
             });
         }
     }
+
     Dialog {
         id: ethConfigDialog
         width: 500
@@ -1963,6 +2005,430 @@ ApplicationWindow {
         }
     }
 
+    Dialog {
+        id: mekConfigDialog
+        width: 500
+        height: 600
+        anchors.centerIn: parent
+        title: "Настройка RS"
+        modal: true
+        standardButtons: Dialog.NoButton
+        property string protocolName: ""
+        property string protocolType: ""
+        property string objectModel: ""
+        property string interfacet: ""
+        background: Rectangle {
+            color: "#ffffff"
+            radius: 8
+            antialiasing: true
+            border.color: "#e2e8f0"
+            border.width: 1
+
+            // Subtle shadow effect
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: -2
+                color: "transparent"
+                border.color: "#00000010"
+                border.width: 2
+                radius: 10
+                z: -1
+            }
+        }
+
+        header: Rectangle {
+            width: parent.width
+            height: 50
+            color: "#f8fafc"
+            radius: 8
+            antialiasing: true
+            Rectangle {
+                anchors.bottom: parent.bottom
+                width: parent.width
+                height: 1
+                color: "#e2e8f0"
+            }
+
+            gradient: Gradient {
+                GradientStop { position: 0.0
+                    ;
+                    color: "#f8fafc"
+                }
+                GradientStop { position: 1.0
+                    ;
+                    color: "#f1f5f9"
+                }
+            }
+
+            Label {
+                anchors.centerIn: parent
+                text: rsConfigDialog.title
+                font.pixelSize: 16
+                font.weight: Font.DemiBold
+                color: "#1e293b"
+            }
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 20
+            spacing: 15
+
+            GridLayout {
+                columns: 2
+                columnSpacing: 15
+                rowSpacing: 15
+                Layout.fillWidth: true
+
+                Label {
+                    text: "АСДУ адрес"
+                    color: "#374151"
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                }
+                TextField {
+                    id: asduField
+                    Layout.preferredHeight: 32
+                    color: "#1e293b"
+                    font.pixelSize: 13
+                    font.weight: Font.Normal
+
+                    leftPadding: 8
+                    rightPadding: 8
+                    topPadding: 6
+                    bottomPadding: 6
+
+                    selectByMouse: true
+                    verticalAlignment: TextInput.AlignVCenter
+
+                    background: Rectangle {
+                        color: enabled ? "#ffffff" : "#f8fafc"
+                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                        border.width: 1
+                        radius: 4
+                        antialiasing: true
+
+                        // Subtle shadow when focused
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.margins: -1
+                            color: "transparent"
+                            border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                            border.width: 2
+                            radius: 5
+                            visible: parent.parent.activeFocus
+                        }
+
+                        Behavior on border.color {
+                            ColorAnimation { duration: 150
+                            }
+                        }
+                    }
+                }
+
+                Label {
+                    text: "Длина адресного поля"
+                    color: "#374151"
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                }
+                ComboBox {
+                    id: linkaddresField
+                    model: [1, 2]
+                    Layout.preferredHeight: 32
+                    Layout.preferredWidth: 120
+                    font.pixelSize: 13
+
+                    background: Rectangle {
+                        color: enabled ? "#ffffff" : "#f8fafc"
+                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                        border.width: 1
+                        radius: 4
+                        antialiasing: true
+
+                        Behavior on border.color {
+                            ColorAnimation { duration: 150
+                            }
+                        }
+                    }
+                }
+
+                Label {
+                    text: "Длина АСДУ"
+                    color: "#374151"
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                }
+                ComboBox {
+                    id: asdulenField
+                    model: [1, 2]
+                    Layout.preferredHeight: 32
+                    Layout.preferredWidth: 120
+                    font.pixelSize: 13
+
+                    background: Rectangle {
+                        color: enabled ? "#ffffff" : "#f8fafc"
+                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                        border.width: 1
+                        radius: 4
+                        antialiasing: true
+
+                        Behavior on border.color {
+                            ColorAnimation { duration: 150
+                            }
+                        }
+                    }
+                }
+                Label {
+                    text: "Длина причина передачи"
+                    color: "#374151"
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                }
+                ComboBox {
+                    id: reasonlenField
+                    model: ["1", "2"]
+                    Layout.preferredHeight: 32
+                    font.pixelSize: 13
+                    Layout.preferredWidth: 120
+                    background: Rectangle {
+                        color: enabled ? "#ffffff" : "#f8fafc"
+                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                        border.width: 1
+                        radius: 4
+                        antialiasing: true
+
+                        Behavior on border.color {
+                            ColorAnimation { duration: 150
+                            }
+                        }
+                    }
+                }
+
+                Label {
+                    text: "Длина IOA"
+                    color: "#374151"
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                }
+                ComboBox {
+                    id: ioalenField
+                    model: [1, 2, 3]
+                    Layout.preferredHeight: 32
+                    Layout.preferredWidth: 120
+                    font.pixelSize: 13
+
+                    background: Rectangle {
+                        color: enabled ? "#ffffff" : "#f8fafc"
+                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                        border.width: 1
+                        radius: 4
+                        antialiasing: true
+
+                        Behavior on border.color {
+                            ColorAnimation { duration: 150
+                            }
+                        }
+                    }
+                }
+                Label {
+                    text: "Синхронизация"
+                    color: "#374151"
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                }
+                ComboBox {
+                    id: syncField
+                    model: ["true", "false"]
+                    Layout.preferredHeight: 32
+                    Layout.preferredWidth: 120
+                    font.pixelSize: 13
+
+                    background: Rectangle {
+                        color: enabled ? "#ffffff" : "#f8fafc"
+                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                        border.width: 1
+                        radius: 4
+                        antialiasing: true
+
+                        Behavior on border.color {
+                            ColorAnimation { duration: 150
+                            }
+                        }
+                    }
+                }
+            }
+            Label {
+                text: "Телеконтроль"
+                color: "#374151"
+                font.pixelSize: 13
+                font.weight: Font.DemiBold
+            }
+            ComboBox {
+                id: telecontrolField
+                model: ["true", "false"]
+                Layout.preferredHeight: 32
+                Layout.preferredWidth: 120
+                font.pixelSize: 13
+
+                background: Rectangle {
+                    color: enabled ? "#ffffff" : "#f8fafc"
+                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                    border.width: 1
+                    radius: 4
+                    antialiasing: true
+
+                    Behavior on border.color {
+                        ColorAnimation { duration: 150
+                        }
+                    }
+                }
+            }
+            Label {
+                text: "Период перцик"
+                color: "#374151"
+                font.pixelSize: 13
+                font.weight: Font.DemiBold
+            }
+            TextField {
+                id: percycField
+                Layout.preferredHeight: 32
+                color: "#1e293b"
+                font.pixelSize: 13
+                font.weight: Font.Normal
+
+                leftPadding: 8
+                rightPadding: 8
+                topPadding: 6
+                bottomPadding: 6
+
+                selectByMouse: true
+                verticalAlignment: TextInput.AlignVCenter
+
+                background: Rectangle {
+                    color: enabled ? "#ffffff" : "#f8fafc"
+                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                    border.width: 1
+                    radius: 4
+                    antialiasing: true
+
+                    // Subtle shadow when focused
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: -1
+                        color: "transparent"
+                        border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                        border.width: 2
+                        radius: 5
+                        visible: parent.parent.activeFocus
+                    }
+
+                    Behavior on border.color {
+                        ColorAnimation { duration: 150
+                        }
+                    }
+                }
+            }
+            Label {
+                text: "Период фонового"
+                color: "#374151"
+                font.pixelSize: 13
+                font.weight: Font.DemiBold
+            }
+            TextField {
+                id: backField
+                Layout.preferredHeight: 32
+                color: "#1e293b"
+                font.pixelSize: 13
+                font.weight: Font.Normal
+
+                leftPadding: 8
+                rightPadding: 8
+                topPadding: 6
+                bottomPadding: 6
+
+                selectByMouse: true
+                verticalAlignment: TextInput.AlignVCenter
+
+                background: Rectangle {
+                    color: enabled ? "#ffffff" : "#f8fafc"
+                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                    border.width: 1
+                    radius: 4
+                    antialiasing: true
+
+                    // Subtle shadow when focused
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: -1
+                        color: "transparent"
+                        border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                        border.width: 2
+                        radius: 5
+                        visible: parent.parent.activeFocus
+                    }
+
+                    Behavior on border.color {
+                        ColorAnimation { duration: 150
+                        }
+                    }
+                }
+            }
+            Item {
+                Layout.fillHeight: true
+            }
+
+            Button {
+                text: "Сохранить"
+                Layout.alignment: Qt.AlignRight
+                Layout.preferredWidth: 120
+                Layout.preferredHeight: 40
+                font.pixelSize: 14
+                font.weight: Font.Medium
+
+                background: Rectangle {
+                    color: parent.pressed ? "#059669" : (parent.hovered ? "#10b981" : "#22c55e")
+                    radius: 6
+                    antialiasing: true
+
+                    Behavior on color {
+                        ColorAnimation { duration: 150
+                        }
+                    }
+                }
+
+                contentItem: Text {
+                    text: parent.text
+                    font: parent.font
+                    color: "#ffffff"
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+
+                onClicked: {
+                    createProtocol(
+                        mekConfigDialog.protocolName,
+                        mekConfigDialog.protocolType,
+                        mekConfigDialog.objectModel,
+                        mekConfigDialog.interfacet,
+                        {
+                            asdu: asduField.text,
+                            link_address_len: linkaddresField.currentValue,
+                            asdu_len: asdulenField.currentValue,
+                            reason_len: reasonlenField.currentValue,
+                            ioa_len: ioalenField.currentValue,
+                            sync: syncField.currentValue,
+                            telecontrol: telecontrolField.currentValue,
+                            percyc_period: percycField.text,
+                            back_period: backField.text
+                        }
+                    )
+                    mekConfigDialog.close();
+                    createProtocolDialog.close()
+                }
+            }
+        }
+    }
     Platform.FileDialog {
         id: fileDialog
         title: "Выберите файл конфигурации"
@@ -2343,13 +2809,12 @@ ApplicationWindow {
                         verticalAlignment: Text.AlignVCenter
                     }
                     onClicked: {
-                        createProtocol(
-                            protocolNameField.text,
-                            protocolTypeCombo.currentText,
-                            objectModelCombo.currentValue.id,
-                            interfaceCombo.currentValue.id
-                        )
-                        createProtocolDialog.close()
+                        mekConfigDialog.protocolName = protocolNameField.text
+                        mekConfigDialog.protocolType = protocolTypeCombo.currentText
+                        mekConfigDialog.objectModel = objectModelCombo.currentValue.id
+                        mekConfigDialog.interfacet = interfaceCombo.currentValue.id
+                        mekConfigDialog.open()
+                        // createProtocolDialog.close()
                     }
                 }
                 Button {
@@ -2572,7 +3037,7 @@ ApplicationWindow {
                                 color: "#374151"
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCente
+                                verticalAlignment: Text.AlignVCenter
                             }
                             Label {
                                 text: "S/D"
@@ -3271,9 +3736,10 @@ ApplicationWindow {
                 clip: true
                 padding: 10
                 ScrollBar.vertical.policy: ScrollBar.AlwaysOn
+                ScrollBar.horizontal.policy: ScrollBar.AsNeeded
                 leftPadding: 15
                 rightPadding: 22
-                contentWidth: listView.width - 30
+                contentWidth: Math.max(listView.width, 1600) // Минимальная ширина для всех колонок
                 contentHeight: listView.height
                 ListView {
                     id: listView
@@ -3287,7 +3753,7 @@ ApplicationWindow {
                     headerPositioning: ListView.OverlayHeader
                     header: Rectangle {
                         z: 2
-                        width: listView.width
+                        width: Math.max(listView.width, 1600)
                         height: 32
                         color: "#f1f5f9"
                         antialiasing: true
@@ -3320,6 +3786,8 @@ ApplicationWindow {
 
                             Label { text: "IO"
                                 Layout.preferredWidth: 50
+                                Layout.minimumWidth: 50
+                                Layout.maximumWidth: 50
                                 color: "#1e293b"
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
@@ -3327,130 +3795,150 @@ ApplicationWindow {
                             }
                             Label { text: "Наименование"
                                 Layout.preferredWidth: 350
+                                Layout.minimumWidth: 300
                                 color: "#1e293b"
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label { text: "Англ.название"
-                                Layout.preferredWidth: 350
+                                Layout.preferredWidth: 250
+                                Layout.minimumWidth: 200
                                 color: "#1e293b"
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
                             }
-                            Label{
-                                text: "Индекс"
-                                Layout.preferredWidth: 150
-                                color: "#374151"
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter
-                                visible: rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Дискретные входы"
-
+                            Item{
+                                Layout.preferredWidth: 120
+                                Layout.minimumWidth: 120
+                                Layout.preferredHeight: 32
+                                Label{
+                                    anchors.fill:parent
+                                    text: "Индекс"
+                                    color: "#374151"
+                                    font.pixelSize: 13
+                                    font.weight: Font.DemiBold
+                                    verticalAlignment: Text.AlignVCenter
+                                    opacity: rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Дискретные входы"
+                                }
                             }
                             Label { text: "Тип"
-                                Layout.preferredWidth: 120
+                                Layout.preferredWidth: 100
+                                Layout.minimumWidth: 100
                                 color: "#1e293b"
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label { text: "Логика"
+                                Layout.preferredWidth: 80
+                                Layout.minimumWidth: 80
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+
+                            Item{
                                 Layout.preferredWidth: 100
-                                color: "#1e293b"
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter
+                                Layout.minimumWidth: 100
+                                Layout.preferredHeight: 32
+                                Label {
+                                    text: "Сохран."
+                                    opacity: rootwindow.currentType === "Признаки" || rootwindow.currentType === "Уставка" || paramType === "Уставка"
+                                    Layout.preferredWidth: 100
+                                    color: "#1e293b"
+                                    font.pixelSize: 13
+                                    font.weight: Font.DemiBold
+                                    verticalAlignment: Text.AlignVCenter
+                                    anchors.fill:parent
+                                }
                             }
-                            Label {
-                                text: "Сохран."
-                                visible: rootwindow.currentType === "Признаки" || rootwindow.currentType === "Уставка" || paramType === "Уставка"
-                                Layout.preferredWidth: 140
-                                color: "#1e293b"
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            Label {
-                                text: "Триггер"
-                                visible: rootwindow.currentType === "Признаки"
-                                Layout.preferredWidth: 140
-                                color: "#1e293b"
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            Label {
-                                text: "Апертура"
-                                visible: rootwindow.currentType === "Аналоговые входы"
-                                Layout.preferredWidth: 120
-                                color: "#1e293b"
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            Label {
-                                text: "КТТ"
-                                visible: rootwindow.currentType === "Аналоговые входы"
+                            Item{
                                 Layout.preferredWidth: 100
-                                color: "#1e293b"
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter
+                                Layout.preferredHeight: 32
+
+                                Label {
+                                    text: "Триггер"
+                                    opacity: rootwindow.currentType === "Признаки"
+                                    color: "#1e293b"
+                                    font.pixelSize: 13
+                                    font.weight: Font.DemiBold
+                                    verticalAlignment: Text.AlignVCenter
+                                    anchors.fill:parent
+                                }
                             }
-                            Label {
-                                text: "Верхний предел"
-                                visible: rootwindow.currentType === "Аналоговые входы"
+                            Item {
                                 Layout.preferredWidth: 150
-                                color: "#1e293b"
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter
+                                Layout.minimumWidth: 150
+                                Layout.preferredHeight: 32
+                                Label {
+                                    text: "Параметры"
+                                    opacity: rootwindow.currentType === "Аналоговые входы"
+                                    color: "#1e293b"
+                                    font.pixelSize: 13
+                                    font.weight: Font.DemiBold
+                                    verticalAlignment: Text.AlignVCenter
+                                    anchors.fill:parent
+                                }
                             }
-                            Label {
-                                text: "Нижний предел"
-                                visible: rootwindow.currentType === "Аналоговые входы"
-                                Layout.preferredWidth: 150
-                                color: "#1e293b"
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter
+                            Item{
+                                Layout.preferredHeight: 32
+                                Layout.preferredWidth: 100
+                                Layout.minimumWidth: 100
+                                Label {
+                                    text: "Знач. по умолч."
+                                    opacity: !(rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Дискретные входы")
+                                    anchors.fill:parent
+                                    color: "#1e293b"
+                                    font.pixelSize: 13
+                                    font.weight: Font.DemiBold
+                                    verticalAlignment: Text.AlignVCenter
+                                }
                             }
-                            Label {
-                                text: "Значение по умолч."
-                                visible: !(rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Дискретные входы")
+                            Item{
                                 Layout.preferredWidth: 120
-                                color: "#1e293b"
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter
+                                Layout.minimumWidth: 120
+                                Layout.preferredHeight: 32
+                                Label { text: "Антидребезг"
+                                    anchors.fill:parent
+                                    opacity: rootwindow.currentType === "Дискретные входы"
+                                    color: "#1e293b"
+                                    font.pixelSize: 13
+                                    font.weight: Font.DemiBold
+                                    verticalAlignment: Text.AlignVCenter
+                                }
                             }
-                            Label { text: "Антидребезг"
-                                Layout.preferredWidth: 170
-                                visible: rootwindow.currentType === "Дискретные входы"
-                                color: "#1e293b"
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            Label { text: "Значение"
-                                Layout.preferredWidth: 70
-                                visible: rootwindow.currentType === "Уставка"
-                                color: "#1e293b"
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter
+                            Item{
+                                Layout.preferredWidth: 80
+                                Layout.minimumWidth: 80
+                                Layout.preferredHeight: 32
+                                Label { text: "Значение"
+                                    anchors.fill:parent
+                                    opacity: rootwindow.currentType === "Уставка"
+                                    color: "#1e293b"
+                                    font.pixelSize: 13
+                                    font.weight: Font.DemiBold
+                                    verticalAlignment: Text.AlignVCenter
+                                }
                             }
                             Label {
                                 text: ""
-                                Layout.preferredWidth: 120
+                                Layout.preferredWidth: 100
+                                Layout.minimumWidth: 100
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
                             }
                         }
                     }
-
-                    delegate: RowLayout {
-                        z: 1
+                    delegate: Rectangle {
+                        width: Math.max(listView.width, 1600)
+                        id: rowItem
+                        height: 180
+                        color: index % 2 === 0 ? "#ffffff" : "#f8fafc"
                         property bool hasDuplicateName: itemData.isNameDuplicate || false
                         property bool hasDuplicateCodeName: itemData.isCodeNameDuplicate || false
 
@@ -3489,498 +3977,500 @@ ApplicationWindow {
                                     return -1
                             }
                         }
-
-                        width: listView.width
-                        spacing: 0
-                        height: 34
-
                         property var itemData: dataModel.get(originalIndex)
+                        RowLayout {
+                            z: 1
+                            anchors.fill: parent
+                            spacing: 0
 
-                        TextField {
-                            text: itemData.ioIndex
-                            Layout.preferredWidth: 50
-                            Layout.preferredHeight: 32
+                            TextField {
+                                text: itemData.ioIndex
+                                Layout.preferredWidth: 50
+                                Layout.preferredHeight: 32
+                                Layout.minimumWidth: 50
+                                Layout.maximumWidth: 50
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.Normal
 
-                            color: "#1e293b"
-                            font.pixelSize: 13
-                            font.weight: Font.Normal
+                                leftPadding: 8
+                                rightPadding: 8
+                                topPadding: 6
+                                bottomPadding: 6
 
-                            leftPadding: 8
-                            rightPadding: 8
-                            topPadding: 6
-                            bottomPadding: 6
+                                selectByMouse: true
+                                verticalAlignment: TextInput.AlignVCenter
 
-                            selectByMouse: true
-                            verticalAlignment: TextInput.AlignVCenter
+                                background: Rectangle {
+                                    color: enabled ? "#ffffff" : "#f8fafc"
+                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    border.width: 1
+                                    radius: 4
+                                    antialiasing: true
 
-                            background: Rectangle {
-                                color: enabled ? "#ffffff" : "#f8fafc"
-                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
-                                radius: 4
-                                antialiasing: true
+                                    Behavior on border.color {
+                                        ColorAnimation { duration: 150 }
+                                    }
+                                }
 
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
+                                onTextChanged: dataModel.setProperty(originalIndex, "ioIndex", text)
+                            }
+
+                            TextField {
+                                text: itemData.name
+                                Layout.preferredWidth: 350
+                                Layout.preferredHeight: 32
+                                Layout.minimumWidth: 300
+                                color: (itemData.isNameDuplicate || false) ? "#dc2626" : "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.Normal
+
+                                leftPadding: 8
+                                rightPadding: 8
+                                topPadding: 6
+                                bottomPadding: 6
+
+                                selectByMouse: true
+                                verticalAlignment: TextInput.AlignVCenter
+
+                                background: Rectangle {
+                                    color: enabled ? "#ffffff" : "#f8fafc"
+                                    border.color: (itemData.isNameDuplicate || false) ? "#dc2626" :
+                                        (parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0"))
+                                    border.width: 1
+                                    radius: 4
+                                    antialiasing: true
+
+                                    Behavior on border.color {
+                                        ColorAnimation { duration: 150 }
+                                    }
+                                }
+
+                                onTextChanged: {
+                                    dataModel.setProperty(originalIndex, "name", text)
+                                    Qt.callLater(rootwindow.checkForDuplicates)
                                 }
                             }
 
-                            onTextChanged: dataModel.setProperty(originalIndex, "ioIndex", text)
-                        }
+                            TextField {
+                                text: itemData.codeName
+                                Layout.preferredWidth: 250
+                                Layout.preferredHeight: 32
+                                Layout.minimumWidth: 200
+                                color: itemData.isCodeNameDuplicate ? "#dc2626" : "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.Normal
 
-                        TextField {
-                            text: itemData.name
-                            Layout.preferredWidth: 350
-                            Layout.preferredHeight: 32
+                                leftPadding: 8
+                                rightPadding: 8
+                                topPadding: 6
+                                bottomPadding: 6
 
-                            color: (itemData.isNameDuplicate || false) ? "#dc2626" : "#1e293b"
-                            font.pixelSize: 13
-                            font.weight: Font.Normal
+                                selectByMouse: true
+                                verticalAlignment: TextInput.AlignVCenter
 
-                            leftPadding: 8
-                            rightPadding: 8
-                            topPadding: 6
-                            bottomPadding: 6
+                                background: Rectangle {
+                                    color: enabled ? "#ffffff" : "#f8fafc"
+                                    border.color: (itemData.isCodeNameDuplicate || false) ? "#dc2626" :
+                                        (parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0"))
+                                    border.width: 1
+                                    radius: 4
+                                    antialiasing: true
 
-                            selectByMouse: true
-                            verticalAlignment: TextInput.AlignVCenter
+                                    Behavior on border.color {
+                                        ColorAnimation { duration: 150 }
+                                    }
+                                }
 
-                            background: Rectangle {
-                                color: enabled ? "#ffffff" : "#f8fafc"
-                                border.color: (itemData.isNameDuplicate || false) ? "#dc2626" :
-                                    (parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0"))
-                                border.width: 1
-                                radius: 4
-                                antialiasing: true
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
+                                onTextChanged: {
+                                    dataModel.setProperty(originalIndex, "codeName", text)
+                                    Qt.callLater(rootwindow.checkForDuplicates)
                                 }
                             }
 
-                            onTextChanged: {
-                                dataModel.setProperty(originalIndex, "name", text)
-                                Qt.callLater(rootwindow.checkForDuplicates)
-                            }
-                        }
-
-                        TextField {
-                            text: itemData.codeName
-                            Layout.preferredWidth: 350
-                            Layout.preferredHeight: 32
-
-                            color: itemData.isCodeNameDuplicate ? "#dc2626" : "#1e293b"
-                            font.pixelSize: 13
-                            font.weight: Font.Normal
-
-                            leftPadding: 8
-                            rightPadding: 8
-                            topPadding: 6
-                            bottomPadding: 6
-
-                            selectByMouse: true
-                            verticalAlignment: TextInput.AlignVCenter
-
-                            background: Rectangle {
-                                color: enabled ? "#ffffff" : "#f8fafc"
-                                border.color: (itemData.isCodeNameDuplicate || false) ? "#dc2626" :
-                                    (parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0"))
-                                border.width: 1
-                                radius: 4
-                                antialiasing: true
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
-                                }
-                            }
-
-                            onTextChanged: {
-                                dataModel.setProperty(originalIndex, "codeName", text)
-                                Qt.callLater(rootwindow.checkForDuplicates)
-                            }
-                        }
-
-                        ComboBox {
-                            id: telecommandIndexBox
-                            visible: rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Дискретные входы"
-                            Layout.preferredWidth: 150
-                            Layout.preferredHeight: 30
-                            model: rootwindow.currentType === "Аналоговые входы" ? telemeasureModel : telesignalModel
-                            textRole: "text"  // показываем имя константы из .h
-                            currentIndex: {
-                                if (!itemData) return 0
-                                return model.indexOf(itemData.TYindex || "bool")
-                            }
-                            onCurrentTextChanged: {
-                                if (itemData) {
-                                    dataModel.setProperty(originalIndex, "TYindex", currentText)
-                                }
-                            }
-                            background: Rectangle {
-                                color: enabled ? "#ffffff" : "#f8fafc"
-                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
-                                radius: 4
-                                antialiasing: true
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
-                                }
-                            }
-                            // удобный аксессор для получения числового enum-значения
-                            function currentValue() {
-                                if (currentIndex < 0 || currentIndex >= count) return -1;
-                                return model.get(currentIndex).value; // size_t из .h
-                            }
-                        }
-
-                        ComboBox {
-                            editable: true
-                            model: ["bool", "float", "unsigned int", "unsigned short", "unsigned char", "unsigned long long"]
-                            currentIndex: model.indexOf(itemData.type || "bool")
-                            onCurrentTextChanged: dataModel.setProperty(originalIndex, "type", currentText)
-                            Layout.preferredWidth: 120
-                            Layout.preferredHeight: 32
-
-                            font.pixelSize: 13
-
-                            background: Rectangle {
-                                color: enabled ? "#ffffff" : "#f8fafc"
-                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
-                                radius: 4
-                                antialiasing: true
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
-                                }
-                            }
-                        }
-
-                        ComboBox {
-                            model: ["Да", "Нет"]
-                            currentIndex: model.indexOf(itemData.logicuse || "Да")
-                            onCurrentTextChanged: dataModel.setProperty(originalIndex, "logicuse", currentText)
-                            Layout.preferredWidth: 100
-                            Layout.preferredHeight: 32
-
-                            font.pixelSize: 13
-
-                            background: Rectangle {
-                                color: enabled ? "#ffffff" : "#f8fafc"
-                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
-                                radius: 4
-                                antialiasing: true
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
-                                }
-                            }
-                        }
-
-                        ComboBox {
-                            visible: rootwindow.currentType === "Признаки" || rootwindow.currentType === "Уставка"
-                            model: ["Нет", "Да"]
-                            currentIndex: model.indexOf(itemData.saving || "Нет")
-                            onCurrentTextChanged: dataModel.setProperty(originalIndex, "saving", currentText)
-                            Layout.preferredWidth: 140
-                            Layout.preferredHeight: 32
-
-                            font.pixelSize: 13
-
-                            background: Rectangle {
-                                color: enabled ? "#ffffff" : "#f8fafc"
-                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
-                                radius: 4
-                                antialiasing: true
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
-                                }
-                            }
-                        }
-
-                        ComboBox {
-                            visible: rootwindow.currentType === "Признаки"
-                            editable: true
-                            model: triggerModel
-                            currentIndex: triggerModel.indexOf(itemData.sector)
-                            onCurrentTextChanged: dataModel.setProperty(originalIndex, "sector", currentText)
-                            Layout.preferredWidth: 140
-                            Layout.preferredHeight: 32
-
-                            font.pixelSize: 13
-
-                            background: Rectangle {
-                                color: enabled ? "#ffffff" : "#f8fafc"
-                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
-                                radius: 4
-                                antialiasing: true
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
-                                }
-                            }
-                        }
-
-                        Repeater {
-                            model: meas_meta.length
-
-                            RowLayout {
-                                id: rowMeas
-                                spacing: 6
-                                property var meta: meas_meta[index]
-                                visible: rootwindow.currentType === "Аналоговые входы"
-                                // локальная функция обновления UI из текущих данных строки
-                                function refreshFromModel() {
-                                    var src = itemData;                          // снимок строки
-                                    var f   = !!(src && src[rowMeas.meta.flag]); // bool-флаг
-                                    cb.checked = f;
-                                    // тянем буфер значения в поле (когда включено)
-                                    var bufv = (src && src[rowMeas.meta.buf]) ? src[rowMeas.meta.buf] : "";
-                                    if (val.text !== bufv) val.text = bufv;
-                                    val.visible = cb.checked;
-                                }
-
-                                CheckBox {
-                                    id: cb
-                                    text: rowMeas.meta.label
-
-                                    // начальная инициализация по данным строки
-                                    Component.onCompleted: rowMeas.refreshFromModel()
-
-                                    // запись флага + создание/удаление уставки
-                                    onToggled: {
-                                        if (originalIndex < 0) return;
-                                        dataModel.setProperty(originalIndex, rowMeas.meta.flag, checked);
-                                        if (checked) {
-                                            var has = findLinkedMeasIndexFor(rowMeas.meta.kind, originalIndex);
-                                            if (has < 0) createLinkedMeasFor(rowMeas.meta.kind, originalIndex);
-                                            syncMeasDefValue(rowMeas.meta.kind, originalIndex);
-                                        } else {
-                                            removeLinkedMeasFor(rowMeas.meta.kind, originalIndex);
-                                            // при желании можно очистить буфер:
-                                            // dataModel.setProperty(originalIndex, rowMeas.meta.buf, "");
+                            Item{
+                                Layout.preferredHeight: 30
+                                Layout.minimumWidth: 120
+                                Layout.preferredWidth: 120
+                                ComboBox {
+                                    id: telecommandIndexBox
+                                    opacity: rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Дискретные входы"
+                                    model: rootwindow.currentType === "Аналоговые входы" ? telemeasureModel : telesignalModel
+                                    textRole: "text"
+                                    Layout.alignment: Qt.AlignLeft
+                                    anchors.fill: parent
+                                    anchors.margins: 0
+                                    currentIndex: {
+                                        if (!itemData) return 0
+                                        return model.indexOf(itemData.TYindex || "bool")
+                                    }
+                                    onCurrentTextChanged: {
+                                        if (itemData) {
+                                            dataModel.setProperty(originalIndex, "TYindex", currentText)
                                         }
-                                        // обновить видимость поля
-                                        val.visible = checked;
+                                    }
+                                    background: Rectangle {
+                                        color: enabled ? "#ffffff" : "#f8fafc"
+                                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                        border.width: 1
+                                        radius: 4
+                                        antialiasing: true
+
+                                        Behavior on border.color {
+                                            ColorAnimation { duration: 150 }
+                                        }
+                                    }
+
+                                    function currentValue() {
+                                        if (currentIndex < 0 || currentIndex >= count) return -1;
+                                        return model.get(currentIndex).value;
                                     }
                                 }
+                            }
+                            ComboBox {
+                                editable: true
+                                model: ["bool", "float", "unsigned int", "unsigned short", "unsigned char", "unsigned long long"]
+                                currentIndex: model.indexOf(itemData.type || "bool")
+                                onCurrentTextChanged: dataModel.setProperty(originalIndex, "type", currentText)
+                                Layout.preferredWidth: 100
+                                Layout.preferredHeight: 32
+                                Layout.minimumWidth: 100
+                                font.pixelSize: 13
 
-                                TextField {
-                                    id: val
-                                    Layout.preferredWidth: 120
-                                    placeholderText: "def_value"
+                                background: Rectangle {
+                                    color: enabled ? "#ffffff" : "#f8fafc"
+                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    border.width: 1
+                                    radius: 4
+                                    antialiasing: true
 
-                                    // начальная инициализация в паре с чекбоксом
-                                    Component.onCompleted: rowMeas.refreshFromModel()
-
-                                    // запись значения в буфер строки + проталкивание в def_value уставки
-                                    onTextChanged: {
-                                        if (originalIndex < 0) return;
-                                        dataModel.setProperty(originalIndex, rowMeas.meta.buf, text);
-                                        syncMeasDefValue(rowMeas.meta.kind, originalIndex);
+                                    Behavior on border.color {
+                                        ColorAnimation { duration: 150 }
                                     }
+                                }
+                            }
+
+                            ComboBox {
+                                model: ["Да", "Нет"]
+                                currentIndex: model.indexOf(itemData.logicuse || "Да")
+                                onCurrentTextChanged: dataModel.setProperty(originalIndex, "logicuse", currentText)
+                                Layout.preferredWidth: 80
+                                Layout.preferredHeight: 32
+                                Layout.minimumWidth: 80
+                                font.pixelSize: 13
+
+                                background: Rectangle {
+                                    color: enabled ? "#ffffff" : "#f8fafc"
+                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    border.width: 1
+                                    radius: 4
+                                    antialiasing: true
+
+                                    Behavior on border.color {
+                                        ColorAnimation { duration: 150 }
+                                    }
+                                }
+                            }
+
+                            Item{
+                                Layout.preferredWidth: 100
+                                Layout.preferredHeight: 32
+                                Layout.minimumWidth: 100
+                                ComboBox {
+                                    opacity: rootwindow.currentType === "Признаки" || rootwindow.currentType === "Уставка"
+                                    model: ["Нет", "Да"]
+                                    currentIndex: model.indexOf(itemData.saving || "Нет")
+                                    onCurrentTextChanged: dataModel.setProperty(originalIndex, "saving", currentText)
+                                    font.pixelSize: 13
+                                    anchors.fill: parent
+                                    anchors.margins: 0
+                                    background: Rectangle {
+                                        color: enabled ? "#ffffff" : "#f8fafc"
+                                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                        border.width: 1
+                                        radius: 4
+                                        antialiasing: true
+
+                                        Behavior on border.color {
+                                            ColorAnimation { duration: 150 }
+                                        }
+                                    }
+                                }
+                            }
+                            Item{
+                                Layout.preferredWidth: 100
+                                Layout.preferredHeight: 32
+                                Layout.minimumWidth: 100
+                                ComboBox {
+                                    opacity: rootwindow.currentType === "Признаки"
+                                    editable: true
+                                    model: triggerModel
+                                    currentIndex: triggerModel.indexOf(itemData.sector)
+                                    onCurrentTextChanged: dataModel.setProperty(originalIndex, "sector", currentText)
+                                    font.pixelSize: 13
+                                    anchors.fill: parent
+                                    anchors.margins: 0
+                                    background: Rectangle {
+                                        color: enabled ? "#ffffff" : "#f8fafc"
+                                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                        border.width: 1
+                                        radius: 4
+                                        antialiasing: true
+
+                                        Behavior on border.color {
+                                            ColorAnimation { duration: 150 }
+                                        }
+                                    }
+                                }
+                            }
+                            Item {
+                                Layout.preferredWidth: 150
+                                Layout.fillHeight: true
+                                opacity: rootwindow.currentType === "Аналоговые входы"
+
+                                ColumnLayout {
+                                    anchors.fill: parent
+                                    spacing: 6
+
+                                    Repeater {
+                                        model: meas_meta.length
+
+                                        RowLayout {
+                                            id: rowMeas
+                                            spacing: 10
+                                            Layout.preferredHeight: 32
+
+                                            property var meta: meas_meta[index]
+                                            property int tgt: originalIndex
+
+                                            CheckBox {
+                                                id: cb
+                                                text: rowMeas.meta.label
+                                                Layout.preferredWidth: 140
+                                                Layout.preferredHeight: 32
+
+                                                function sync() {
+                                                    const src = dataModel.get(rowMeas.tgt)
+                                                    checked = !!(src && src[rowMeas.meta.flag])
+                                                    val.enabled = checked
+                                                    val.opacity = checked ? 1 : 0
+                                                    val.text = (src && src[rowMeas.meta.buf]) ? src[rowMeas.meta.buf] : ""
+                                                }
+
+                                                Component.onCompleted: sync()
+
+                                                onToggled: {
+                                                    if (rowMeas.tgt < 0) return
+                                                    dataModel.setProperty(rowMeas.tgt, rowMeas.meta.flag, checked)
+                                                    if (checked) {
+                                                        var has = findLinkedMeasIndexFor(rowMeas.meta.kind, rowMeas.tgt)
+                                                        if (has < 0) createLinkedMeasFor(rowMeas.meta.kind, rowMeas.tgt)
+                                                        syncMeasDefValue(rowMeas.meta.kind, rowMeas.tgt)
+                                                    } else {
+                                                        removeLinkedMeasFor(rowMeas.meta.kind, rowMeas.tgt)
+                                                    }
+                                                    val.enabled = checked
+                                                    val.opacity = checked ? 1 : 0
+                                                }
+
+                                                Connections {
+                                                    target: dataModel
+                                                    function onDataChanged() { cb.sync() }
+                                                }
+                                            }
+
+                                            Item {
+                                                Layout.preferredWidth: 150
+                                                Layout.minimumWidth: 150
+                                                Layout.maximumWidth: 150
+                                                Layout.preferredHeight: 32
+
+                                                TextField {
+                                                    id: val
+                                                    anchors.fill: parent
+                                                    placeholderText: "def_value"
+                                                    enabled: cb.checked
+                                                    opacity: cb.checked ? 1 : 0
+
+                                                    onTextChanged: {
+                                                        if (rowMeas.tgt < 0) return
+                                                        dataModel.setProperty(rowMeas.tgt, rowMeas.meta.buf, text)
+                                                        syncMeasDefValue(rowMeas.meta.kind, rowMeas.tgt)
+                                                    }
+
+                                                    background: Rectangle {
+                                                        color: enabled ? "#ffffff" : "#f8fafc"
+                                                        border.color: parent.activeFocus ? "#3b82f6"
+                                                            : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                                        border.width: 1
+                                                        radius: 4
+                                                        antialiasing: true
+                                                        Behavior on border.color { ColorAnimation { duration: 150 } }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            Item{
+                                Layout.preferredWidth: 100
+                                Layout.preferredHeight: 32
+                                Layout.minimumWidth: 100
+                                TextField {
+                                    opacity: !(rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Дискретные входы")
+                                    text: itemData.def_value
+                                    color: "#1e293b"
+                                    font.pixelSize: 13
+                                    font.weight: Font.Normal
+                                    anchors.fill: parent
+                                    anchors.margins: 0
+                                    leftPadding: 8
+                                    rightPadding: 8
+                                    topPadding: 6
+                                    bottomPadding: 6
+
+                                    selectByMouse: true
+                                    verticalAlignment: TextInput.AlignVCenter
 
                                     background: Rectangle {
                                         color: enabled ? "#ffffff" : "#f8fafc"
                                         border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                        border.width: 1; radius: 4; antialiasing: true
-                                        Behavior on border.color { ColorAnimation { duration: 150 } }
+                                        border.width: 1
+                                        radius: 4
+                                        antialiasing: true
+
+                                        Behavior on border.color {
+                                            ColorAnimation { duration: 150 }
+                                        }
+                                    }
+
+                                    onTextChanged: dataModel.setProperty(originalIndex, "def_value", text)
+                                }
+                            }
+                            Item{
+                                Layout.preferredWidth: 120
+                                Layout.preferredHeight: 32
+                                Layout.minimumWidth: 120
+                                TextField {
+                                    text: itemData.ad
+                                    opacity: rootwindow.currentType === "Дискретные входы"
+                                    color: "#1e293b"
+                                    font.pixelSize: 13
+                                    font.weight: Font.Normal
+                                    anchors.fill: parent
+                                    anchors.margins: 0
+                                    leftPadding: 8
+                                    rightPadding: 8
+                                    topPadding: 6
+                                    bottomPadding: 6
+
+                                    selectByMouse: true
+                                    verticalAlignment: TextInput.AlignVCenter
+
+                                    background: Rectangle {
+                                        color: enabled ? "#ffffff" : "#f8fafc"
+                                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                        border.width: 1
+                                        radius: 4
+                                        antialiasing: true
+
+                                        Behavior on border.color {
+                                            ColorAnimation { duration: 150 }
+                                        }
+                                    }
+                                    onTextChanged: dataModel.setProperty(originalIndex, "ad", text)
+
+                                }
+                            }
+                            Item {
+                                Layout.preferredWidth: 80
+                                Layout.fillHeight: true
+                                RowLayout {
+                                    id: cellSetpoint
+                                    spacing: 6
+                                    opacity: rootwindow.currentType === "Уставка"
+                                    anchors.fill: parent
+                                    CheckBox {
+                                        id: spCheck
+                                        text: "Значение"
+
+                                        enabled: !isSetpointCommand(itemData)
+
+                                        Component.onCompleted: {
+                                            var v = !!(itemData && itemData[val_sp.flag]);
+                                            spCheck.checked = v;
+                                            val.opacity = v;
+                                            var buf = (itemData && itemData[val_sp.buf]) ? itemData[val_sp.buf] : "";
+                                            if (val.text !== buf) val.text = buf;
+                                        }
+
+                                        onToggled: {
+                                            if (originalIndex < 0 || isSetpointCommand(itemData)) return;
+
+                                            dataModel.setProperty(originalIndex, val_sp.flag, checked);
+
+                                            if (checked) {
+                                                var has = findValSetpointIndex(originalIndex);
+                                                if (has < 0) createValSetpoint(originalIndex);
+                                                syncValSetpointDefValue(originalIndex);
+                                            } else {
+                                                removeValSetpoint(originalIndex);
+                                            }
+
+                                            val.opacity = checked;
+                                        }
                                     }
                                 }
 
-                                // ГЛОБАЛЬНАЯ синхронизация: как только dataModel меняется — подтягиваем UI
                                 Connections {
                                     target: dataModel
-                                    function onDataChanged() { rowMeas.refreshFromModel(); }
-                                }
-                            }
-                        }
+                                    function onDataChanged() {
+                                        if (isSetpointCommand(itemData)) return;
 
-                        TextField {
-                            visible: !(rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Дискретные входы")
-                            text: itemData.def_value
-                            Layout.preferredWidth: 120
-                            Layout.preferredHeight: 32
+                                        var v = !!(itemData && itemData[val_sp.flag]);
+                                        if (spCheck.checked !== v) spCheck.checked = v;
 
-                            color: "#1e293b"
-                            font.pixelSize: 13
-                            font.weight: Font.Normal
+                                        var buf = (itemData && itemData[val_sp.buf]) ? itemData[val_sp.buf] : "";
+                                        if (val.text !== buf) val.text = buf;
 
-                            leftPadding: 8
-                            rightPadding: 8
-                            topPadding: 6
-                            bottomPadding: 6
-
-                            selectByMouse: true
-                            verticalAlignment: TextInput.AlignVCenter
-
-                            background: Rectangle {
-                                color: enabled ? "#ffffff" : "#f8fafc"
-                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
-                                radius: 4
-                                antialiasing: true
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
-                                }
-                            }
-
-                            onTextChanged: dataModel.setProperty(originalIndex, "def_value", text)
-                        }
-
-                        TextField {
-                            text: itemData.ad
-                            Layout.preferredWidth: 170
-                            Layout.preferredHeight: 32
-                            visible: rootwindow.currentType === "Дискретные входы"
-
-                            color: "#1e293b"
-                            font.pixelSize: 13
-                            font.weight: Font.Normal
-
-                            leftPadding: 8
-                            rightPadding: 8
-                            topPadding: 6
-                            bottomPadding: 6
-
-                            selectByMouse: true
-                            verticalAlignment: TextInput.AlignVCenter
-
-                            background: Rectangle {
-                                color: enabled ? "#ffffff" : "#f8fafc"
-                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
-                                radius: 4
-                                antialiasing: true
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
-                                }
-                            }
-
-                            onTextChanged: dataModel.setProperty(originalIndex, "ad", text)
-                        }
-                        RowLayout {
-                            id: cellSetpoint
-                            spacing: 6
-                            visible: rootwindow.currentType === "Уставка"
-
-                            CheckBox {
-                                id: spCheck
-                                text: "Значение"
-
-                                // Запретить создание команды для команды
-                                enabled: !isSetpointCommand(itemData)
-
-                                Component.onCompleted: {
-                                    var v = !!(itemData && itemData[val_sp.flag]);
-                                    spCheck.checked = v;
-                                    val.visible = v;
-                                    var buf = (itemData && itemData[val_sp.buf]) ? itemData[val_sp.buf] : "";
-                                    if (val.text !== buf) val.text = buf;
-                                }
-
-                                onToggled: {
-                                    if (originalIndex < 0 || isSetpointCommand(itemData)) return;
-
-                                    dataModel.setProperty(originalIndex, val_sp.flag, checked);
-
-                                    if (checked) {
-                                        var has = findValSetpointIndex(originalIndex);
-                                        if (has < 0) createValSetpoint(originalIndex);
-                                        syncValSetpointDefValue(originalIndex);
-                                    } else {
-                                        removeValSetpoint(originalIndex);
+                                        val.opacity = spCheck.checked;
                                     }
-
-                                    val.visible = checked;
                                 }
                             }
-
-                            TextField {id: val
-                                Layout.preferredWidth: 70
+                            Button {
+                                text: "Удалить"
+                                Layout.preferredWidth: 100
                                 Layout.preferredHeight: 32
-                                placeholderText: "значение"
+                                Layout.minimumWidth: 100
 
-                                // Запретить редактирование для команд
-                                enabled: !isSetpointCommand(itemData)
-
-                                Component.onCompleted: {
-                                    var v = !!(itemData && itemData[val_sp.flag]);
-                                    val.visible = v;
-                                    var buf = (itemData && itemData[val_sp.buf]) ? itemData[val_sp.buf] : "";
-                                    if (val.text !== buf) val.text = buf;
-                                }
-
-                                onTextChanged: {
-                                    if (originalIndex < 0 || isSetpointCommand(itemData)) return;
-                                    dataModel.setProperty(originalIndex, val_sp.buf, text);
-                                    syncValSetpointDefValue(originalIndex);
-                                }
+                                font.pixelSize: 13
+                                font.weight: Font.Medium
 
                                 background: Rectangle {
-                                    color: enabled ? "#ffffff" : "#f8fafc"
-                                    border.color: parent.activeFocus ? "#3b82f6"
-                                        : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                    border.width: 1
+                                    color: parent.pressed ? "#b91c1c" : (parent.hovered ? "#dc2626" : "#ef4444")
                                     radius: 4
                                     antialiasing: true
-                                    Behavior on border.color { ColorAnimation { duration: 150 } }
+
+                                    Behavior on color {
+                                        ColorAnimation { duration: 150 }
+                                    }
                                 }
-                            }
 
-                            Connections {
-                                target: dataModel
-                                function onDataChanged() {
-                                    if (isSetpointCommand(itemData)) return;
-
-                                    var v = !!(itemData && itemData[val_sp.flag]);
-                                    if (spCheck.checked !== v) spCheck.checked = v;
-
-                                    var buf = (itemData && itemData[val_sp.buf]) ? itemData[val_sp.buf] : "";
-                                    if (val.text !== buf) val.text = buf;
-
-                                    val.visible = spCheck.checked;
+                                contentItem: Text {
+                                    text: parent.text
+                                    font: parent.font
+                                    color: "#ffffff"
+                                    verticalAlignment: Text.AlignVCenter
                                 }
+
+                                onClicked: dataModel.remove(originalIndex)
                             }
-                        }
-                        Button {
-                            text: "Удалить"
-                            Layout.preferredWidth: 160
-                            Layout.preferredHeight: 32
-
-                            font.pixelSize: 13
-                            font.weight: Font.Medium
-
-                            background: Rectangle {
-                                color: parent.pressed ? "#b91c1c" : (parent.hovered ? "#dc2626" : "#ef4444")
-                                radius: 4
-                                antialiasing: true
-
-                                Behavior on color {
-                                    ColorAnimation { duration: 150 }
-                                }
-                            }
-
-                            contentItem: Text {
-                                text: parent.text
-                                font: parent.font
-                                color: "#ffffff"
-                                verticalAlignment: Text.AlignVCenter
-                            }
-
-                            onClicked: dataModel.remove(originalIndex)
                         }
                     }
                 }
-            }
 
+            }
             Button {
                 Layout.alignment: Qt.AlignCenter
                 text: "Добавить"
@@ -4064,6 +4554,8 @@ ApplicationWindow {
         id: modbusPageComponent
 
         ColumnLayout {
+            spacing: 0
+
             ScrollView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -4082,6 +4574,7 @@ ApplicationWindow {
                     cacheBuffer: 200
                     model: getFilteredModel(rootwindow.currentType, false)
                     spacing: 0
+                    interactive: true
                     clip: true
                     headerPositioning: ListView.OverlayHeader
 
@@ -4133,38 +4626,44 @@ ApplicationWindow {
                                 color: "#1e293b"
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter                        }
+                                verticalAlignment: Text.AlignVCenter
+                            }
                             Label {
                                 text: "Тип данных"
                                 Layout.preferredWidth: 100
                                 color: "#1e293b"
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter                        }
+                                verticalAlignment: Text.AlignVCenter
+                            }
                             Label {
                                 text: "Адрес"
                                 Layout.preferredWidth: 100
                                 color: "#1e293b"
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter                        }
+                                verticalAlignment: Text.AlignVCenter
+                            }
                             Label {
                                 text: "Блок"
-                                Layout.preferredWidth: 100
+                                Layout.preferredWidth: 150
                                 color: "#1e293b"
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter                        }
+                                verticalAlignment: Text.AlignVCenter
+                            }
                             Item {
                                 Layout.preferredWidth: 160
                             }
                         }
                     }
 
-                    delegate: RowLayout {
-                        z: 1
-                        required property int index     // индекс в отфильтрованной модели
-                        required property var model     // данные из фильтра (не основной dataModel)
+                    delegate: Rectangle {
+                        width: listView.width
+                        height: 34
+                        color: index % 2 === 0 ? "#ffffff" : "#f8fafc"
+                        required property int index
+                        required property var model
 
                         // Мост к основному dataModel:
                         property int originalIndex: {
@@ -4185,156 +4684,182 @@ ApplicationWindow {
                                     return -1
                             }
                         }
-                        // Удобный объект строки:
+
                         property var itemData: (originalIndex >= 0 ? dataModel.get(originalIndex) : ({}))
 
-                        width: listView.width
-                        spacing: 0
-                        height: 34
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 12
+                            anchors.rightMargin: 12
+                            spacing: 0
+                            z: 1
 
-                        // === Общие колонки ===
-                        Text {
-                            text: itemData.ioIndex
-                            Layout.preferredWidth: 50
-                            color: "#1e293b"
-                            font.pixelSize: 13
-                            font.weight: Font.DemiBold
-                            verticalAlignment: Text.AlignVCenter
-                            elide: Text.ElideRight
-                        }
-                        Text {
-                            text: itemData.name
-                            Layout.preferredWidth: 200
-                            color: "#1e293b"
-                            font.pixelSize: 13
-                            font.weight: Font.DemiBold
-                            verticalAlignment: Text.AlignVCenter
-                            elide: Text.ElideRight
-                        }
-                        Text {
-                            text: itemData.type
-                            Layout.preferredWidth: 100
-                            color: "#1e293b"
-                            font.pixelSize: 13
-                            font.weight: Font.DemiBold
-                            verticalAlignment: Text.AlignVCenter
-                            elide: Text.ElideRight
-                        }
-
-                        // === Modbus: Адрес ===
-                        TextField {
-                            id: addressField
-                            Layout.preferredWidth: 100
-                            Layout.preferredHeight: 30
-                            horizontalAlignment: Text.AlignHCenter
-
-
-                            text: {
-                                if (originalIndex >= 0) {
-                                    var addr = itemData.address
-                                    return (addr !== undefined && addr !== null) ? String(addr) : ""
-                                }
-                                return ""
+                            // IO колонка
+                            Text {
+                                text: itemData.ioIndex || ""
+                                Layout.preferredWidth: 50
+                                Layout.alignment: Qt.AlignVCenter
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
                             }
 
-                            color: "#1e293b"
-                            font.pixelSize: 13
-                            font.weight: Font.Normal
+                            // Наименование
+                            Text {
+                                text: itemData.name || ""
+                                Layout.preferredWidth: 200
+                                Layout.alignment: Qt.AlignVCenter
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
 
-                            leftPadding: 8
-                            rightPadding: 8
-                            topPadding: 6
-                            bottomPadding: 6
-
-                            selectByMouse: true
-                            verticalAlignment: TextInput.AlignVCenter
-
-                            // Only allow numbers
-                            validator: IntValidator { bottom: 1; top: 65535 }
-
-                            background: Rectangle {
-                                color: enabled ? "#ffffff" : "#f8fafc"
-                                border.color: parent.activeFocus ? "#3b82f6" :
-                                    (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
-                                radius: 4
-                                antialiasing: true
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    ToolTip.visible: containsMouse && parent.text.length > 0
+                                    ToolTip.text: itemData.name || ""
                                 }
                             }
 
-                            onTextChanged: {
-                                if (originalIndex >= 0) {
-                                    dataModel.setProperty(originalIndex, "address", text)
-                                }
+                            // Тип данных
+                            Text {
+                                text: itemData.type || ""
+                                Layout.preferredWidth: 100
+                                Layout.alignment: Qt.AlignVCenter
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
                             }
 
-                            onEditingFinished: {
-                                if (originalIndex < 0) return
+                            // Адрес
+                            TextField {
+                                id: addressField
+                                Layout.preferredWidth: 100
+                                Layout.preferredHeight: 30
+                                Layout.alignment: Qt.AlignVCenter
 
-                                if (text === "" || text === null) {
-                                    const blk = itemData.blockName || ""
-                                    if (blk) {
-                                        dataModel.setProperty(originalIndex, "address", "")
-                                            Qt.callLater(() => mbAssignOne(blk, originalIndex, 1))
-                                    }
-                                }
-                            }
-
-                            // Force refresh when model changes
-                            Connections {
-                                target: dataModel
-                                function onDataChanged() {
+                                text: {
                                     if (originalIndex >= 0) {
                                         var addr = itemData.address
-                                        addressField.text = (addr !== undefined && addr !== null) ? String(addr) : ""
+                                        return (addr !== undefined && addr !== null) ? String(addr) : ""
+                                    }
+                                    return ""
+                                }
+
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.Normal
+
+                                leftPadding: 8
+                                rightPadding: 8
+                                topPadding: 6
+                                bottomPadding: 6
+
+                                selectByMouse: true
+                                verticalAlignment: TextInput.AlignVCenter
+                                horizontalAlignment: Text.AlignHCenter
+
+                                // Only allow numbers
+                                validator: IntValidator { bottom: 1; top: 65535 }
+
+                                background: Rectangle {
+                                    color: enabled ? "#ffffff" : "#f8fafc"
+                                    border.color: parent.activeFocus ? "#3b82f6" :
+                                        (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    border.width: 1
+                                    radius: 4
+                                    antialiasing: true
+
+                                    Behavior on border.color {
+                                        ColorAnimation { duration: 150 }
+                                    }
+                                }
+
+                                onTextChanged: {
+                                    if (originalIndex >= 0) {
+                                        dataModel.setProperty(originalIndex, "address", text)
+                                    }
+                                }
+
+                                onEditingFinished: {
+                                    if (originalIndex < 0) return
+
+                                    if (text === "" || text === null) {
+                                        const blk = itemData.blockName || ""
+                                        if (blk) {
+                                            dataModel.setProperty(originalIndex, "address", "")
+                                                Qt.callLater(() => mbAssignOne(blk, originalIndex, 1))
+                                        }
+                                    }
+                                }
+
+                                // Force refresh when model changes
+                                Connections {
+                                    target: dataModel
+                                    function onDataChanged() {
+                                        if (originalIndex >= 0) {
+                                            var addr = itemData.address
+                                            addressField.text = (addr !== undefined && addr !== null) ? String(addr) : ""
+                                        }
                                     }
                                 }
                             }
-                        }
 
-                        // === Modbus: Блок ===
-                        ComboBox {
-                            Layout.preferredWidth: 150
-                            Layout.preferredHeight: 30
-                            model: ["Coil", "Discrete input", "Input register", "Holding register"]
-                            currentIndex: {
-                                const bn = itemData.blockName || "Coil"
-                                const i = model.indexOf(bn)
-                                return (i >= 0 ? i : 0)
-                            }
-                            onActivated: {
-                                if (originalIndex < 0) return
-                                const newBlock = model[currentIndex]
-                                const oldBlock = itemData.blockName || ""
-                                if (newBlock === oldBlock) return
+                            // Блок
+                            ComboBox {
+                                Layout.preferredWidth: 150
+                                Layout.preferredHeight: 30
+                                Layout.alignment: Qt.AlignVCenter
+                                model: ["Coil", "Discrete input", "Input register", "Holding register"]
+                                font.pixelSize: 13
 
-                                dataModel.setProperty(originalIndex, "blockName", newBlock)
-                                dataModel.setProperty(originalIndex, "address", "")
-                                    Qt.callLater(()=> onModbusBlockChanged(originalIndex, newBlock, oldBlock))
-                            }
-                            background: Rectangle {
-                                color: enabled ? "#ffffff" : "#f8fafc"
-                                border.color: parent.activeFocus ? "#3b82f6" :
-                                    (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
-                                radius: 4
-                                antialiasing: true
+                                currentIndex: {
+                                    const bn = itemData.blockName || "Coil"
+                                    const i = model.indexOf(bn)
+                                    return (i >= 0 ? i : 0)
+                                }
 
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
+                                onActivated: {
+                                    if (originalIndex < 0) return
+                                    const newBlock = model[currentIndex]
+                                    const oldBlock = itemData.blockName || ""
+                                    if (newBlock === oldBlock) return
+
+                                    dataModel.setProperty(originalIndex, "blockName", newBlock)
+                                    dataModel.setProperty(originalIndex, "address", "")
+                                        Qt.callLater(() => onModbusBlockChanged(originalIndex, newBlock, oldBlock))
+                                }
+
+                                background: Rectangle {
+                                    color: enabled ? "#ffffff" : "#f8fafc"
+                                    border.color: parent.activeFocus ? "#3b82f6" :
+                                        (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    border.width: 1
+                                    radius: 4
+                                    antialiasing: true
+
+                                    Behavior on border.color {
+                                        ColorAnimation { duration: 150 }
+                                    }
                                 }
                             }
 
-                        } 
+                            // Пустая колонка в конце
+                            Item {
+                                Layout.preferredWidth: 160
+                            }
+                        }
+                    }
                 }
             }
         }
     }
-    }
-
 
     Component {
         id: mekPageComponent
@@ -4464,7 +4989,7 @@ ApplicationWindow {
                             }
                             Label {
                                 text: "Параметры"
-                                Layout.preferredWidth: 150
+                                Layout.preferredWidth: 100
                                 color: "#1e293b"
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
@@ -4571,7 +5096,7 @@ ApplicationWindow {
                         property var itemData: (originalIndex >= 0 ? dataModel.get(originalIndex) : ({}))
 
                         // Проверка, является ли это командой уставки
-                        property bool isCommand: isSetpointCommand(itemData)
+                        property bool isVal: isSetpointCommand(itemData)
 
                         // Подсветка для выбранных сигналов
                         Rectangle {
@@ -4584,6 +5109,7 @@ ApplicationWindow {
                             z: 0
                         }
 
+                        // ИСПРАВЛЕНИЕ: Обернули все элементы в один RowLayout
                         RowLayout {
                             anchors.fill: parent
                             anchors.leftMargin: 12
@@ -4591,11 +5117,12 @@ ApplicationWindow {
                             spacing: 0
                             z: 1
 
+                            // Чекбокс
                             CheckBox {
                                 Layout.preferredWidth: 30
                                 Layout.alignment: Qt.AlignVCenter
                                 checked: isSignalInCurrentObjectModel(index)
-                                enabled: currentObjectModelId !== "" && !isCommand // Запретить выбор команд
+                                enabled: currentObjectModelId !== "" && !isVal // Запретить выбор команд
 
                                 onClicked: {
                                     if (checked) {
@@ -4612,51 +5139,57 @@ ApplicationWindow {
                                 text: itemData.name
                                 Layout.preferredWidth: 200
                                 Layout.alignment: Qt.AlignVCenter
-                                color: isCommand ? "#6b7280" : "#1e293b" // Серый цвет для команд
+                                color: isVal ? "#6b7280" : "#1e293b" // Серый цвет для команд
                                 font.pixelSize: 13
                                 elide: Text.ElideRight
                             }
 
                             // Параметры
                             ColumnLayout {
+                                Layout.preferredWidth: 100
+                                Layout.alignment: Qt.AlignVCenter
                                 spacing: 3
                                 Repeater {
                                     model: rootwindow.currentType === "Аналоговые входы"
                                         ? ["Значение","Апертура","КТТ","Upper","Lower"]
                                         : rootwindow.currentType === "Уставка"
-                                            ? (itemData.val_setpoint_enabled && !isCommand
+                                            ? (itemData.val_setpoint_enabled && !isVal
                                                 ? ["Команда", "Значение"]
-                                                : ["Значение"])
+                                                : ["Команда"])
                                             : [itemData.codeName]
-                                delegate: Text {
-                                    text: modelData
-                                    color: isCommand ? "#6b7280" : "#475569"
-                                    font.pixelSize: 12
-                                    font.bold: true
-                                    Layout.preferredWidth: 100
-                                    verticalAlignment: Text.AlignVCenter
+                                    delegate: Text {
+                                        text: modelData
+                                        color: isVal ? "#6b7280" : "#475569"
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                        Layout.preferredWidth: 100
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
                                 }
                             }
-                        }
 
-                        // Тип данных
-                        ColumnLayout {
-                            spacing: 4
-                            Repeater {
-                                model: __codesForRow(itemData)
-                                delegate: Text {
-                                    text: __getByRole(modelData, "type")
-                                    elide: Text.ElideRight
-                                    verticalAlignment: Text.AlignVCenter
-                                    color: isCommand ? "#6b7280" : "#1e293b"
-                                    font.pixelSize: 12
-                                    Layout.preferredWidth: 100
-                                }
-                            }
-                        }
-
-                        // === КОЛОНКА: Адрес ОИ ("ioa_address") ===
+                            // Тип данных
                             ColumnLayout {
+                                Layout.preferredWidth: 100
+                                Layout.alignment: Qt.AlignVCenter
+                                spacing: 4
+                                Repeater {
+                                    model: __codesForRow(itemData)
+                                    delegate: Text {
+                                        text: __getByRole(modelData, "type")
+                                        elide: Text.ElideRight
+                                        verticalAlignment: Text.AlignVCenter
+                                        color: isVal ? "#6b7280" : "#1e293b"
+                                        font.pixelSize: 12
+                                        Layout.preferredWidth: 100
+                                    }
+                                }
+                            }
+
+                            // === КОЛОНКА: Адрес ОИ ("ioa_address") ===
+                            ColumnLayout {
+                                Layout.preferredWidth: 100
+                                Layout.alignment: Qt.AlignVCenter
                                 spacing: 4
                                 Repeater {
                                     model: __codesForRow(itemData)
@@ -4672,7 +5205,7 @@ ApplicationWindow {
                                             }
                                         }
                                         onEditingFinished: {
-                                            if (!isCommand) {
+                                            if (!isVal) {
                                                 if (index === 0) {
                                                     // Записываем в основной элемент
                                                     dataModel.setProperty(originalIndex, "ioa_address", text)
@@ -4685,7 +5218,7 @@ ApplicationWindow {
                                         selectByMouse: true
                                         Layout.preferredWidth: 100
                                         Layout.preferredHeight: 32
-                                        color: isCommand ? "#6b7280" : "#1e293b"
+                                        color: isVal ? "#6b7280" : "#1e293b"
                                         font.pixelSize: 13
                                         background: Rectangle {
                                             color: enabled ? "#ffffff" : "#f8fafc"
@@ -4700,151 +5233,65 @@ ApplicationWindow {
                                 }
                             }
 
-                        // === КОЛОНКА: Адрес АСДУ ("asdu_address") ===
-                        ColumnLayout {
-                            spacing: 4
-                            Repeater {
-                                model: __codesForRow(itemData)
-                                delegate: TextField {
-                                    text: __getByRole(modelData, "asdu_address") || ""
-                                    onEditingFinished: {
-                                        if (!isCommand) {
-                                            __setByRole(modelData, "asdu_address", text)
-                                        }
-                                    }
-                                    selectByMouse: true
-                                    Layout.preferredWidth: 100
-                                    Layout.preferredHeight: 32
-                                    color: isCommand ? "#6b7280" : "#1e293b"
-                                    font.pixelSize: 13
-                                    background: Rectangle {
-                                        color: enabled ? "#ffffff" : "#f8fafc"
-                                        border.color: parent.activeFocus ? "#3b82f6"
-                                            : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                        border.width: 1
-                                        radius: 4
-                                        antialiasing: true
-                                        Behavior on border.color { ColorAnimation { duration: 150 } }
-                                    }
-                                }
-                            }
-                        }
-
-                        // === КОЛОНКА: Номер буфера ("second_class_num") ===
-                        ColumnLayout {
-                            spacing: 4
-                            Repeater {
-                                model: __codesForRow(itemData)
-                                delegate: ComboBox {
-                                    property var choices: [
-                                        "NOT_USE","DEFAULT", "1", "2", "3", "4", "5", "6", "7", "8"
-                                    ]
-                                    model: choices
-                                    Layout.preferredWidth: 130
-                                    Layout.preferredHeight: 32
-                                    font.pixelSize: 13
-                                    property bool _init: false
-
-                                    Component.onCompleted: {
-                                        const wanted = __getByRole(modelData, "second_class_num") || "DEFAULT"
-                                        const idx = choices.indexOf(wanted)
-                                        currentIndex = idx >= 0 ? idx : choices.indexOf("DEFAULT")
-                                        _init = true
-                                    }
-
-                                    onCurrentIndexChanged: {
-                                        if (_init && currentIndex >= 0 && !isCommand) {
-                                            __setByRole(modelData, "second_class_num", choices[currentIndex])
-                                        }
-                                    }
-
-                                    background: Rectangle {
-                                        color: enabled ? "#ffffff" : "#f8fafc"
-                                        border.color: parent.activeFocus ? "#3b82f6"
-                                            : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                        border.width: 1
-                                        radius: 4
-                                        antialiasing: true
-                                        Behavior on border.color { ColorAnimation { duration: 150 } }
-                                    }
-                                }
-                            }
-                        }
-
-
-
-                        // === КОЛОНКА: Спорадика ("type_spont") ===
-                        ColumnLayout {
-                            spacing: 4
-                            Repeater {
-                                model: __codesForRow(itemData)
-                                delegate: ComboBox {
-                                    property var choices: [
-                                        "NOT_USE", "DEFAULT", "M_SP_NA_1", "M_SP_TA1", "M_DP_NA_1", "M_DP_TA_1",
-                                        "M_BO_NA_1", "M_BO_TA_1", "M_ME_NA_1", "M_ME_TA_1", "M_ME_NB1",
-                                        "M_ME_TB_1", "M_ME_NC_1", "M_ME_TC_1", "M_ME_ND_1", "M_SP_TB_1",
-                                        "M_DP_TB_1", "M_BO_TB_1", "M_ME_TD_1", "M_ME_TF_1"
-                                    ]
-                                    model: choices
-                                    editable: isCommand || index !== 0 // Только для не-команд
-                                    enabled: isCommand || index !== 0
-                                    Layout.preferredWidth: 130
-                                    Layout.preferredHeight: 32
-                                    font.pixelSize: 13
-                                    property bool _init: false
-
-                                    Component.onCompleted: {
-                                        const wanted = __getByRole(modelData, "type_spont") || "DEFAULT"
-                                        const idx = choices.indexOf(wanted)
-                                        currentIndex = idx >= 0 ? idx : choices.indexOf("DEFAULT")
-                                        _init = true
-                                    }
-
-                                    onCurrentIndexChanged: {
-                                        if (_init && currentIndex >= 0 && !isCommand) {
-                                            __setByRole(modelData, "type_spont", choices[currentIndex])
-                                        }
-                                    }
-
-                                    background: Rectangle {
-                                        color: enabled ? "#ffffff" : "#f8fafc"
-                                        border.color: parent.activeFocus ? "#3b82f6"
-                                            : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                        border.width: 1
-                                        radius: 4
-                                        antialiasing: true
-                                        Behavior on border.color { ColorAnimation { duration: 150 } }
-                                    }
-                                }
-                            }
-                        }
+                            // === КОЛОНКА: Адрес АСДУ ("asdu_address") ===
                             ColumnLayout {
+                                Layout.preferredWidth: 100
+                                Layout.alignment: Qt.AlignVCenter
+                                spacing: 4
+                                Repeater {
+                                    model: __codesForRow(itemData)
+                                    delegate: TextField {
+                                        text: __getByRole(modelData, "asdu_address") || ""
+                                        onEditingFinished: {
+                                            if (!isVal) {
+                                                __setByRole(modelData, "asdu_address", text)
+                                            }
+                                        }
+                                        selectByMouse: true
+                                        Layout.preferredWidth: 100
+                                        Layout.preferredHeight: 32
+                                        color: isVal ? "#6b7280" : "#1e293b"
+                                        font.pixelSize: 13
+                                        background: Rectangle {
+                                            color: enabled ? "#ffffff" : "#f8fafc"
+                                            border.color: parent.activeFocus ? "#3b82f6"
+                                                : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                            border.width: 1
+                                            radius: 4
+                                            antialiasing: true
+                                            Behavior on border.color { ColorAnimation { duration: 150 } }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // === КОЛОНКА: Номер буфера ("second_class_num") ===
+                            ColumnLayout {
+                                Layout.preferredWidth: 130
+                                Layout.alignment: Qt.AlignVCenter
                                 spacing: 4
                                 Repeater {
                                     model: __codesForRow(itemData)
                                     delegate: ComboBox {
                                         property var choices: [
-                                            "NOT_USE", "DEFAULT", "M_SP_NA_1", "M_DP_NA_1", "M_BO_NA_1", "M_ME_NA_1",
-                                            "M_ME_NB_1", "M_ME_NC_1", "M_ME_ND_1"
+                                            "NOT_USE","DEFAULT", "1", "2", "3", "4", "5", "6", "7", "8"
                                         ]
                                         model: choices
-                                        editable: isCommand || index !== 0 // Только для не-команд
-                                        enabled: isCommand || index !== 0
                                         Layout.preferredWidth: 130
                                         Layout.preferredHeight: 32
                                         font.pixelSize: 13
                                         property bool _init: false
 
                                         Component.onCompleted: {
-                                            const wanted = __getByRole(modelData, "type_back") || "DEFAULT"
+                                            const wanted = __getByRole(itemData.codeName, "second_class_num") || "DEFAULT"
                                             const idx = choices.indexOf(wanted)
                                             currentIndex = idx >= 0 ? idx : choices.indexOf("DEFAULT")
                                             _init = true
                                         }
 
                                         onCurrentIndexChanged: {
-                                            if (_init && currentIndex >= 0 && !isCommand) {
-                                                __setByRole(modelData, "type_back", choices[currentIndex])
+                                            if (_init && currentIndex >= 0 && !isVal) {
+                                                __setByRole(modelData, "second_class_num", choices[currentIndex])
                                             }
                                         }
 
@@ -4860,48 +5307,11 @@ ApplicationWindow {
                                     }
                                 }
                             }
+
+                            // === КОЛОНКА: Спорадика ("type_spont") ===
                             ColumnLayout {
-                                spacing: 4
-                                Repeater {
-                                    model: __codesForRow(itemData)
-                                    delegate: ComboBox {
-                                        property var choices: [
-                                            "NOT_USE", "DEFAULT", "M_ME_NA_1", "M_ME_NB_1", "M_ME_NC_1", "M_ME_ND_1"
-                                        ]
-                                        model: choices
-                                        editable: isCommand || index !== 0 // Только для не-команд
-                                        enabled: isCommand || index !== 0
-                                        Layout.preferredWidth: 130
-                                        Layout.preferredHeight: 32
-                                        font.pixelSize: 13
-                                        property bool _init: false
-
-                                        Component.onCompleted: {
-                                            const wanted = __getByRole(modelData, "type_percyc") || "DEFAULT"
-                                            const idx = choices.indexOf(wanted)
-                                            currentIndex = idx >= 0 ? idx : choices.indexOf("DEFAULT")
-                                            _init = true
-                                        }
-
-                                        onCurrentIndexChanged: {
-                                            if (_init && currentIndex >= 0 && !isCommand) {
-                                                __setByRole(modelData, "type_percyc", choices[currentIndex])
-                                            }
-                                        }
-
-                                        background: Rectangle {
-                                            color: enabled ? "#ffffff" : "#f8fafc"
-                                            border.color: parent.activeFocus ? "#3b82f6"
-                                                : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                            border.width: 1
-                                            radius: 4
-                                            antialiasing: true
-                                            Behavior on border.color { ColorAnimation { duration: 150 } }
-                                        }
-                                    }
-                                }
-                            }
-                            ColumnLayout {
+                                Layout.preferredWidth: 130
+                                Layout.alignment: Qt.AlignVCenter
                                 spacing: 4
                                 Repeater {
                                     model: __codesForRow(itemData)
@@ -4913,23 +5323,39 @@ ApplicationWindow {
                                             "M_DP_TB_1", "M_BO_TB_1", "M_ME_TD_1", "M_ME_TF_1"
                                         ]
                                         model: choices
-                                        editable: isCommand || index !== 0 // Только для не-команд
-                                        enabled: isCommand || index !== 0
+                                        editable: !(rootwindow.currentType === "Уставка" && index === 0)
+                                        enabled:  !(rootwindow.currentType === "Уставка" && index === 0)
                                         Layout.preferredWidth: 130
                                         Layout.preferredHeight: 32
                                         font.pixelSize: 13
                                         property bool _init: false
 
-                                        Component.onCompleted: {
-                                            const wanted = __getByRole(modelData, "type_def") || "DEFAULT"
+                                        function initCombo() {
+                                            if (_init) return
+                                            if (!itemData || !itemData.codeName) return
+
+                                            const wanted = __getByRole(itemData.codeName, "type_spont") || "NOT_USE"
                                             const idx = choices.indexOf(wanted)
-                                            currentIndex = idx >= 0 ? idx : choices.indexOf("DEFAULT")
+
+                                            console.log("INIT type_spont for", itemData.codeName, "=", wanted)
+
+                                            currentIndex = idx >= 0 ? idx : choices.indexOf("NOT_USE")
                                             _init = true
                                         }
 
+                                        Component.onCompleted: Qt.callLater(initCombo)
+
+                                        onModelChanged: Qt.callLater(initCombo)
+                                        onCountChanged: Qt.callLater(initCombo)
+
+                                        Connections {
+                                            target: itemData
+                                            onCodeNameChanged: Qt.callLater(initCombo)
+                                        }
+
                                         onCurrentIndexChanged: {
-                                            if (_init && currentIndex >= 0 && !isCommand) {
-                                                __setByRole(modelData, "type_def", choices[currentIndex])
+                                            if (_init && !isVal) {
+                                                __setByRole(modelData, "type_spont", choices[currentIndex])
                                             }
                                         }
 
@@ -4946,11 +5372,201 @@ ApplicationWindow {
                                 }
                             }
 
+                            // === КОЛОНКА: Фоновый ("type_back") ===
+                            ColumnLayout {
+                                Layout.preferredWidth: 130
+                                Layout.alignment: Qt.AlignVCenter
+                                spacing: 4
+                                Repeater {
+                                    model: __codesForRow(itemData)
+                                    delegate: ComboBox {
+                                        property var choices: [
+                                            "NOT_USE", "DEFAULT", "M_SP_NA_1", "M_DP_NA_1", "M_BO_NA_1", "M_ME_NA_1",
+                                            "M_ME_NB_1", "M_ME_NC_1", "M_ME_ND_1"
+                                        ]
+                                        model: choices
+                                        editable: !(rootwindow.currentType === "Уставка" && index === 0)
+                                        enabled:  !(rootwindow.currentType === "Уставка" && index === 0)
+                                        Layout.preferredWidth: 130
+                                        Layout.preferredHeight: 32
+                                        font.pixelSize: 13
+                                        property bool _init: false
+
+
+                                        function initCombo() {
+                                            if (_init) return
+                                            if (!itemData || !itemData.codeName) return
+
+                                            const wanted = __getByRole(itemData.codeName, "type_back") || "NOT_USE"
+                                            const idx = choices.indexOf(wanted)
+
+                                            console.log("INIT type_spont for", itemData.codeName, "=", wanted)
+
+                                            currentIndex = idx >= 0 ? idx : choices.indexOf("NOT_USE")
+                                            _init = true
+                                        }
+
+                                        Component.onCompleted: Qt.callLater(initCombo)
+
+                                        onModelChanged: Qt.callLater(initCombo)
+                                        onCountChanged: Qt.callLater(initCombo)
+
+                                        Connections {
+                                            target: itemData   // <-- ВАЖНО! НЕ dataModel!
+                                            onCodeNameChanged: Qt.callLater(initCombo)
+                                        }
+
+                                        onCurrentIndexChanged: {
+                                            if (_init && !isVal) {
+                                                __setByRole(modelData, "type_spont", choices[currentIndex])
+                                            }
+                                        }
+
+                                        background: Rectangle {
+                                            color: enabled ? "#ffffff" : "#f8fafc"
+                                            border.color: parent.activeFocus ? "#3b82f6"
+                                                : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                            border.width: 1
+                                            radius: 4
+                                            antialiasing: true
+                                            Behavior on border.color { ColorAnimation { duration: 150 } }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // === КОЛОНКА: Пер/цик ("type_percyc") ===
+                            ColumnLayout {
+                                Layout.preferredWidth: 130
+                                Layout.alignment: Qt.AlignVCenter
+                                spacing: 4
+                                Repeater {
+                                    model: __codesForRow(itemData)
+                                    delegate: ComboBox {
+                                        property var choices: [
+                                            "NOT_USE", "DEFAULT", "M_ME_NA_1", "M_ME_NB_1", "M_ME_NC_1", "M_ME_ND_1"
+                                        ]
+                                        model: choices
+                                        editable: !(rootwindow.currentType === "Уставка" && index === 0)
+                                        enabled:  !(rootwindow.currentType === "Уставка" && index === 0)
+                                        Layout.preferredWidth: 130
+                                        Layout.preferredHeight: 32
+                                        font.pixelSize: 13
+                                        property bool _init: false
+
+                                        function initCombo() {
+                                            if (_init) return
+                                            if (!itemData || !itemData.codeName) return
+
+                                            const wanted = __getByRole(itemData.codeName, "type_percyc") || "NOT_USE"
+                                            const idx = choices.indexOf(wanted)
+
+                                            console.log("INIT type_spont for", itemData.codeName, "=", wanted)
+
+                                            currentIndex = idx >= 0 ? idx : choices.indexOf("NOT_USE")
+                                            _init = true
+                                        }
+
+                                        Component.onCompleted: Qt.callLater(initCombo)
+
+                                        onModelChanged: Qt.callLater(initCombo)
+                                        onCountChanged: Qt.callLater(initCombo)
+
+                                        Connections {
+                                            target: itemData   // <-- ВАЖНО! НЕ dataModel!
+                                            onCodeNameChanged: Qt.callLater(initCombo)
+                                        }
+
+                                        onCurrentIndexChanged: {
+                                            if (_init && !isVal) {
+                                                __setByRole(modelData, "type_spont", choices[currentIndex])
+                                            }
+                                        }
+
+                                        background: Rectangle {
+                                            color: enabled ? "#ffffff" : "#f8fafc"
+                                            border.color: parent.activeFocus ? "#3b82f6"
+                                                : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                            border.width: 1
+                                            radius: 4
+                                            antialiasing: true
+                                            Behavior on border.color { ColorAnimation { duration: 150 } }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // === КОЛОНКА: Общий ("type_def") ===
+                            ColumnLayout {
+                                Layout.preferredWidth: 130
+                                Layout.alignment: Qt.AlignVCenter
+                                spacing: 4
+                                Repeater {
+                                    model: __codesForRow(itemData)
+                                    delegate: ComboBox {
+                                        property var choices: [
+                                            "NOT_USE", "DEFAULT", "M_SP_NA_1", "M_SP_TA1", "M_DP_NA_1", "M_DP_TA_1",
+                                            "M_BO_NA_1", "M_BO_TA_1", "M_ME_NA_1", "M_ME_TA_1", "M_ME_NB1",
+                                            "M_ME_TB_1", "M_ME_NC_1", "M_ME_TC_1", "M_ME_ND_1", "M_SP_TB_1",
+                                            "M_DP_TB_1", "M_BO_TB_1", "M_ME_TD_1", "M_ME_TF_1"
+                                        ]
+                                        model: choices
+                                        editable: !(rootwindow.currentType === "Уставка" && index === 0)
+                                        enabled:  !(rootwindow.currentType === "Уставка" && index === 0)
+                                        Layout.preferredWidth: 130
+                                        Layout.preferredHeight: 32
+                                        font.pixelSize: 13
+                                        property bool _init: false
+
+                                        function initCombo() {
+                                            if (_init) return
+                                            if (!itemData || !itemData.codeName) return
+
+                                            const wanted = __getByRole(itemData.codeName, "type_spont") || "NOT_USE"
+                                            const idx = choices.indexOf(wanted)
+
+                                            currentIndex = idx >= 0 ? idx : choices.indexOf("NOT_USE")
+                                            _init = true
+                                        }
+
+                                        Component.onCompleted: Qt.callLater(initCombo)
+
+                                        onModelChanged: Qt.callLater(initCombo)
+                                        onCountChanged: Qt.callLater(initCombo)
+
+                                        Connections {
+                                            target: itemData
+                                            onCodeNameChanged: Qt.callLater(initCombo)
+                                        }
+
+                                        onCurrentIndexChanged: {
+                                            if (_init && !isVal) {
+                                                __setByRole(modelData, "type_spont", choices[currentIndex])
+                                            }
+                                        }
+
+                                        background: Rectangle {
+                                            color: enabled ? "#ffffff" : "#f8fafc"
+                                            border.color: parent.activeFocus ? "#3b82f6"
+                                                : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                            border.width: 1
+                                            radius: 4
+                                            antialiasing: true
+                                            Behavior on border.color { ColorAnimation { duration: 150 } }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Пустая колонка в конце
+                            Item {
+                                Layout.preferredWidth: 100
+                            }
+                        }
                     }
                 }
             }
         }
-    }
     }
     Dialog {
         id: objectModelSelectorDialog
@@ -5043,6 +5659,8 @@ ApplicationWindow {
         id: mek101PageComponent
         ColumnLayout {
             id: pageRoot1
+            spacing: 0
+
             ScrollView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -5178,10 +5796,13 @@ ApplicationWindow {
                         }
                     }
 
-                    delegate: RowLayout {
-                        z: 1
+                    delegate: Rectangle {
+                        width: listView.width
+                        height: 34
+                        color: index % 2 === 0 ? "#ffffff" : "#f8fafc"
                         required property int index
                         required property var model
+
                         property int originalIndex: {
                             switch (rootwindow.currentType) {
                                 case "Аналоговые входы":
@@ -5200,371 +5821,382 @@ ApplicationWindow {
                                     return -1
                             }
                         }
-                        // Удобный объект строки:
+
                         property var itemData: (originalIndex >= 0 ? dataModel.get(originalIndex) : ({}))
-                        width: listView.width
-                        spacing: 0
-                        height: 34
-                        Text {
-                            text: itemData.ioIndex
-                            Layout.preferredWidth: 50
-                            Layout.preferredHeight: 32
-                            color: "#1e293b"
-                            font.pixelSize: 13
-                            font.weight: Font.Normal
-                            verticalAlignment: Text.AlignVCenter
-                            leftPadding: 8
-                        }
-                        ColumnLayout {
-                            id: paramColumn
-                            spacing: 4
-                            Layout.preferredWidth: 50
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 12
+                            anchors.rightMargin: 12
+                            spacing: 0
+                            z: 1
+
+                            // IO колонка
+                            Text {
+                                text: itemData.ioIndex
+                                Layout.preferredWidth: 50
+                                Layout.alignment: Qt.AlignVCenter
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.Normal
+                                verticalAlignment: Text.AlignVCenter
+                            }
+
+                            // Наименование колонка
                             Text {
                                 text: itemData.name
                                 Layout.preferredWidth: 200
-                                Layout.preferredHeight: 32
+                                Layout.alignment: Qt.AlignVCenter
                                 color: "#1e293b"
                                 font.pixelSize: 13
                                 font.weight: Font.Normal
                                 verticalAlignment: Text.AlignVCenter
                                 elide: Text.ElideRight
-                                leftPadding: 8
 
                                 MouseArea {
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     ToolTip.visible: containsMouse && parent.text.length > 0
-                                    ToolTip.text: dataModel.name || ""
-                                }
-                            }
-                            Text { text: itemData.codeName; Layout.preferredWidth: 100 }
-                            Text { text: itemData.aperture; Layout.preferredWidth: 100 }
-                            Text { text: itemData.ktt; Layout.preferredWidth: 100 }
-                            Text { text: itemData.lower; Layout.preferredWidth: 100 }
-                            Text { text: itemData.upper; Layout.preferredWidth: 100 }
-                        }
-
-                        TextField {
-                            text: itemData.ioa_address
-                            Layout.preferredWidth: 100
-                            Layout.preferredHeight: 32
-
-                            color: "#1e293b"
-                            font.pixelSize: 13
-                            font.weight: Font.Normal
-
-                            leftPadding: 8
-                            rightPadding: 8
-                            topPadding: 6
-                            bottomPadding: 6
-
-                            selectByMouse: true
-                            verticalAlignment: TextInput.AlignVCenter
-
-                            background: Rectangle {
-                                color: enabled ? "#ffffff" : "#f8fafc"
-                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
-                                radius: 4
-                                antialiasing: true
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
+                                    ToolTip.text: itemData.name || ""
                                 }
                             }
 
-                        }
+                            // Адрес ОИ
+                            TextField {
+                                text: itemData.ioa_address || ""
+                                Layout.preferredWidth: 100
+                                Layout.preferredHeight: 32
+                                Layout.alignment: Qt.AlignVCenter
 
-                        TextField {
-                            text: itemData.asdu_address
-                            Layout.preferredWidth: 100
-                            Layout.preferredHeight: 32
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.Normal
 
-                            color: "#1e293b"
-                            font.pixelSize: 13
-                            font.weight: Font.Normal
+                                leftPadding: 8
+                                rightPadding: 8
+                                topPadding: 6
+                                bottomPadding: 6
 
-                            leftPadding: 8
-                            rightPadding: 8
-                            topPadding: 6
-                            bottomPadding: 6
+                                selectByMouse: true
+                                verticalAlignment: TextInput.AlignVCenter
 
-                            selectByMouse: true
-                            verticalAlignment: TextInput.AlignVCenter
-
-                            background: Rectangle {
-                                color: enabled ? "#ffffff" : "#f8fafc"
-                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
-                                radius: 4
-                                antialiasing: true
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
-                                }
-                            }
-
-                            onTextChanged: dataModel.setProperty(originalIndex, "asdu_address", text)
-                        }
-
-                        Switch {
-                            implicitWidth: 44
-                            implicitHeight: 24
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
-
-                            indicator: Rectangle {
-                                anchors.centerIn: parent
-                                width: 44
-                                height: 24
-                                radius: 12
-
-                                color: parent.checked ? "#3b82f6" : "#f8fafc"
-                                border.color: parent.checked ? "#3b82f6" :
-                                    (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
-
-                                Behavior on color {
-                                    ColorAnimation { duration: 150 }
-                                }
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
-                                }
-
-                                Rectangle {
-                                    width: 18
-                                    height: 18
-                                    radius: 9
-
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    x: parent.parent.checked ? parent.width - width - 3 : 3
-
-                                    color: "#ffffff"
-                                    border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                background: Rectangle {
+                                    color: enabled ? "#ffffff" : "#f8fafc"
+                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
                                     border.width: 1
-
-                                    Behavior on x {
-                                        NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
-                                    }
+                                    radius: 4
+                                    antialiasing: true
 
                                     Behavior on border.color {
                                         ColorAnimation { duration: 150 }
                                     }
                                 }
+
+                                onTextChanged: dataModel.setProperty(originalIndex, "ioa_address", text)
                             }
-                            checked: itemData.use_in_spont_101 || false
-                            onCheckedChanged: dataModel.setProperty(originalIndex, "use_in_spont_101", checked)
-                        }
 
-                        Switch {
-                            checked: itemData.use_in_back_101 || false
-                            implicitWidth: 44
-                            implicitHeight: 24
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
+                            // Адрес АСДУ
+                            TextField {
+                                text: itemData.asdu_address || ""
+                                Layout.preferredWidth: 100
+                                Layout.preferredHeight: 32
+                                Layout.alignment: Qt.AlignVCenter
 
-                            indicator: Rectangle {
-                                anchors.centerIn: parent
-                                width: 44
-                                height: 24
-                                radius: 12
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.Normal
 
-                                color: parent.checked ? "#3b82f6" : "#f8fafc"
-                                border.color: parent.checked ? "#3b82f6" :
-                                    (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
+                                leftPadding: 8
+                                rightPadding: 8
+                                topPadding: 6
+                                bottomPadding: 6
 
-                                Behavior on color {
-                                    ColorAnimation { duration: 150 }
-                                }
+                                selectByMouse: true
+                                verticalAlignment: TextInput.AlignVCenter
 
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
-                                }
-
-                                Rectangle {
-                                    width: 18
-                                    height: 18
-                                    radius: 9
-
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    x: parent.parent.checked ? parent.width - width - 3 : 3
-
-                                    color: "#ffffff"
-                                    border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                background: Rectangle {
+                                    color: enabled ? "#ffffff" : "#f8fafc"
+                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
                                     border.width: 1
-
-                                    Behavior on x {
-                                        NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
-                                    }
+                                    radius: 4
+                                    antialiasing: true
 
                                     Behavior on border.color {
                                         ColorAnimation { duration: 150 }
                                     }
                                 }
+
+                                onTextChanged: dataModel.setProperty(originalIndex, "asdu_address", text)
                             }
-                            onCheckedChanged: dataModel.setProperty(originalIndex, "use_in_back_101", checked)
-                        }
 
-                        Switch {
-                            checked: itemData.use_in_percyc_101 || false
-                            implicitWidth: 44
-                            implicitHeight: 24
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
+                            // Исп. в спорадике
+                            Switch {
+                                implicitWidth: 44
+                                implicitHeight: 24
+                                Layout.preferredWidth: 100
+                                Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
+                                checked: itemData.use_in_spont_101 || false
 
-                            indicator: Rectangle {
-                                anchors.centerIn: parent
-                                width: 44
-                                height: 24
-                                radius: 12
+                                indicator: Rectangle {
+                                    anchors.centerIn: parent
+                                    width: 44
+                                    height: 24
+                                    radius: 12
 
-                                color: parent.checked ? "#3b82f6" : "#f8fafc"
-                                border.color: parent.checked ? "#3b82f6" :
-                                    (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
-
-                                Behavior on color {
-                                    ColorAnimation { duration: 150 }
-                                }
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
-                                }
-
-                                Rectangle {
-                                    width: 18
-                                    height: 18
-                                    radius: 9
-
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    x: parent.parent.checked ? parent.width - width - 3 : 3
-
-                                    color: "#ffffff"
-                                    border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                    color: parent.checked ? "#3b82f6" : "#f8fafc"
+                                    border.color: parent.checked ? "#3b82f6" :
+                                        (parent.hovered ? "#94a3b8" : "#e2e8f0")
                                     border.width: 1
 
-                                    Behavior on x {
-                                        NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+                                    Behavior on color {
+                                        ColorAnimation { duration: 150 }
                                     }
 
                                     Behavior on border.color {
                                         ColorAnimation { duration: 150 }
                                     }
+
+                                    Rectangle {
+                                        width: 18
+                                        height: 18
+                                        radius: 9
+
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        x: parent.parent.checked ? parent.width - width - 3 : 3
+
+                                        color: "#ffffff"
+                                        border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                        border.width: 1
+
+                                        Behavior on x {
+                                            NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+                                        }
+
+                                        Behavior on border.color {
+                                            ColorAnimation { duration: 150 }
+                                        }
+                                    }
                                 }
+                                onCheckedChanged: dataModel.setProperty(originalIndex, "use_in_spont_101", checked)
                             }
-                            onCheckedChanged: dataModel.setProperty(originalIndex, "use_in_percyc_101", checked)
-                        }
 
-                        Switch {
-                            checked: itemData.allow_address_101 || false
-                            implicitWidth: 44
-                            implicitHeight: 24
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
+                            // Исп. в цикл/период
+                            Switch {
+                                checked: itemData.use_in_back_101 || false
+                                implicitWidth: 44
+                                implicitHeight: 24
+                                Layout.preferredWidth: 100
+                                Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
 
-                            indicator: Rectangle {
-                                anchors.centerIn: parent
-                                width: 44
-                                height: 24
-                                radius: 12
+                                indicator: Rectangle {
+                                    anchors.centerIn: parent
+                                    width: 44
+                                    height: 24
+                                    radius: 12
 
-                                color: parent.checked ? "#3b82f6" : "#f8fafc"
-                                border.color: parent.checked ? "#3b82f6" :
-                                    (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
-
-                                Behavior on color {
-                                    ColorAnimation { duration: 150 }
-                                }
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
-                                }
-
-                                Rectangle {
-                                    width: 18
-                                    height: 18
-                                    radius: 9
-
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    x: parent.parent.checked ? parent.width - width - 3 : 3
-
-                                    color: "#ffffff"
-                                    border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                    color: parent.checked ? "#3b82f6" : "#f8fafc"
+                                    border.color: parent.checked ? "#3b82f6" :
+                                        (parent.hovered ? "#94a3b8" : "#e2e8f0")
                                     border.width: 1
 
-                                    Behavior on x {
-                                        NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+                                    Behavior on color {
+                                        ColorAnimation { duration: 150 }
                                     }
 
                                     Behavior on border.color {
                                         ColorAnimation { duration: 150 }
                                     }
+
+                                    Rectangle {
+                                        width: 18
+                                        height: 18
+                                        radius: 9
+
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        x: parent.parent.checked ? parent.width - width - 3 : 3
+
+                                        color: "#ffffff"
+                                        border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                        border.width: 1
+
+                                        Behavior on x {
+                                            NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+                                        }
+
+                                        Behavior on border.color {
+                                            ColorAnimation { duration: 150 }
+                                        }
+                                    }
+                                }
+                                onCheckedChanged: dataModel.setProperty(originalIndex, "use_in_back_101", checked)
+                            }
+
+                            // Исп. в фон. сканир
+                            Switch {
+                                checked: itemData.use_in_percyc_101 || false
+                                implicitWidth: 44
+                                implicitHeight: 24
+                                Layout.preferredWidth: 100
+                                Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
+
+                                indicator: Rectangle {
+                                    anchors.centerIn: parent
+                                    width: 44
+                                    height: 24
+                                    radius: 12
+
+                                    color: parent.checked ? "#3b82f6" : "#f8fafc"
+                                    border.color: parent.checked ? "#3b82f6" :
+                                        (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    border.width: 1
+
+                                    Behavior on color {
+                                        ColorAnimation { duration: 150 }
+                                    }
+
+                                    Behavior on border.color {
+                                        ColorAnimation { duration: 150 }
+                                    }
+
+                                    Rectangle {
+                                        width: 18
+                                        height: 18
+                                        radius: 9
+
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        x: parent.parent.checked ? parent.width - width - 3 : 3
+
+                                        color: "#ffffff"
+                                        border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                        border.width: 1
+
+                                        Behavior on x {
+                                            NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+                                        }
+
+                                        Behavior on border.color {
+                                            ColorAnimation { duration: 150 }
+                                        }
+                                    }
+                                }
+                                onCheckedChanged: dataModel.setProperty(originalIndex, "use_in_percyc_101", checked)
+                            }
+
+                            // Разрешить адрес
+                            Switch {
+                                checked: itemData.allow_address_101 || false
+                                implicitWidth: 44
+                                implicitHeight: 24
+                                Layout.preferredWidth: 150
+                                Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
+
+                                indicator: Rectangle {
+                                    anchors.centerIn: parent
+                                    width: 44
+                                    height: 24
+                                    radius: 12
+
+                                    color: parent.checked ? "#3b82f6" : "#f8fafc"
+                                    border.color: parent.checked ? "#3b82f6" :
+                                        (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    border.width: 1
+
+                                    Behavior on color {
+                                        ColorAnimation { duration: 150 }
+                                    }
+
+                                    Behavior on border.color {
+                                        ColorAnimation { duration: 150 }
+                                    }
+
+                                    Rectangle {
+                                        width: 18
+                                        height: 18
+                                        radius: 9
+
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        x: parent.parent.checked ? parent.width - width - 3 : 3
+
+                                        color: "#ffffff"
+                                        border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                        border.width: 1
+
+                                        Behavior on x {
+                                            NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+                                        }
+
+                                        Behavior on border.color {
+                                            ColorAnimation { duration: 150 }
+                                        }
+                                    }
+                                }
+                                onCheckedChanged: dataModel.setProperty(originalIndex, "allow_address_101", checked)
+                            }
+
+                            // Группа опроса
+                            ComboBox {
+                                id: surveyGroupCombo101
+                                model: ["GENERAL SURVEY", "GROUP 1", "GROUP 2", "GROUP 3", "GROUP 4",
+                                    "GROUP 5", "GROUP 6", "GROUP 7", "GROUP 8"]
+                                Layout.preferredWidth: 150
+                                Layout.preferredHeight: 32
+                                Layout.alignment: Qt.AlignVCenter
+                                font.pixelSize: 13
+
+                                background: Rectangle {
+                                    color: enabled ? "#ffffff" : "#f8fafc"
+                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    border.width: 1
+                                    radius: 4
+                                    antialiasing: true
+
+                                    Behavior on border.color {
+                                        ColorAnimation { duration: 150 }
+                                    }
+                                }
+
+                                property string _currentValue: itemData.survey_group_101 || ""
+                                property bool _initialized: false
+
+                                Component.onCompleted: {
+                                    if (_currentValue) {
+                                        var idx = model.indexOf(_currentValue);
+                                        currentIndex = idx >= 0 ? idx : 0;
+                                    } else {
+                                        currentIndex = 0;
+                                    }
+                                    _initialized = true;
+                                }
+
+                                on_CurrentValueChanged: {
+                                    if (_initialized && _currentValue) {
+                                        var idx = model.indexOf(_currentValue);
+                                        currentIndex = idx >= 0 ? idx : 0;
+                                    }
+                                }
+
+                                onCurrentIndexChanged: {
+                                    if (_initialized && currentIndex >= 0) {
+                                        dataModel.setProperty(originalIndex, "survey_group_101", model[currentIndex]);
+                                    }
                                 }
                             }
-                            onCheckedChanged: dataModel.setProperty(originalIndex, "allow_address_101", checked)
+
+                            // Пустая колонка в конце
+                            Item {
+                                Layout.preferredWidth: 120
+                            }
                         }
-
-                        ComboBox {
-                            id: surveyGroupCombo101
-                            model: ["GENERAL SURVEY", "GROUP 1", "GROUP 2", "GROUP 3", "GROUP 4",
-                                "GROUP 5", "GROUP 6", "GROUP 7", "GROUP 8"]
-                            Layout.preferredWidth: 150
-                            Layout.preferredHeight: 32
-                            font.pixelSize: 13
-
-                            background: Rectangle {
-                                color: enabled ? "#ffffff" : "#f8fafc"
-                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
-                                radius: 4
-                                antialiasing: true
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
-                                }
-                            }
-
-                            property string _currentValue: itemData.survey_group_101 || ""
-                            property bool _initialized: false
-
-                            Component.onCompleted: {
-                                if (_currentValue) {
-                                    var idx = itemData.indexOf(_currentValue);
-                                    currentIndex = idx >= 0 ? idx : 0;
-                                } else {
-                                    currentIndex = 0;
-                                }
-                                _initialized = true;
-                            }
-
-                            on_CurrentValueChanged: {
-                                if (_initialized && _currentValue) {
-                                    var idx = itemData.indexOf(_currentValue);
-                                    currentIndex = idx >= 0 ? idx : 0;
-                                }
-                            }
-
-                            onCurrentIndexChanged: {
-                                if (_initialized && currentIndex >= 0) {
-                                    dataModel.setProperty(originalIndex, "survey_group_101", model[currentIndex]);
-                                }
-                            }
-                        }
-
                     }
                 }
             }
         }
     }
-
     Component {
         id: mek104PageComponent
         ColumnLayout {
             id: pageRoot
-            signal addClicked
+            spacing: 0
 
             ScrollView {
                 Layout.fillWidth: true
@@ -5587,6 +6219,7 @@ ApplicationWindow {
                     interactive: true
                     clip: true
                     headerPositioning: ListView.OverlayHeader
+
                     header: Rectangle {
                         z: 2
                         width: listView.width
@@ -5700,10 +6333,13 @@ ApplicationWindow {
                         }
                     }
 
-                    delegate: RowLayout {
-                        z: 1
+                    delegate: Rectangle {
+                        width: listView.width
+                        height: 34
+                        color: index % 2 === 0 ? "#ffffff" : "#f8fafc"
                         required property int index
                         required property var model
+
                         property int originalIndex: {
                             switch (rootwindow.currentType) {
                                 case "Аналоговые входы":
@@ -5722,350 +6358,372 @@ ApplicationWindow {
                                     return -1
                             }
                         }
-                        // Удобный объект строки:
+
                         property var itemData: (originalIndex >= 0 ? dataModel.get(originalIndex) : ({}))
-                        width: listView.width
-                        spacing: 0
-                        height: 34
-                        Text {
-                            text: itemData.ioIndex
-                            Layout.preferredWidth: 50
-                            Layout.preferredHeight: 32
-                            color: "#1e293b"
-                            font.pixelSize: 13
-                            font.weight: Font.Normal
-                            verticalAlignment: Text.AlignVCenter
-                            leftPadding: 8
-                        }
-                        Text {
-                            text: itemData.name
-                            Layout.preferredWidth: 200
-                            Layout.preferredHeight: 32
-                            color: "#1e293b"
-                            font.pixelSize: 13
-                            font.weight: Font.Normal
-                            verticalAlignment: Text.AlignVCenter
-                            elide: Text.ElideRight
-                            leftPadding: 8
 
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                ToolTip.visible: containsMouse && parent.text.length > 0
-                                ToolTip.text: dataModel.name || ""
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 12
+                            anchors.rightMargin: 12
+                            spacing: 0
+                            z: 1
+
+                            // IO колонка
+                            Text {
+                                text: itemData.ioIndex
+                                Layout.preferredWidth: 50
+                                Layout.alignment: Qt.AlignVCenter
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.Normal
+                                verticalAlignment: Text.AlignVCenter
                             }
-                        }
 
-                        TextField {
-                            text: itemData.ioa_address
-                            Layout.preferredWidth: 100
-                            Layout.preferredHeight: 32
+                            // Наименование колонка
+                            Text {
+                                text: itemData.name
+                                Layout.preferredWidth: 200
+                                Layout.alignment: Qt.AlignVCenter
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.Normal
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
 
-                            color: "#1e293b"
-                            font.pixelSize: 13
-                            font.weight: Font.Normal
-
-                            leftPadding: 8
-                            rightPadding: 8
-                            topPadding: 6
-                            bottomPadding: 6
-
-                            selectByMouse: true
-                            verticalAlignment: TextInput.AlignVCenter
-
-                            background: Rectangle {
-                                color: enabled ? "#ffffff" : "#f8fafc"
-                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
-                                radius: 4
-                                antialiasing: true
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    ToolTip.visible: containsMouse && parent.text.length > 0
+                                    ToolTip.text: itemData.name || ""
                                 }
                             }
 
-                        }
+                            // Адрес ОИ
+                            TextField {
+                                text: itemData.ioa_address || ""
+                                Layout.preferredWidth: 100
+                                Layout.preferredHeight: 32
+                                Layout.alignment: Qt.AlignVCenter
 
-                        TextField {
-                            text: itemData.asdu_address
-                            Layout.preferredWidth: 100
-                            Layout.preferredHeight: 32
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.Normal
 
-                            color: "#1e293b"
-                            font.pixelSize: 13
-                            font.weight: Font.Normal
+                                leftPadding: 8
+                                rightPadding: 8
+                                topPadding: 6
+                                bottomPadding: 6
 
-                            leftPadding: 8
-                            rightPadding: 8
-                            topPadding: 6
-                            bottomPadding: 6
+                                selectByMouse: true
+                                verticalAlignment: TextInput.AlignVCenter
 
-                            selectByMouse: true
-                            verticalAlignment: TextInput.AlignVCenter
-
-                            background: Rectangle {
-                                color: enabled ? "#ffffff" : "#f8fafc"
-                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
-                                radius: 4
-                                antialiasing: true
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
-                                }
-                            }
-
-                            onTextChanged: dataModel.setProperty(originalIndex, "asdu_address", text)
-                        }
-
-                        Switch {
-                            implicitWidth: 44
-                            implicitHeight: 24
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
-
-                            indicator: Rectangle {
-                                anchors.centerIn: parent
-                                width: 44
-                                height: 24
-                                radius: 12
-
-                                color: parent.checked ? "#3b82f6" : "#f8fafc"
-                                border.color: parent.checked ? "#3b82f6" :
-                                    (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
-
-                                Behavior on color {
-                                    ColorAnimation { duration: 150 }
-                                }
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
-                                }
-
-                                Rectangle {
-                                    width: 18
-                                    height: 18
-                                    radius: 9
-
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    x: parent.parent.checked ? parent.width - width - 3 : 3
-
-                                    color: "#ffffff"
-                                    border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                background: Rectangle {
+                                    color: enabled ? "#ffffff" : "#f8fafc"
+                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
                                     border.width: 1
-
-                                    Behavior on x {
-                                        NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
-                                    }
+                                    radius: 4
+                                    antialiasing: true
 
                                     Behavior on border.color {
                                         ColorAnimation { duration: 150 }
                                     }
                                 }
+
+                                onTextChanged: dataModel.setProperty(originalIndex, "ioa_address", text)
                             }
-                            checked: itemData.use_in_spont_104 || false
-                            onCheckedChanged: dataModel.setProperty(originalIndex, "use_in_spont_104", checked)
-                        }
 
-                        Switch {
-                            checked: itemData.use_in_back_104 || false
-                            implicitWidth: 44
-                            implicitHeight: 24
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
+                            // Адрес АСДУ
+                            TextField {
+                                text: itemData.asdu_address || ""
+                                Layout.preferredWidth: 100
+                                Layout.preferredHeight: 32
+                                Layout.alignment: Qt.AlignVCenter
 
-                            indicator: Rectangle {
-                                anchors.centerIn: parent
-                                width: 44
-                                height: 24
-                                radius: 12
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.Normal
 
-                                color: parent.checked ? "#3b82f6" : "#f8fafc"
-                                border.color: parent.checked ? "#3b82f6" :
-                                    (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
+                                leftPadding: 8
+                                rightPadding: 8
+                                topPadding: 6
+                                bottomPadding: 6
 
-                                Behavior on color {
-                                    ColorAnimation { duration: 150 }
-                                }
+                                selectByMouse: true
+                                verticalAlignment: TextInput.AlignVCenter
 
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
-                                }
-
-                                Rectangle {
-                                    width: 18
-                                    height: 18
-                                    radius: 9
-
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    x: parent.parent.checked ? parent.width - width - 3 : 3
-
-                                    color: "#ffffff"
-                                    border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                background: Rectangle {
+                                    color: enabled ? "#ffffff" : "#f8fafc"
+                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
                                     border.width: 1
-
-                                    Behavior on x {
-                                        NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
-                                    }
+                                    radius: 4
+                                    antialiasing: true
 
                                     Behavior on border.color {
                                         ColorAnimation { duration: 150 }
                                     }
                                 }
+
+                                onTextChanged: dataModel.setProperty(originalIndex, "asdu_address", text)
                             }
-                            onCheckedChanged: dataModel.setProperty(originalIndex, "use_in_back_104", checked)
-                        }
 
-                        Switch {
-                            checked: itemData.use_in_percyc_104 || false
-                            implicitWidth: 44
-                            implicitHeight: 24
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
+                            // Исп. в спорадике
+                            Switch {
+                                implicitWidth: 44
+                                implicitHeight: 24
+                                Layout.preferredWidth: 100
+                                Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
+                                checked: itemData.use_in_spont_104 || false
 
-                            indicator: Rectangle {
-                                anchors.centerIn: parent
-                                width: 44
-                                height: 24
-                                radius: 12
+                                indicator: Rectangle {
+                                    anchors.centerIn: parent
+                                    width: 44
+                                    height: 24
+                                    radius: 12
 
-                                color: parent.checked ? "#3b82f6" : "#f8fafc"
-                                border.color: parent.checked ? "#3b82f6" :
-                                    (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
-
-                                Behavior on color {
-                                    ColorAnimation { duration: 150 }
-                                }
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
-                                }
-
-                                Rectangle {
-                                    width: 18
-                                    height: 18
-                                    radius: 9
-
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    x: parent.parent.checked ? parent.width - width - 3 : 3
-
-                                    color: "#ffffff"
-                                    border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                    color: parent.checked ? "#3b82f6" : "#f8fafc"
+                                    border.color: parent.checked ? "#3b82f6" :
+                                        (parent.hovered ? "#94a3b8" : "#e2e8f0")
                                     border.width: 1
 
-                                    Behavior on x {
-                                        NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+                                    Behavior on color {
+                                        ColorAnimation { duration: 150 }
                                     }
 
                                     Behavior on border.color {
                                         ColorAnimation { duration: 150 }
                                     }
+
+                                    Rectangle {
+                                        width: 18
+                                        height: 18
+                                        radius: 9
+
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        x: parent.parent.checked ? parent.width - width - 3 : 3
+
+                                        color: "#ffffff"
+                                        border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                        border.width: 1
+
+                                        Behavior on x {
+                                            NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+                                        }
+
+                                        Behavior on border.color {
+                                            ColorAnimation { duration: 150 }
+                                        }
+                                    }
                                 }
+                                onCheckedChanged: dataModel.setProperty(originalIndex, "use_in_spont_104", checked)
                             }
-                            onCheckedChanged: dataModel.setProperty(originalIndex, "use_in_percyc_104", checked)
-                        }
 
-                        Switch {
-                            checked: itemData.allow_address_104 || false
-                            implicitWidth: 44
-                            implicitHeight: 24
-                            Layout.preferredWidth: 100
-                            Layout.alignment: Qt.AlignHCenter
+                            // Исп. в цикл/период
+                            Switch {
+                                checked: itemData.use_in_back_104 || false
+                                implicitWidth: 44
+                                implicitHeight: 24
+                                Layout.preferredWidth: 100
+                                Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
 
-                            indicator: Rectangle {
-                                anchors.centerIn: parent
-                                width: 44
-                                height: 24
-                                radius: 12
+                                indicator: Rectangle {
+                                    anchors.centerIn: parent
+                                    width: 44
+                                    height: 24
+                                    radius: 12
 
-                                color: parent.checked ? "#3b82f6" : "#f8fafc"
-                                border.color: parent.checked ? "#3b82f6" :
-                                    (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
-
-                                Behavior on color {
-                                    ColorAnimation { duration: 150 }
-                                }
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
-                                }
-
-                                Rectangle {
-                                    width: 18
-                                    height: 18
-                                    radius: 9
-
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    x: parent.parent.checked ? parent.width - width - 3 : 3
-
-                                    color: "#ffffff"
-                                    border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                    color: parent.checked ? "#3b82f6" : "#f8fafc"
+                                    border.color: parent.checked ? "#3b82f6" :
+                                        (parent.hovered ? "#94a3b8" : "#e2e8f0")
                                     border.width: 1
 
-                                    Behavior on x {
-                                        NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+                                    Behavior on color {
+                                        ColorAnimation { duration: 150 }
                                     }
 
                                     Behavior on border.color {
                                         ColorAnimation { duration: 150 }
                                     }
+
+                                    Rectangle {
+                                        width: 18
+                                        height: 18
+                                        radius: 9
+
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        x: parent.parent.checked ? parent.width - width - 3 : 3
+
+                                        color: "#ffffff"
+                                        border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                        border.width: 1
+
+                                        Behavior on x {
+                                            NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+                                        }
+
+                                        Behavior on border.color {
+                                            ColorAnimation { duration: 150 }
+                                        }
+                                    }
+                                }
+                                onCheckedChanged: dataModel.setProperty(originalIndex, "use_in_back_104", checked)
+                            }
+
+                            // Исп. в фон. сканир
+                            Switch {
+                                checked: itemData.use_in_percyc_104 || false
+                                implicitWidth: 44
+                                implicitHeight: 24
+                                Layout.preferredWidth: 100
+                                Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
+
+                                indicator: Rectangle {
+                                    anchors.centerIn: parent
+                                    width: 44
+                                    height: 24
+                                    radius: 12
+
+                                    color: parent.checked ? "#3b82f6" : "#f8fafc"
+                                    border.color: parent.checked ? "#3b82f6" :
+                                        (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    border.width: 1
+
+                                    Behavior on color {
+                                        ColorAnimation { duration: 150 }
+                                    }
+
+                                    Behavior on border.color {
+                                        ColorAnimation { duration: 150 }
+                                    }
+
+                                    Rectangle {
+                                        width: 18
+                                        height: 18
+                                        radius: 9
+
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        x: parent.parent.checked ? parent.width - width - 3 : 3
+
+                                        color: "#ffffff"
+                                        border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                        border.width: 1
+
+                                        Behavior on x {
+                                            NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+                                        }
+
+                                        Behavior on border.color {
+                                            ColorAnimation { duration: 150 }
+                                        }
+                                    }
+                                }
+                                onCheckedChanged: dataModel.setProperty(originalIndex, "use_in_percyc_104", checked)
+                            }
+
+                            // Разрешить адрес
+                            Switch {
+                                checked: itemData.allow_address_104 || false
+                                implicitWidth: 44
+                                implicitHeight: 24
+                                Layout.preferredWidth: 150
+                                Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
+
+                                indicator: Rectangle {
+                                    anchors.centerIn: parent
+                                    width: 44
+                                    height: 24
+                                    radius: 12
+
+                                    color: parent.checked ? "#3b82f6" : "#f8fafc"
+                                    border.color: parent.checked ? "#3b82f6" :
+                                        (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    border.width: 1
+
+                                    Behavior on color {
+                                        ColorAnimation { duration: 150 }
+                                    }
+
+                                    Behavior on border.color {
+                                        ColorAnimation { duration: 150 }
+                                    }
+
+                                    Rectangle {
+                                        width: 18
+                                        height: 18
+                                        radius: 9
+
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        x: parent.parent.checked ? parent.width - width - 3 : 3
+
+                                        color: "#ffffff"
+                                        border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                        border.width: 1
+
+                                        Behavior on x {
+                                            NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+                                        }
+
+                                        Behavior on border.color {
+                                            ColorAnimation { duration: 150 }
+                                        }
+                                    }
+                                }
+                                onCheckedChanged: dataModel.setProperty(originalIndex, "allow_address_104", checked)
+                            }
+
+                            // Группа опроса
+                            ComboBox {
+                                id: surveyGroupCombo104
+                                model: ["GENERAL SURVEY", "GROUP 1", "GROUP 2", "GROUP 3", "GROUP 4",
+                                    "GROUP 5", "GROUP 6", "GROUP 7", "GROUP 8"]
+                                Layout.preferredWidth: 150
+                                Layout.preferredHeight: 32
+                                Layout.alignment: Qt.AlignVCenter
+                                font.pixelSize: 13
+
+                                background: Rectangle {
+                                    color: enabled ? "#ffffff" : "#f8fafc"
+                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    border.width: 1
+                                    radius: 4
+                                    antialiasing: true
+
+                                    Behavior on border.color {
+                                        ColorAnimation { duration: 150 }
+                                    }
+                                }
+
+                                property string _currentValue: itemData.survey_group_104 || ""
+                                property bool _initialized: false
+
+                                Component.onCompleted: {
+                                    if (_currentValue) {
+                                        var idx = model.indexOf(_currentValue);
+                                        currentIndex = idx >= 0 ? idx : 0;
+                                    } else {
+                                        currentIndex = 0;
+                                    }
+                                    _initialized = true;
+                                }
+
+                                on_CurrentValueChanged: {
+                                    if (_initialized && _currentValue) {
+                                        var idx = model.indexOf(_currentValue);
+                                        currentIndex = idx >= 0 ? idx : 0;
+                                    }
+                                }
+
+                                onCurrentIndexChanged: {
+                                    if (_initialized && currentIndex >= 0) {
+                                        dataModel.setProperty(originalIndex, "survey_group_104", model[currentIndex]);
+                                    }
                                 }
                             }
-                            onCheckedChanged: dataModel.setProperty(originalIndex, "allow_address_104", checked)
+
+                            // Пустая колонка в конце
+                            Item {
+                                Layout.preferredWidth: 120
+                            }
                         }
-
-                        ComboBox {
-                            id: surveyGroupCombo104
-                            model: ["GENERAL SURVEY", "GROUP 1", "GROUP 2", "GROUP 3", "GROUP 4",
-                                "GROUP 5", "GROUP 6", "GROUP 7", "GROUP 8"]
-                            Layout.preferredWidth: 150
-                            Layout.preferredHeight: 32
-                            font.pixelSize: 13
-
-                            background: Rectangle {
-                                color: enabled ? "#ffffff" : "#f8fafc"
-                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
-                                border.width: 1
-                                radius: 4
-                                antialiasing: true
-
-                                Behavior on border.color {
-                                    ColorAnimation { duration: 150 }
-                                }
-                            }
-
-                            property string _currentValue: model.survey_group_104 || ""
-                            property bool _initialized: false
-
-                            Component.onCompleted: {
-                                if (_currentValue) {
-                                    var idx = itemData.indexOf(_currentValue);
-                                    currentIndex = idx >= 0 ? idx : 0;
-                                } else {
-                                    currentIndex = 0;
-                                }
-                                _initialized = true;
-                            }
-
-                            on_CurrentValueChanged: {
-                                if (_initialized && _currentValue) {
-                                    var idx = itemData.indexOf(_currentValue);
-                                    currentIndex = idx >= 0 ? idx : 0;
-                                }
-                            }
-
-                            onCurrentIndexChanged: {
-                                if (_initialized && currentIndex >= 0) {
-                                    dataModel.setProperty(originalIndex, "survey_group_104", model[currentIndex]);
-                                }
-                            }
-                        }
-                        
                     }
                 }
             }
@@ -6967,30 +7625,15 @@ ApplicationWindow {
     function createInterface(type, config = {}) {
         var newId = type.toLowerCase() + "_int_" + Date.now();
         var counter = type === "RS" ? rscounter : ethcounter;
+        var interfaceName = type + counter;
 
         switch(type) {
             case "ETH":
-                // Add ETH parameters to dataModel
-                ethConfigDialog.addToModel("ETH" + counter + " IP адрес", config.ip || "", "ETH" + counter + "_IP_ADDR", "unsigned int", "Да", "Нет");
-                ethConfigDialog.addToModel("ETH" + counter + " Маска подсети", config.mask || "", "ETH" + counter + "_MASK", "unsigned int", "Да", "Нет");
-                ethConfigDialog.addToModel("ETH" + counter + " Шлюз", config.gate || "", "ETH" + counter + "_GATEWAY", "unsigned int", "Да", "Нет");
-                ethConfigDialog.addToModel("ETH" + counter + " Старшие 3 байта MAC", config.high || "", "ETH" + counter + "_MAC_OUI", "unsigned int", "Да", "Нет");
-                ethConfigDialog.addToModel("ETH" + counter + " Младшие 3 байта MAC", config.low || "", "ETH" + counter + "_MAC_NIC", "unsigned int", "Да", "Нет");
-                ethConfigDialog.addToModel("ETH" + counter + " IP клиента 1", config.ipc1 || "", "ETH" + counter + "_IP_CLIENT1", "unsigned int", "Да", "Нет");
-                ethConfigDialog.addToModel("ETH" + counter + " IP клиента 2", config.ipc2 || "", "ETH" + counter + "_IP_CLIENT2", "unsigned int", "Да", "Нет");
-                ethConfigDialog.addToModel("ETH" + counter + " IP клиента 3", config.ipc3 || "", "ETH" + counter + "_IP_CLIENT3", "unsigned int", "Да", "Нет");
-                ethConfigDialog.addToModel("ETH" + counter + " IP клиента 4", config.ipc4 || "", "ETH" + counter + "_IP_CLIENT4", "unsigned int", "Да", "Нет");
-                ethConfigDialog.addToModel("ETH" + counter + " адрес устройства", config.addr || "", "ETH" + counter + "_ADDR", "unsigned short", "Да", "Нет");
-                ethConfigDialog.addToModel("ETH" + counter + " Порт 1", config.port1 || "", "ETH" + counter + "_IP_PORT1", "unsigned short", "Да", "Нет");
-                ethConfigDialog.addToModel("ETH" + counter + " Порт 2", config.port2 || "", "ETH" + counter + "_IP_PORT2", "unsigned short", "Да", "Нет");
-                ethConfigDialog.addToModel("ETH" + counter + " Порт 3", config.port3 || "", "ETH" + counter + "_IP_PORT3", "unsigned short", "Да", "Нет");
-                ethConfigDialog.addToModel("ETH" + counter + " Порт 4", config.port4 || "", "ETH" + counter + "_IP_PORT4", "unsigned short", "Да", "Нет");
-
-                // Add to Interface model
+                // Add ONE entry to interfaceModelsConfig for this ETH interface
                 interfaceModelsConfig.append({
                     id: newId,
                     type: "ETH",
-                    name: type + counter,
+                    name: interfaceName,
                     IP: config.ip || "",
                     MASK: config.mask || "",
                     GATE: config.gate || "",
@@ -7004,28 +7647,26 @@ ApplicationWindow {
                     PORT1: config.port1 || "",
                     PORT2: config.port2 || "",
                     PORT3: config.port3 || "",
-                    PORT4: config.port4 || "",
+                    PORT4: config.port4 || ""
                 });
+
+                ethcounter++;
                 break;
 
             case "RS":
-                // Add RS parameters to dataModel
-                rsConfigDialog.addToModel("RS" + counter + " четность", config.parity || "", "PA_RS" + counter + "_PARITY", "unsigned short", "Да", "Нет");
-                rsConfigDialog.addToModel("RS" + counter + " скорость", config.baudrate || "", "PA_RS" + counter + "_BAUDRATE", "unsigned short", "Да", "Нет");
-                rsConfigDialog.addToModel("RS" + counter + " длина слова", config.wordLen || "", "PA_RS" + counter + "_WORD_LEN", "unsigned short", "Да", "Нет");
-                rsConfigDialog.addToModel("RS" + counter + " стоп-бит", config.stopBits || "", "PA_RS" + counter + "_STOP_BITS", "unsigned short", "Да", "Нет");
-                rsConfigDialog.addToModel("RS" + counter + " адрес устройства", config.addr || "", "PA_RS" + counter + "_MAC_NIC", "unsigned int", "Да", "Нет");
-
+                // Add ONE entry to interfaceModelsConfig for this RS interface
                 interfaceModelsConfig.append({
                     id: newId,
                     type: "RS",
-                    name: type + counter,
+                    name: interfaceName,
                     PARITY: config.parity || "",
                     BAUDRATE: config.baudrate || "",
                     WORD_LEN: config.wordLen || "",
                     STOP_BITS: config.stopBits || "",
-                    ADDRESS: config.addr || "",
+                    ADDRESS: config.addr || ""
                 });
+
+                rscounter++;
                 break;
 
             default:
@@ -7037,7 +7678,7 @@ ApplicationWindow {
     }
 
 
-    function createProtocol(name, type, objectModelId, interfaceId) {
+    function createProtocol(name, type, objectModelId, interfaceId, config ={}) {
         var newId = type.toLowerCase() + "_prot_" + Date.now();
 
         protocolModelsConfig.append({
@@ -7046,7 +7687,16 @@ ApplicationWindow {
             type: type,
             objectModelId: objectModelId,
             interfaceId: interfaceId,
-            signalMappings: []
+            signalMappings: [],
+            ASDU: config.asdu || "",
+            LINK_LEN: config.link_address_len || "",
+            ASDU_LEN: config.asdu_len || "",
+            REASON_LEN: config.reason_len || "",
+            IOA_LEN: config.ioa_len || "",
+            SYNC: config.sync || "",
+            TELECONTROL: config.telecontrol || "",
+            PERCYC_PERIOD: config.percyc_period || "",
+            BACK_PERIOD: config.back_period || ""
         });
 
         // Добавляем протокол к объектной модели
@@ -7099,7 +7749,13 @@ ApplicationWindow {
         for (var i = 0; i < objectModelsConfig.count; i++) {
             if (objectModelsConfig.get(i).id === currentObjectModelId) {
                 var signalIds = objectModelsConfig.get(i).signalIds || []
-                return signalIds.count
+                // Check if it's a ListModel or array
+                if (signalIds && typeof signalIds.count !== 'undefined') {
+                    return signalIds.count
+                } else if (Array.isArray(signalIds)) {
+                    return signalIds.length
+                }
+                return 0
             }
         }
         return 0
@@ -7252,27 +7908,33 @@ ApplicationWindow {
     function selectAllSignalsForCurrentModel() {
         if (currentObjectModelId === "") return
 
-        var allSignalIds = []
         for (var i = 0; i < dataModel.count; i++) {
-            allSignalIds.push(i)
-        }
-
-        for (var j = 0; j < objectModelsConfig.count; j++) {
-            if (objectModelsConfig.get(j).id === currentObjectModelId) {
-                objectModelsConfig.setProperty(j, "signalIds", allSignalIds)
-                break
-            }
+            addSignalToCurrentObjectModel(i)
         }
     }
 
     function clearAllSignalsForCurrentModel() {
         if (currentObjectModelId === "") return
 
+        // Get the current signal list first
+        var signalsToRemove = []
         for (var i = 0; i < objectModelsConfig.count; i++) {
-            if (objectModelsConfig.get(i).id === currentObjectModelId) {
-                objectModelsConfig.setProperty(i, "signalIds", [])
+            var item = objectModelsConfig.get(i)
+            if (item.id === currentObjectModelId) {
+                var signalIds = item.signalIds
+
+                if (signalIds && typeof signalIds.count !== 'undefined') {
+                    for (var j = 0; j < signalIds.count; j++) {
+                        signalsToRemove.push(signalIds.get(j).signalId)
+                    }
+                }
                 break
             }
+        }
+
+        // Remove each signal
+        for (var k = 0; k < signalsToRemove.length; k++) {
+            removeSignalFromCurrentObjectModel(signalsToRemove[k])
         }
     }
     function convertSignalIdsToListModel(array) {
