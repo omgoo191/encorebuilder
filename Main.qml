@@ -44,7 +44,6 @@ ApplicationWindow {
 
             const typ = item.type
             let fallback = "DEFAULT"
-            console.log(item.paramType+item.link_kind+item.type )
 
             if (fieldName === "type_spont" || fieldName === "type_def") {
                 if (typ === "bool")           fallback = "M_SP_TB_1"
@@ -65,12 +64,10 @@ ApplicationWindow {
             }
 
             const fbIdx = choices.indexOf(fallback)
-            console.log(fallback)
             if (fbIdx >= 0) return fbIdx
         }
 
         // иначе дефолт
-        const defIdx = choices.indexOf("DEFAULT")
 
         return defIdx >= 0 ? defIdx : 0
     }
@@ -3135,7 +3132,7 @@ ApplicationWindow {
 
                         width: listView1.width
                         spacing: 0
-                        height: implicitHeight
+                        height: Math.max(180, nameField.height + 20)
 
                         property var itemData: dataModel.get(originalIndex)
 
@@ -3182,9 +3179,11 @@ ApplicationWindow {
                         }
 
                         TextField {
+                            id: nameField
                             text: itemData.name
                             Layout.preferredWidth: 350
-                            Layout.preferredHeight: 32
+                            Layout.minimumHeight: 32
+                            Layout.preferredHeight: Math.max(32, contentHeight + topPadding + bottomPadding)
 
                             color: (itemData.isNameDuplicate || false) ? "#dc2626" : "#1e293b"
                             font.pixelSize: 13
@@ -3196,7 +3195,8 @@ ApplicationWindow {
                             bottomPadding: 6
 
                             selectByMouse: true
-                            verticalAlignment: TextInput.AlignVCenter
+                            verticalAlignment: TextInput.AlignTop
+                            wrapMode: TextInput.WordWrap  // Перенос по словам
 
                             background: Rectangle {
                                 color: enabled ? "#ffffff" : "#f8fafc"
@@ -3937,7 +3937,7 @@ ApplicationWindow {
                     delegate: Rectangle {
                         width: Math.max(listView.width, 1600)
                         id: rowItem
-                        height: 180
+                        height: Math.max(180, nameField.height + 20)
                         color: index % 2 === 0 ? "#ffffff" : "#f8fafc"
                         property bool hasDuplicateName: itemData.isNameDuplicate || false
                         property bool hasDuplicateCodeName: itemData.isCodeNameDuplicate || false
@@ -4017,10 +4017,12 @@ ApplicationWindow {
                             }
 
                             TextField {
+                                id: nameField
                                 text: itemData.name
                                 Layout.preferredWidth: 350
-                                Layout.preferredHeight: 32
-                                Layout.minimumWidth: 300
+                                Layout.minimumHeight: 32
+                                Layout.preferredHeight: Math.max(32, contentHeight + topPadding + bottomPadding)
+
                                 color: (itemData.isNameDuplicate || false) ? "#dc2626" : "#1e293b"
                                 font.pixelSize: 13
                                 font.weight: Font.Normal
@@ -4031,7 +4033,8 @@ ApplicationWindow {
                                 bottomPadding: 6
 
                                 selectByMouse: true
-                                verticalAlignment: TextInput.AlignVCenter
+                                verticalAlignment: TextInput.AlignTop
+                                wrapMode: TextInput.WordWrap  // Перенос по словам
 
                                 background: Rectangle {
                                     color: enabled ? "#ffffff" : "#f8fafc"
@@ -4660,7 +4663,7 @@ ApplicationWindow {
 
                     delegate: Rectangle {
                         width: listView.width
-                        height: 34
+                        height: 70
                         color: index % 2 === 0 ? "#ffffff" : "#f8fafc"
                         required property int index
                         required property var model
@@ -4716,7 +4719,8 @@ ApplicationWindow {
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
                                 elide: Text.ElideRight
-
+                                wrapMode: Text.WordWrap
+                                maximumLineCount: 4
                                 MouseArea {
                                     anchors.fill: parent
                                     hoverEnabled: true
@@ -4988,8 +4992,9 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Параметры"
-                                Layout.preferredWidth: 100
+                                text: rootwindow.currentType === "Аналоговые входы" ? "Параметры": (rootwindow.currentType === "Уставка" ? "Тип" : "")
+                                visible: (rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Уставка")
+                                Layout.preferredWidth: (rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Уставка") ? 100 : 0
                                 color: "#1e293b"
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
@@ -5140,15 +5145,18 @@ ApplicationWindow {
                                 Layout.preferredWidth: 200
                                 Layout.alignment: Qt.AlignVCenter
                                 color: isVal ? "#6b7280" : "#1e293b" // Серый цвет для команд
+                                wrapMode: Text.WordWrap
+                                maximumLineCount: 4
                                 font.pixelSize: 13
                                 elide: Text.ElideRight
                             }
 
                             // Параметры
                             ColumnLayout {
-                                Layout.preferredWidth: 100
+                                Layout.preferredWidth: (rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Уставка") ? 100 : 0
                                 Layout.alignment: Qt.AlignVCenter
                                 spacing: 3
+                                visible: (rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Уставка")
                                 Repeater {
                                     model: rootwindow.currentType === "Аналоговые входы"
                                         ? ["Значение","Апертура","КТТ","Upper","Lower"]
@@ -5156,7 +5164,7 @@ ApplicationWindow {
                                             ? (itemData.val_setpoint_enabled && !isVal
                                                 ? ["Команда", "Значение"]
                                                 : ["Команда"])
-                                            : [itemData.codeName]
+                                            : ""
                                     delegate: Text {
                                         text: modelData
                                         color: isVal ? "#6b7280" : "#475569"
@@ -5335,12 +5343,13 @@ ApplicationWindow {
                                             if (!itemData || !itemData.codeName) return
 
                                             const wanted = __getByRole(itemData.codeName, "type_spont") || "NOT_USE"
-                                            const idx = choices.indexOf(wanted)
+                                            const idx = item.link_kind !== "val_setpoint"  ? setTypeCombo(choices,"type_spont", itemData ) : choices.indexOf(wanted)
 
-                                            console.log("INIT type_spont for", itemData.codeName, "=", wanted)
+                                            console.log("INIT type_spont for", idx)
 
                                             currentIndex = idx >= 0 ? idx : choices.indexOf("NOT_USE")
                                             _init = true
+
                                         }
 
                                         Component.onCompleted: Qt.callLater(initCombo)
@@ -5398,9 +5407,9 @@ ApplicationWindow {
                                             if (!itemData || !itemData.codeName) return
 
                                             const wanted = __getByRole(itemData.codeName, "type_back") || "NOT_USE"
-                                            const idx = choices.indexOf(wanted)
+                                            const idx = item.link_kind !== "val_setpoint"  ? setTypeCombo(choices,"type_back", itemData ) : choices.indexOf(wanted)
 
-                                            console.log("INIT type_spont for", itemData.codeName, "=", wanted)
+                                            console.log("INIT type_back for", itemData.codeName, "=", wanted)
 
                                             currentIndex = idx >= 0 ? idx : choices.indexOf("NOT_USE")
                                             _init = true
@@ -5418,7 +5427,7 @@ ApplicationWindow {
 
                                         onCurrentIndexChanged: {
                                             if (_init && !isVal) {
-                                                __setByRole(modelData, "type_spont", choices[currentIndex])
+                                                __setByRole(modelData, "type_back", choices[currentIndex])
                                             }
                                         }
 
@@ -5459,9 +5468,9 @@ ApplicationWindow {
                                             if (!itemData || !itemData.codeName) return
 
                                             const wanted = __getByRole(itemData.codeName, "type_percyc") || "NOT_USE"
-                                            const idx = choices.indexOf(wanted)
+                                            const idx = item.link_kind !== "val_setpoint"  ? setTypeCombo(choices,"type_percyc", itemData ) : choices.indexOf(wanted)
 
-                                            console.log("INIT type_spont for", itemData.codeName, "=", wanted)
+                                            console.log("INIT type_percyc for", itemData.codeName, "=", wanted)
 
                                             currentIndex = idx >= 0 ? idx : choices.indexOf("NOT_USE")
                                             _init = true
@@ -5473,13 +5482,13 @@ ApplicationWindow {
                                         onCountChanged: Qt.callLater(initCombo)
 
                                         Connections {
-                                            target: itemData   // <-- ВАЖНО! НЕ dataModel!
+                                            target: itemData
                                             onCodeNameChanged: Qt.callLater(initCombo)
                                         }
 
                                         onCurrentIndexChanged: {
                                             if (_init && !isVal) {
-                                                __setByRole(modelData, "type_spont", choices[currentIndex])
+                                                __setByRole(modelData, "type_percyc", choices[currentIndex])
                                             }
                                         }
 
@@ -5522,8 +5531,8 @@ ApplicationWindow {
                                             if (_init) return
                                             if (!itemData || !itemData.codeName) return
 
-                                            const wanted = __getByRole(itemData.codeName, "type_spont") || "NOT_USE"
-                                            const idx = choices.indexOf(wanted)
+                                            const wanted = __getByRole(itemData.codeName, "type_def") || "NOT_USE"
+                                            const idx = item.link_kind !== "val_setpoint"  ? setTypeCombo(choices,"type_def", itemData ) : choices.indexOf(wanted)
 
                                             currentIndex = idx >= 0 ? idx : choices.indexOf("NOT_USE")
                                             _init = true
@@ -5541,7 +5550,7 @@ ApplicationWindow {
 
                                         onCurrentIndexChanged: {
                                             if (_init && !isVal) {
-                                                __setByRole(modelData, "type_spont", choices[currentIndex])
+                                                __setByRole(modelData, "type_def", choices[currentIndex])
                                             }
                                         }
 
@@ -5798,7 +5807,7 @@ ApplicationWindow {
 
                     delegate: Rectangle {
                         width: listView.width
-                        height: 34
+                        height: 70
                         color: index % 2 === 0 ? "#ffffff" : "#f8fafc"
                         required property int index
                         required property var model
@@ -5852,7 +5861,8 @@ ApplicationWindow {
                                 font.weight: Font.Normal
                                 verticalAlignment: Text.AlignVCenter
                                 elide: Text.ElideRight
-
+                                wrapMode: Text.WordWrap
+                                maximumLineCount: 4
                                 MouseArea {
                                     anchors.fill: parent
                                     hoverEnabled: true
@@ -6335,7 +6345,7 @@ ApplicationWindow {
 
                     delegate: Rectangle {
                         width: listView.width
-                        height: 34
+                        height: 70
                         color: index % 2 === 0 ? "#ffffff" : "#f8fafc"
                         required property int index
                         required property var model
@@ -6389,7 +6399,8 @@ ApplicationWindow {
                                 font.weight: Font.Normal
                                 verticalAlignment: Text.AlignVCenter
                                 elide: Text.ElideRight
-
+                                wrapMode: Text.WordWrap
+                                maximumLineCount: 4
                                 MouseArea {
                                     anchors.fill: parent
                                     hoverEnabled: true
