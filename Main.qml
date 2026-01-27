@@ -533,7 +533,6 @@ ApplicationWindow {
             if (!url) { console.warn("Не удалось получить URL выбранного файла"); return; }
 
             readTextUrl(url.toString(), function(text) {
-                // иногда пишут TelesignalizationIndexes или TsiIndexes — добавь свои варианты при необходимости
                 const items = parseAnyOf(text, ["TelesignalizationIndexes"]);
                 fillModel(telesignalModel, items);
                 if (items.length === 0) console.warn("В файле нет TelesignalizationIndexes");
@@ -2447,7 +2446,9 @@ ApplicationWindow {
                 objectModelsConfig.clear();
                 interfaceModelsConfig.clear();
                 protocolModelsConfig.clear();
-
+                telemeasureModel.clear();
+                telesignalModel.clear();
+                telecommandModel.clear();
                 for (let i = 0; i < data.signals.length; i++) {
                     dataModel.append(data.signals[i]);
                 }
@@ -2457,6 +2458,15 @@ ApplicationWindow {
                 }
                 for (let i = 0; i < (data.protocols || []).length; i++) {
                     protocolModelsConfig.append(data.protocols[i]);
+                }
+                for (let i = 0; i < (data.TcIndexes || []).length; i++) {
+                    telecommandModel.append(data.TcIndexes[i]);
+                }
+                for (let i = 0; i < (data.TsIndexes || []).length; i++) {
+                    telesignalModel.append(data.TsIndexes[i]);
+                }
+                for (let i = 0; i < (TmIndexes.protocols || []).length; i++) {
+                    telemeasureModel.append(TmIndexes.protocols[i]);
                 }
             updateNextIoIndex();
             initializeFilteredModels();
@@ -2902,7 +2912,10 @@ ApplicationWindow {
             signals: [],
             objectModels: [],
             interfaces: [],
-            protocols: []
+            protocols: [],
+            TcIndexes:[],
+            TsIndexes:[],
+            TmIndexes:[]
         };
 
         for (var i = 0; i < dataModel.count; i++) {
@@ -2930,6 +2943,16 @@ ApplicationWindow {
         for (var m = 0; m < protocolModelsConfig.count; m++) {
             result.protocols.push(protocolModelsConfig.get(m));
         }
+        for(var t = 0; t<telecommandModel.count; t++){
+            result.TcIndexes.push(telecommandModel.get(t));
+        }
+        for(var s = 0; s<telesignalModel.count; s++){
+            result.TsIndexes.push(telesignalModel.get(s));
+        }
+        for(var z = 0; z<telemeasureModel.count; z++){
+            result.TmIndexes.push(telemeasureModel.get(z));
+        }
+
 
         return JSON.stringify(result, null, 2);
     }
@@ -5482,7 +5505,7 @@ ApplicationWindow {
                                         onCountChanged: Qt.callLater(initCombo)
 
                                         Connections {
-                                            target: itemData
+                                            target: itemData   
                                             onCodeNameChanged: Qt.callLater(initCombo)
                                         }
 

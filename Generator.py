@@ -84,10 +84,42 @@ def main(json_file):
 
             # Get object models
             object_models = json_data.get("objectModels", [])
-
+ы
     except json.JSONDecodeError:
         print("Ошибка: Файл содержит некорректный JSON", file=sys.stderr)
         return 1
+
+
+    # Get indexes arrays (ordered lists)
+    ts_indexes = json_data.get("TsIndexes", []) or []
+    tc_indexes = json_data.get("TcIndexes", []) or []
+    tm_indexes = json_data.get("TmIndexes", []) or []
+
+    # normalize index entries (strip text)
+    def _norm_idx(arr):
+        out = []
+        for it in arr:
+            if isinstance(it, dict):
+                t = norm_str(it.get("text", ""))
+                out.append({"text": t})
+        return out
+
+    ts_indexes = _norm_idx(ts_indexes)
+    tc_indexes = _norm_idx(tc_indexes)
+    tm_indexes = _norm_idx(tm_indexes)
+
+    # counters (consume in appearance order)
+    ts_i = 0
+    tc_i = 0
+    tm_i = 0
+
+    def take_idx(arr, i, fallback_code):
+        if i < len(arr):
+            t = norm_str(arr[i].get("text", ""))
+            if t:
+                return t, i + 1
+            return fallback_code, i + 1   # элемент есть, но пустой
+        return fallback_code, i          # элемента нет вообще
 
     telecommand_count = sum(1 for obj in data if obj.get("paramType") in ("Аналоговый выход", "Дискретный выход"))
     telesignal_count  = sum(1 for obj in data if obj.get("paramType") == "Дискретные входы" and obj.get("ad"))
@@ -350,11 +382,17 @@ void Core::InitTelemeasurements() {{
         # telesignalizations
         if paramType == "Дискретные входы" and obj.get("ad"):
             ad_code = norm_str(obj.get("ad"))
-            tele_content += f"    AddTelesignalization(ind_{code}, parameters::TelesignalizationIndexes::{code}, ind_{ad_code});\n"
+
+            ts_name, ts_i = take_idx(ts_indexes, ts_i, code)
+
+            tele_content += f"    AddTelesignalization(ind_{code}, parameters::TelesignalizationIndexes::{ts_name}, ind_{ad_code});\n"
 
         # telecommands
         if paramType in ("Аналоговый выход", "Дискретный выход"):
-            telecommands_content += f"    AddTelecommand(ind_{code}, parameters::TelecommandIndexes::{code});\n"
+
+            tc_name, tc_i = take_idx(tc_indexes, tc_i, code)
+
+            telecommands_content += f"    AddTelecommand(ind_{code}, parameters::TelecommandIndexes::{tc_name});\n"
 
         # saved parameters
         if (paramType == "Признаки" and saving_bool) or (paramType == "Уставки") or (paramType == "Дискретный выход" and saving_bool):
@@ -364,10 +402,11 @@ void Core::InitTelemeasurements() {{
         if paramType == "Аналоговые входы" and (obj.get("ktt") or obj.get("aperture")):
             ktt_param = f"ind_{obj['ktt']}" if obj.get("ktt") else "std::nullopt"
             aperture_param = f"ind_{obj['aperture']}" if obj.get("aperture") else "std::nullopt"
+            tm_name, tm_i = take_idx(tm_indexes, tm_i, code)
             TM_type = TM_mapping.get(typ, typ if typ else "FLOAT")
             telemeasurements_content += (
                 f"    AddTelemeasurement<info_object::InfoElement::CurrentType::{TM_type}>(ind_{code}, "
-                f"parameters::TelemeasurementIndexes::{code}, {ktt_param}, {aperture_param});\n"
+                f"parameters::TelemeasurementIndexes::{tm_name}, {ktt_param}, {aperture_param});\n"
             )
 
     # ---------- Process each object model ----------
