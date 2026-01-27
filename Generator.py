@@ -84,7 +84,7 @@ def main(json_file):
 
             # Get object models
             object_models = json_data.get("objectModels", [])
-ы
+
     except json.JSONDecodeError:
         print("Ошибка: Файл содержит некорректный JSON", file=sys.stderr)
         return 1
