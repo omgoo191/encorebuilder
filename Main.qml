@@ -172,136 +172,26 @@ ApplicationWindow {
 
 
 //endregion
-    menuBar: MenuBar {
-        Menu {
-            title: qsTr("Файл")
-
-            MenuItem {
-                id: saveMenuItem
-                text: qsTr("Сохранить")
-                Accessible.name: text
-                Accessible.description: qsTr("Сохранить текущую конфигурацию")
-                onTriggered: {
-                    if (rootwindow.currentBldePath !== "") {
-                        saveToBlde(rootwindow.currentBldePath)
-                    } else {
-                        saveFileDialog.open()
-                    }
-                }
-            }
-
-            MenuItem {
-                id: saveAsMenuItem
-                text: qsTr("Сохранить как...")
-                Accessible.name: text
-                Accessible.description: qsTr("Открыть диалог сохранения в новый файл")
-                onTriggered: {saveFileDialog.open(); console.log("trigger")}
-            }
-
-            Menu {
-                title: qsTr("Экспорт...")
-                MenuItem{
-                    id: exportExcelMenuItem
-                    text: qsTr("Excel")
-                    Accessible.name: text
-                    Accessible.description: qsTr("Экспортировать данные в файл Excel")
-                    onTriggered: {
-                        exportExcelDialog.open()
-                        console.log("trigger")
-                    }
-                }
-                    MenuItem{
-                        id: exportCodeMenuItem
-                        text: qsTr("Код")
-                        Accessible.name: text
-                        Accessible.description: qsTr("Экспортировать исходный код")
-                        onTriggered:{
-                            exportCodeDialog.open()
-                        }
-                    }
-                }
-
-            MenuItem{
-                id: importMenuItem
-                text: qsTr("Импорт")
-                Accessible.name: text
-                Accessible.description: qsTr("Импортировать конфигурацию из файла")
-                onTriggered: fileDialog.open()
-            }
-
-            MenuItem {
-                id: exitMenuItem
-                text: qsTr("Выход")
-                Accessible.name: text
-                Accessible.description: qsTr("Закрыть приложение")
-                onTriggered: {confirmExitDialog.open(); console.log("trigger")}
+    menuBar: AppShell {
+        onSaveRequested: {
+            if (rootwindow.currentBldePath !== "") {
+                saveToBlde(rootwindow.currentBldePath)
+            } else {
+                saveFileDialog.open()
             }
         }
-        Menu {
-            title: qsTr("Объектные модели")
-            MenuItem {
-                text: qsTr("Создать MEK модель")
-                onTriggered: {
-                    objectModelTypeCombo.currentIndex = 0 // MEK
-                    createObjectModelDialog.open()
-                }
-            }
-            MenuItem {
-                text: qsTr("Создать MODBUS модель")
-                onTriggered: {
-                    objectModelTypeCombo.currentIndex = 1 // MODBUS
-                    createObjectModelDialog.open()
-                }
-            }
-            MenuSeparator {}
-            MenuItem {
-                text: qsTr("Управление моделями")
-                onTriggered: objectModelsManagerDialog.open()
-            }
+        onSaveAsRequested: saveFileDialog.open()
+        onExportExcelRequested: exportExcelDialog.open()
+        onExportCodeRequested: exportCodeDialog.open()
+        onImportRequested: fileDialog.open()
+        onExitRequested: confirmExitDialog.open()
+        onCreateMekModelRequested: {
+            objectModelTypeCombo.currentIndex = 0
+            createObjectModelDialog.open()
         }
-
-        Menu {
-            title: qsTr("Интерфейсы")
-            MenuItem {
-                text: qsTr("Ethernet")
-                onTriggered: ethConfigDialog.open()
-            }
-            MenuItem{
-                text: qsTr("RS")
-                onTriggered: rsConfigDialog.open()
-            }
-            MenuItem {
-                text: qsTr("Управление интерфейсами")
-                onTriggered: interfaceManagerDialog.open()
-            }
-        }
-
-        Menu {
-            title: qsTr("Протоколы")
-            MenuItem {
-                text: qsTr("Создать протокол")
-                onTriggered: createProtocolDialog.open()
-            }
-            MenuItem {
-                text: qsTr("Управление протоколами")
-                onTriggered: protocolManagerDialog.open()
-            }
-        }
-
-        Menu{
-            title: qsTr("Дополнительно")
-            MenuItem{
-                text: qsTr("Добавить ТУ")
-                onTriggered: pickTelecommandHeader.open()
-            }
-            MenuItem{
-                text: qsTr("Добавить ТC")
-                onTriggered: pickTelesignalHeader.open()
-            }
-            MenuItem{
-                text: qsTr("Добавить ТИ")
-                onTriggered: pickTelemeasureHeader.open()
-            }
+        onCreateModbusModelRequested: {
+            objectModelTypeCombo.currentIndex = 1
+            createObjectModelDialog.open()
         }
         onObjectModelManagerRequested: objectModelsManagerDialog.open()
         onEthernetConfigRequested: ethConfigDialog.open()
@@ -619,52 +509,40 @@ ApplicationWindow {
     ManagerListDialog {
         id: removeInterfaceDialog
         title: qsTr("Удалить интерфейс")
-        standardButtons: Dialog.Ok | Dialog.Cancel
-        height: 500
-        ListView {
-            width: 300
-            height: 500
-            model: interfaceModel
-            delegate: ItemDelegate {
-                text: model.type + " (" + model.id + ")"
-                onClicked: {
-                    interfaceModel.remove(index)
-                    if (item.type === "ETH") {
-                        ethcounter--
-                    } else if (item.type === "rs") {
-                        rscounter--
-                    }
-                    removeInterfaceDialog.close()
-                }
+        listModel: interfaceModel
+        onItemSelected: function(index) {
+            var selectedInterface = interfaceModel.get(index)
+            if (!selectedInterface)
+                return
+            interfaceModel.remove(index)
+            if (selectedInterface.type === "ETH") {
+                ethcounter--
+            } else if (selectedInterface.type === "rs") {
+                rscounter--
             }
+            removeInterfaceDialog.close()
         }
     }
 
     ManagerListDialog {
         id: removeObjectModelDialog
         title: qsTr("Удалить объектную модель")
-        standardButtons: Dialog.Ok | Dialog.Cancel
-        height: 500
-        ListView {
-            width: 300
-            height: 500
-            model: objectModels
-            delegate: ItemDelegate {
-                text: model.type + " (" + model.id + ")"
-                onClicked: {
-                    objectModels.remove(index)
-                        if (item.type === "MEK") {
-                            mekcounter--
-                            mekcounter === 0 ? mek = false : true
-                        } else if (item.type === "Modbus") {
-                            mbcounter--
-                            mbcounter === 0 ? modbus = false : true
-                        }
-                    removeObjectModelDialog.close()
-                    }
-                }
+        listModel: objectModels
+        onItemSelected: function(index) {
+            var selectedModel = objectModels.get(index)
+            if (!selectedModel)
+                return
+            objectModels.remove(index)
+            if (selectedModel.type === "MEK") {
+                mekcounter--
+                mek = mekcounter > 0
+            } else if (selectedModel.type === "Modbus") {
+                mbcounter--
+                modbus = mbcounter > 0
             }
+            removeObjectModelDialog.close()
         }
+    }
 
     FileDialog {
         id: saveDialog
@@ -905,141 +783,10 @@ ApplicationWindow {
 
     StartupDialog {
         id: startDialog
-        title: qsTr("Выберите действие")
         Accessible.name: title
         Accessible.description: qsTr("Диалог выбора создания новой или открытия существующей конфигурации")
-        modal: true
-        standardButtons: Dialog.NoButton
-        anchors.centerIn: parent
-        width: 400
-        height: 200
-
-        background: Rectangle {
-            color: "#ffffff"
-            radius: 8
-            antialiasing: true
-            border.color: "#e2e8f0"
-            border.width: 1
-
-            // Subtle shadow effect
-            Rectangle {
-                anchors.fill: parent
-                anchors.margins: -2
-                color: "transparent"
-                border.color: "#00000010"
-                border.width: 2
-                radius: 10
-                z: -1
-            }
-        }
-
-        header: Rectangle {
-            width: parent.width
-            height: 50
-            color: "#f8fafc"
-            radius: 8
-            antialiasing: true
-
-            Rectangle {
-                anchors.bottom: parent.bottom
-                width: parent.width
-                height: 1
-                color: "#e2e8f0"
-            }
-
-            gradient: Gradient {
-                GradientStop { position: 0.0; color: "#f8fafc" }
-                GradientStop { position: 1.0; color: "#f1f5f9" }
-            }
-
-            Label {
-                anchors.centerIn: parent
-                text: startDialog.title
-                font.pixelSize: 16
-                font.weight: Font.DemiBold
-                color: "#1e293b"
-            }
-        }
-
-        GridLayout {
-            anchors.fill: parent
-            anchors.margins: 20
-            columns: 1
-            columnSpacing: 10
-            rowSpacing: 15
-
-            Button {
-                id: startCreateButton
-                text: qsTr("Создать новую конфигурацию")
-                focus: true
-                KeyNavigation.tab: startOpenButton
-                Accessible.name: text
-                Accessible.description: qsTr("Создать пустую конфигурацию")
-                Layout.fillWidth: true
-                Layout.preferredHeight: 40
-                font.pixelSize: 14
-                font.weight: Font.Medium
-
-                background: Rectangle {
-                    color: parent.pressed ? "#059669" : (parent.hovered ? "#10b981" : "#22c55e")
-                    radius: 6
-                    antialiasing: true
-
-                    Behavior on color {
-                        ColorAnimation { duration: 150 }
-                    }
-                }
-
-                contentItem: Text {
-                    text: parent.text
-                    font: parent.font
-                    color: "#ffffff"
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
-
-                onClicked: {
-                    dataModel.clear()
-                    startDialog.close()
-                }
-            }
-
-            Button {
-                id: startOpenButton
-                text: qsTr("Открыть существующую")
-                KeyNavigation.tab: startCreateButton
-                KeyNavigation.backtab: startCreateButton
-                Accessible.name: text
-                Accessible.description: qsTr("Открыть конфигурацию из файла")
-                Layout.fillWidth: true
-                Layout.preferredHeight: 40
-                font.pixelSize: 14
-                font.weight: Font.Medium
-
-                background: Rectangle {
-                    color: parent.pressed ? "#1d4ed8" : (parent.hovered ? "#2563eb" : "#3b82f6")
-                    radius: 6
-                    antialiasing: true
-
-                    Behavior on color {
-                        ColorAnimation { duration: 150 }
-                    }
-                }
-
-                contentItem: Text {
-                    text: parent.text
-                    font: parent.font
-                    color: "#ffffff"
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
-
-                onClicked: {
-                    fileDialog.open()
-                    startDialog.close()
-                }
-            }
-        }
+        onCreateNewRequested: dataModel.clear()
+        onOpenExistingRequested: fileDialog.open()
     }
 
     Dialog {
