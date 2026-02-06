@@ -21,6 +21,12 @@ qt_add_qml_module(appGenerator
     VERSION 1.0
     QML_FILES
         Main.qml
+        ui/shell/AppShell.qml
+        ui/components/TableHeaderRow.qml
+        ui/dialogs/ManagerListDialog.qml
+        ui/dialogs/StartupDialog.qml
+        ui/tables/SignalTableView.qml
+        ui/theme/Theme.qml
 )
 
 set(TS_FILES
