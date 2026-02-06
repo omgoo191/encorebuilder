@@ -21,46 +21,46 @@ MenuBar {
     signal addTiRequested()
 
     Menu {
-        title: "Файл"
+        title: qsTr("Файл")
 
-        MenuItem { text: "Сохранить"; onTriggered: saveRequested() }
-        MenuItem { text: "Сохранить как..."; onTriggered: saveAsRequested() }
+        MenuItem { text: qsTr("Сохранить"); onTriggered: saveRequested() }
+        MenuItem { text: qsTr("Сохранить как..."); onTriggered: saveAsRequested() }
 
         Menu {
-            title: "Экспорт..."
-            MenuItem { text: "Excel"; onTriggered: exportExcelRequested() }
-            MenuItem { text: "Код"; onTriggered: exportCodeRequested() }
+            title: qsTr("Экспорт...")
+            MenuItem { text: qsTr("Excel"); onTriggered: exportExcelRequested() }
+            MenuItem { text: qsTr("Код"); onTriggered: exportCodeRequested() }
         }
 
-        MenuItem { text: "Импорт"; onTriggered: importRequested() }
-        MenuItem { text: "Выход"; onTriggered: exitRequested() }
+        MenuItem { text: qsTr("Импорт"); onTriggered: importRequested() }
+        MenuItem { text: qsTr("Выход"); onTriggered: exitRequested() }
     }
 
     Menu {
-        title: "Объектные модели"
-        MenuItem { text: "Создать MEK модель"; onTriggered: createMekModelRequested() }
-        MenuItem { text: "Создать MODBUS модель"; onTriggered: createModbusModelRequested() }
+        title: qsTr("Объектные модели")
+        MenuItem { text: qsTr("Создать MEK модель"); onTriggered: createMekModelRequested() }
+        MenuItem { text: qsTr("Создать MODBUS модель"); onTriggered: createModbusModelRequested() }
         MenuSeparator {}
-        MenuItem { text: "Управление моделями"; onTriggered: objectModelManagerRequested() }
+        MenuItem { text: qsTr("Управление моделями"); onTriggered: objectModelManagerRequested() }
     }
 
     Menu {
-        title: "Интерфейсы"
-        MenuItem { text: "Ethernet"; onTriggered: ethernetConfigRequested() }
-        MenuItem { text: "RS"; onTriggered: rsConfigRequested() }
-        MenuItem { text: "Управление интерфейсами"; onTriggered: interfaceManagerRequested() }
+        title: qsTr("Интерфейсы")
+        MenuItem { text: qsTr("Ethernet"); onTriggered: ethernetConfigRequested() }
+        MenuItem { text: qsTr("RS"); onTriggered: rsConfigRequested() }
+        MenuItem { text: qsTr("Управление интерфейсами"); onTriggered: interfaceManagerRequested() }
     }
 
     Menu {
-        title: "Протоколы"
-        MenuItem { text: "Создать протокол"; onTriggered: createProtocolRequested() }
-        MenuItem { text: "Управление протоколами"; onTriggered: protocolManagerRequested() }
+        title: qsTr("Протоколы")
+        MenuItem { text: qsTr("Создать протокол"); onTriggered: createProtocolRequested() }
+        MenuItem { text: qsTr("Управление протоколами"); onTriggered: protocolManagerRequested() }
     }
 
     Menu {
-        title: "Дополнительно"
-        MenuItem { text: "Добавить ТУ"; onTriggered: addTuRequested() }
-        MenuItem { text: "Добавить ТC"; onTriggered: addTsRequested() }
-        MenuItem { text: "Добавить ТИ"; onTriggered: addTiRequested() }
+        title: qsTr("Дополнительно")
+        MenuItem { text: qsTr("Добавить ТУ"); onTriggered: addTuRequested() }
+        MenuItem { text: qsTr("Добавить ТC"); onTriggered: addTsRequested() }
+        MenuItem { text: qsTr("Добавить ТИ"); onTriggered: addTiRequested() }
     }
 }

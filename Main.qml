@@ -6981,12 +6981,12 @@ ApplicationWindow {
                 anchors.rightMargin: 16
                 spacing: 18
 
-                Label { text: "Модель: " + currentModelName; font.bold: true; color: "#1e293b" }
-                Label { text: hasUnsavedChanges ? "● Несохраненные изменения" : "✓ Сохранено"; color: hasUnsavedChanges ? "#dc2626" : "#059669" }
-                Label { text: "Сигналов в разделе: " + selectedSignalCount; color: "#334155" }
+                Label { text: qsTr("Модель: ") + currentModelName; font.bold: true; color: "#1e293b" }
+                Label { text: hasUnsavedChanges ? qsTr("● Несохраненные изменения") : qsTr("✓ Сохранено"); color: hasUnsavedChanges ? "#dc2626" : "#059669" }
+                Label { text: qsTr("Сигналов в разделе: ") + selectedSignalCount; color: "#334155" }
                 Item { Layout.fillWidth: true }
                 Button {
-                    text: "Дополнительно"
+                    text: qsTr("Дополнительно")
                     onClicked: advancedDrawer.open()
                 }
             }
@@ -6997,11 +6997,11 @@ ApplicationWindow {
             Layout.fillWidth: true
             currentIndex: workflowStep
             onCurrentIndexChanged: workflowStep = currentIndex
-            TabButton { text: "1. Проект/модель" }
-            TabButton { text: "2. Сигналы" }
-            TabButton { text: "3. Протоколы" }
-            TabButton { text: "4. Валидация" }
-            TabButton { text: "5. Экспорт" }
+            TabButton { text: qsTr("1. Проект/модель") }
+            TabButton { text: qsTr("2. Сигналы") }
+            TabButton { text: qsTr("3. Протоколы") }
+            TabButton { text: qsTr("4. Валидация") }
+            TabButton { text: qsTr("5. Экспорт") }
         }
 
         Rectangle {
@@ -7012,11 +7012,11 @@ ApplicationWindow {
             ColumnLayout {
                 anchors.centerIn: parent
                 spacing: 12
-                Label { text: "Шаг 1: выберите проект и объектную модель"; font.pixelSize: 20; font.bold: true }
+                Label { text: qsTr("Шаг 1: выберите проект и объектную модель"); font.pixelSize: 20; font.bold: true }
                 RowLayout {
-                    Button { text: "Импорт проекта"; onClicked: fileDialog.open() }
-                    Button { text: "Управление моделями"; onClicked: objectModelsManagerDialog.open() }
-                    Button { text: "Управление протоколами"; onClicked: protocolManagerDialog.open() }
+                    Button { text: qsTr("Импорт проекта"); onClicked: fileDialog.open() }
+                    Button { text: qsTr("Управление моделями"); onClicked: objectModelsManagerDialog.open() }
+                    Button { text: qsTr("Управление протоколами"); onClicked: protocolManagerDialog.open() }
                 }
             }
         }
@@ -7395,9 +7395,9 @@ ApplicationWindow {
             ColumnLayout {
                 anchors.centerIn: parent
                 spacing: 10
-                Label { text: "Шаг 4: валидация"; font.pixelSize: 20; font.bold: true }
-                Label { text: hasUnsavedChanges ? "Есть несохраненные изменения" : "Изменения сохранены" }
-                Label { text: "Проверьте заполнение сигналов и соответствия протоколам перед экспортом." }
+                Label { text: qsTr("Шаг 4: валидация"); font.pixelSize: 20; font.bold: true }
+                Label { text: hasUnsavedChanges ? qsTr("Есть несохраненные изменения") : qsTr("Изменения сохранены") }
+                Label { text: qsTr("Проверьте заполнение сигналов и соответствия протоколам перед экспортом.") }
             }
         }
 
@@ -7409,11 +7409,11 @@ ApplicationWindow {
             ColumnLayout {
                 anchors.centerIn: parent
                 spacing: 10
-                Label { text: "Шаг 5: экспорт/генерация"; font.pixelSize: 20; font.bold: true }
+                Label { text: qsTr("Шаг 5: экспорт/генерация"); font.pixelSize: 20; font.bold: true }
                 RowLayout {
-                    Button { text: "Экспорт JSON"; onClicked: saveFileDialog.open() }
-                    Button { text: "Генерация кода"; onClicked: { jsonSelectDialog.exportType = "code"; jsonSelectDialog.open() } }
-                    Button { text: "Генерация Excel"; onClicked: { jsonSelectDialog.exportType = "exel"; jsonSelectDialog.open() } }
+                    Button { text: qsTr("Экспорт JSON"); onClicked: saveFileDialog.open() }
+                    Button { text: qsTr("Генерация кода"); onClicked: { jsonSelectDialog.exportType = "code"; jsonSelectDialog.open() } }
+                    Button { text: qsTr("Генерация Excel"); onClicked: { jsonSelectDialog.exportType = "exel"; jsonSelectDialog.open() } }
                 }
             }
         }
@@ -7429,16 +7429,16 @@ ApplicationWindow {
             anchors.fill: parent
             anchors.margins: 16
             spacing: 10
-            Label { text: "Расширенные и отладочные операции"; font.bold: true; font.pixelSize: 16 }
+            Label { text: qsTr("Расширенные и отладочные операции"); font.bold: true; font.pixelSize: 16 }
             Button {
-                text: modbus ? "Удалить Modbus" : "Добавить Modbus"
+                text: modbus ? qsTr("Удалить Modbus") : qsTr("Добавить Modbus")
                 onClicked: {
                     modbus = !modbus;
                     if (modbus) tabBar.updateFocus();
                 }
             }
             Button {
-                text: mek ? "Удалить MEK" : "Добавить MEK"
+                text: mek ? qsTr("Удалить MEK") : qsTr("Добавить MEK")
                 Layout.preferredWidth: rootwindow.isWideDesktop ? 150 : 130
                 onClicked: {
                     mek = !mek;
@@ -7453,18 +7453,18 @@ ApplicationWindow {
                     }
                 }
             }
-            Button { enabled: mek; visible: mek; text: mek_101 ? "Удалить MEK_101" : "Добавить MEK_101"; onClicked: mek_101 = !mek_101 }
-            Button { enabled: mek; visible: mek; text: mek_104 ? "Удалить MEK_104" : "Добавить MEK_104"; onClicked: mek_104 = !mek_104 }
-            Button { text: "Настроить ETH"; onClicked: ethConfigDialog.open() }
-            Button { text: "Настроить RS"; onClicked: rsConfigDialog.open() }
+            Button { enabled: mek; visible: mek; text: mek_101 ? qsTr("Удалить MEK_101") : qsTr("Добавить MEK_101"); onClicked: mek_101 = !mek_101 }
+            Button { enabled: mek; visible: mek; text: mek_104 ? qsTr("Удалить MEK_104") : qsTr("Добавить MEK_104"); onClicked: mek_104 = !mek_104 }
+            Button { text: qsTr("Настроить ETH"); onClicked: ethConfigDialog.open() }
+            Button { text: qsTr("Настроить RS"); onClicked: rsConfigDialog.open() }
             Button {
-                text: "Export to JSON"
+                text: qsTr("Export to JSON")
                 visible: rootwindow.isWideDesktop && !rootwindow.isCompactMode
                 Layout.preferredWidth: 145
                 onClicked: saveFileDialog.open()
             }
             Button {
-                text: "Generate code"
+                text: qsTr("Generate code")
                 visible: rootwindow.isWideDesktop && !rootwindow.isCompactMode
                 Layout.preferredWidth: 145
                 onClicked: {
@@ -7473,7 +7473,7 @@ ApplicationWindow {
                 }
             }
             Button {
-                text: "Generate exel"
+                text: qsTr("Generate exel")
                 visible: rootwindow.isWideDesktop && !rootwindow.isCompactMode
                 Layout.preferredWidth: 145
                 onClicked: {
@@ -7482,7 +7482,7 @@ ApplicationWindow {
                 }
             }
             Button {
-                text: "MEK indexing"
+                text: qsTr("MEK indexing")
                 visible: rootwindow.isWideDesktop && !rootwindow.isCompactMode
                 Layout.preferredWidth: 130
                 onClicked: assignIOA
@@ -7502,65 +7502,11 @@ ApplicationWindow {
                     console.log("----- END DUMP -----");
                 }
             }
-            Button { text: "MEK indexing"; onClicked: assignIOA }
+            Button { text: qsTr("MEK indexing"); onClicked: assignIOA }
             Item { Layout.fillHeight: true }
         }
     }
 
-            Button {
-                text: qsTr("Настроить ETH")
-                onClicked: {
-                    ethcounter = ethcounter + 1
-                    ethConfigDialog.open()
-                }
-            }
-            Button {
-                text: qsTr("Настроить RS")
-                onClicked: {
-                    initializeMekProperties()
-                }
-            }
-            Item {
-                Layout.fillWidth: true
-            }
-
-            Item { Layout.fillWidth: true }
-
-            Button {
-                text: qsTr("Export to JSON")
-                onClicked: {
-                    if (rootwindow.currentBldePath !== "") {
-                        saveToBlde(rootwindow.currentBldePath)
-                        hasUnsavedChanges = false
-                    } else {
-                        saveFileDialog.open()
-                    }
-                }
-            }
-
-            Button {
-                text: qsTr("Generate code")
-                onClicked: {
-                    jsonSelectDialog.exportType = "code"
-                    onClicked: jsonSelectDialog.open()
-                }
-            }
-            Button {
-                text: "Generate excel"
-                onClicked: {
-                    jsonSelectDialog.exportType = "excel"
-                    onClicked: jsonSelectDialog.open()
-                }
-            }
-
-            Button {
-                text: qsTr("MEK indexing")
-                onClicked: {
-                    assignIOA
-                }
-            }
-        }
-    }
 
 
 
