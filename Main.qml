@@ -665,7 +665,6 @@ ApplicationWindow {
                 }
             }
         }
-    }
 
     FileDialog {
         id: saveDialog
@@ -3173,162 +3172,6 @@ ApplicationWindow {
                             { title: "Сохранение", width: 100 },
                             { title: "Триггер", width: 140 }
                         ]
-                    }
-
-                    delegate: Rectangle {
-                        width: Math.max(listView.width, 1600)
-                        id: rowItem
-                        height: Math.max(180, nameField.height + 20)
-                        color: index % 2 === 0 ? "#ffffff" : "#f8fafc"
-                        property bool hasDuplicateName: itemData.isNameDuplicate || false
-                        property bool hasDuplicateCodeName: itemData.isCodeNameDuplicate || false
-
-                        required property int index
-                        property string ioIndex
-                        property string paramType
-                        property string name
-                        property string codeName
-                        property string type
-                        property string logicuse
-                        property string saving
-                        property string aperture
-                        property string ktt
-                        property string def_value
-                        property string ad
-                        property string oc
-                        property string sector
-                        property string tosp
-                        property string tolp
-
-                        property int originalIndex: {
-                            switch (pageRoot.paramType) {
-                                case "Аналоговые входы":
-                                    return analogInputsModel.get(index).originalIndex
-                                case "Дискретные входы":
-                                    return digitalInputsModel.get(index).originalIndex
-                                case "Аналоговый выход":
-                                    return analogOutputsModel.get(index).originalIndex
-                                case "Дискретный выход":
-                                    return digitalOutputsModel.get(index).originalIndex
-                                case "Признаки":
-                                    return flagsModel.get(index).originalIndex
-                                case "Уставка":
-                                    return settingsModel.get(index).originalIndex
-                                default:
-                                    return -1
-                            }
-                        }
-                        property var itemData: dataModel.get(originalIndex)
-                        RowLayout {
-                            z: 1
-                            anchors.fill: parent
-                            spacing: 0
-
-                            Label {
-                                text: qsTr("IO")
-                                Layout.preferredWidth: 50
-                                Layout.preferredHeight: 32
-                                Layout.minimumWidth: 50
-                                Layout.maximumWidth: 50
-                                color: "#1e293b"
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter
-                            }
-
-                            Label {
-                                text: qsTr("Наименование")
-                                Layout.preferredWidth: 350
-                                color: "#1e293b"
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter
-                            }
-
-                            Label {
-                                text: qsTr("Англ.название")
-                                Layout.preferredWidth: 350
-                                color: "#374151"
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            Label{
-                                text: qsTr("Индекс ТУ")
-                                Layout.preferredWidth: 150
-                                color: "#374151"
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            Label {
-                                text: qsTr("S/D")
-                                Layout.preferredWidth: 44
-                                color: "#374151"
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter
-                            }
-
-                            Label {
-                                text: qsTr("Логика")
-                                Layout.preferredWidth: 100
-                                color: "#374151"
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter
-                            }
-
-                            Label {
-                                text: qsTr("Сохранение")
-                                Layout.preferredWidth: 100
-                                color: "#374151"
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter
-                            }
-
-                            Label {
-                                text: qsTr("Триггер")
-                                Layout.preferredWidth: 140
-                                color: "#374151"
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            Label {
-                                text: qsTr("Выход")
-                                Layout.preferredWidth: 140
-                                color: "#374151"
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter
-                            }
-
-                            Label {
-                                text: qsTr("Короткий импульс")
-                                Layout.preferredWidth: 160
-                                color: "#374151"
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter
-                            }
-
-                            Label {
-                                text: qsTr("Длинный импульс")
-                                Layout.preferredWidth: 160
-                                color: "#374151"
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                verticalAlignment: Text.AlignVCenter
-                            }
-
-                            Label {
-                                text: ""
-                                Layout.preferredWidth: 160
-                                Layout.alignment: Qt.AlignHCenter
-                            }
-                        }
                     }
 
                     delegate: RowLayout {
@@ -7510,8 +7353,8 @@ ApplicationWindow {
 
 
 
-    Material.theme: Material.Light
-    Material.accent: Material.Purple
+    // Material.theme: Material.Light
+    // Material.accent: Material.Purple
 
 
 //region Functions
@@ -7557,15 +7400,12 @@ ApplicationWindow {
             var item = dataModel.get(i)
             if (item.paramType === "Аналоговый выход" || item.paramType === "Дискретный выход") {
                 dataModel.setProperty(i, "oi_c_sc_na_1", 'true')
-            }
-            else if (item.paramType === "Уставка") {
+            } else if (item.paramType === "Уставка") {
                 if (item.type === "bool") {
                     dataModel.setProperty(i, "oi_c_sc_na_1", 'true')
-                }
-                else if (item.type === "unsigned short" || item.type === "unsigned int") {
+                } else if (item.type === "unsigned short" || item.type === "unsigned int") {
                     dataModel.setProperty(i, "oi_c_se_na_1", 'true')
-                }
-                else if (item.type === "float") {
+                } else if (item.type === "float") {
                     dataModel.setProperty(i, "oi_c_se_nb_1", 'true')
                 }
             }
