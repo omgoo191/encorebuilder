@@ -2,16 +2,60 @@
 #include <QQmlEngine>
 #include <QStandardPaths>
 #include <QDir>
+#include <QFileInfo>
 
 FileHandler::FileHandler(QObject *parent) : QObject(parent)
 {
 	m_process = new QProcess(this);
-	connect(m_process, &QProcess::readyReadStandardOutput, [this]() {
-		emit pythonFinished(QString::fromLocal8Bit(m_process->readAllStandardOutput()));
+	connect(m_process, &QProcess::readyReadStandardOutput, this, [this]() {
+		m_stdoutBuffer.append(m_process->readAllStandardOutput());
+		emit pythonFinished(QString::fromUtf8(m_stdoutBuffer));
 	});
-	connect(m_process, &QProcess::errorOccurred, [this](QProcess::ProcessError error) {
-		emit pythonError(QString("Error: %1").arg(error));
+	connect(m_process, &QProcess::readyReadStandardError, this, [this]() {
+		m_stderrBuffer.append(m_process->readAllStandardError());
 	});
+	connect(m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
+		const QString errorText = QString::fromUtf8(m_stderrBuffer);
+		QVariantMap result{
+			{QStringLiteral("status"), QStringLiteral("process_error")},
+			{QStringLiteral("processError"), static_cast<int>(error)},
+			{QStringLiteral("executable"), m_currentExecutable},
+			{QStringLiteral("script"), m_currentScript},
+			{QStringLiteral("inputFile"), m_currentInputFile},
+			{QStringLiteral("stdout"), QString::fromUtf8(m_stdoutBuffer)},
+			{QStringLiteral("stderr"), errorText}
+		};
+		emit pythonProcessResult(result);
+		emit pythonError(QStringLiteral("Ошибка запуска процесса / Process launch error: %1").arg(errorText));
+	});
+	connect(m_process,
+			QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+			this,
+			[this](int exitCode, QProcess::ExitStatus exitStatus) {
+				const QString stdoutText = QString::fromUtf8(m_stdoutBuffer);
+				const QString stderrText = QString::fromUtf8(m_stderrBuffer);
+				const bool success = (exitStatus == QProcess::NormalExit && exitCode == 0);
+
+				QVariantMap result{
+					{QStringLiteral("status"), success ? QStringLiteral("success") : QStringLiteral("failed")},
+					{QStringLiteral("exitCode"), exitCode},
+					{QStringLiteral("exitStatus"), exitStatus == QProcess::NormalExit ? QStringLiteral("normal") : QStringLiteral("crash")},
+					{QStringLiteral("executable"), m_currentExecutable},
+					{QStringLiteral("script"), m_currentScript},
+					{QStringLiteral("inputFile"), m_currentInputFile},
+					{QStringLiteral("stdout"), stdoutText},
+					{QStringLiteral("stderr"), stderrText}
+				};
+
+				emit pythonProcessResult(result);
+				if (success) {
+					emit pythonFinished(stdoutText);
+				} else {
+					emit pythonError(QStringLiteral("Скрипт завершился с ошибкой / Script failed (exit code %1). stderr: %2")
+									.arg(exitCode)
+									.arg(stderrText));
+				}
+			});
 }
 QString FileHandler::getAppDirectory() const {
 	QDir projectDir(QCoreApplication::applicationDirPath());
@@ -23,7 +67,7 @@ QString FileHandler::cleanPath(const QString &path) const {
 	QString cleaned = path;
 	cleaned.replace("file://", "");
 
-	if (cleaned.startsWith("/") && cleaned	[2] == ':') {
+	if (cleaned.startsWith("/") && cleaned[2] == ':') {
 		cleaned = cleaned.mid(1);
 	}
 
@@ -115,36 +159,39 @@ void FileHandler::runPythonScript(const QString &jsonFilePath, bool type)
 {
 	QFileInfo fileInfo(jsonFilePath);
 	if (!fileInfo.exists()) {
-		emit pythonError("? ?? ?? ���?����?�: " + jsonFilePath);
+		emit pythonError(QStringLiteral("Файл JSON не найден / JSON file not found: %1").arg(jsonFilePath));
 		return;
 	}
 
 	QString basePath = QCoreApplication::applicationDirPath();
 	QDir path(basePath);
 	path.cdUp();
-	QString pythonExec = QCoreApplication::applicationDirPath() + (type ? "/Generator.exe" : "/exel_generator.exe");
-	QString scriptPath = type ? path.filePath("Generator.py") : path.filePath("exel_generator.py");
+	QString pythonExec = QCoreApplication::applicationDirPath() + (type ? "/Generator.exe" : "/excel_generator.exe");
+	QString scriptPath = type ? path.filePath("Generator.py") : path.filePath("excel_generator.py");
 
 	if (!QFile::exists(pythonExec)) {
-		emit pythonError("Python ?? ? ?�??: " + pythonExec);
+		emit pythonError(QStringLiteral("Исполняемый файл не найден / Executable not found: %1").arg(pythonExec));
 		return;
 	}
 	if (!QFile::exists(scriptPath)) {
-		emit pythonError("?���� ?? ? ?�??: " + scriptPath);
+		emit pythonError(QStringLiteral("Скрипт не найден / Script not found: %1").arg(scriptPath));
 		return;
 	}
 
-	if (!m_process) {
-		m_process = new QProcess(this);
+	if (m_process->state() != QProcess::NotRunning) {
+		emit pythonError(QStringLiteral("Предыдущий процесс ещё выполняется / Previous process is still running"));
+		return;
 	}
-	connect(m_process, &QProcess::readyReadStandardError, [=]() {
-		qDebug() << "stderr:" << m_process->readAllStandardError();
-	});
-	connect(m_process, &QProcess::readyReadStandardOutput, [=]() {
-		qDebug() << "stdout:" << m_process->readAllStandardOutput();
-	});
+
+	m_stdoutBuffer.clear();
+	m_stderrBuffer.clear();
+	m_currentExecutable = pythonExec;
+	m_currentScript = scriptPath;
+	m_currentInputFile = jsonFilePath;
 	m_process->setWorkingDirectory(path.absolutePath());
-	m_process->start(pythonExec, QStringList() << jsonFilePath);
+	m_process->setProgram(pythonExec);
+	m_process->setArguments(QStringList() << jsonFilePath);
+	m_process->start();
 }
 
 void FileHandler::writeFile(const QString &path, const QString &content)
@@ -154,7 +201,6 @@ void FileHandler::writeFile(const QString &path, const QString &content)
 		file.write(content.toUtf8());
 		file.close();
 	} else {
-		emit pythonError("�訡�� �� ��࠭���� 䠩��: " + path);
+		emit pythonError(QStringLiteral("Ошибка при сохранении файла / Failed to save file: %1").arg(path));
 	}
 }
-

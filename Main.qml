@@ -1989,7 +1989,7 @@ ApplicationWindow {
             if(exportType === "code"){
                 fileHandler.runPythonScript(localPath, true)
             }
-            if(exportType === "exel")
+            if(exportType === "excel")
                 {
                 fileHandler.runPythonScript(localPath, false)
             }
@@ -2905,6 +2905,28 @@ ApplicationWindow {
 
     FileHandler {
         id: fileHandler
+    }
+
+    MessageDialog {
+        id: scriptErrorDialog
+        title: "Ошибка генерации"
+        text: ""
+    }
+
+    Connections {
+        target: fileHandler
+        function onPythonProcessResult(result) {
+            if (!result || result.status === "success")
+                return
+
+            const stderrText = result.stderr ? String(result.stderr) : "(stderr is empty)"
+            const exitCode = (result.exitCode !== undefined) ? String(result.exitCode) : "n/a"
+            scriptErrorDialog.text = "Скрипт завершился с ошибкой.\n" +
+                                     "Script: " + (result.script || "") + "\n" +
+                                     "Exit code: " + exitCode + "\n" +
+                                     "stderr:\n" + stderrText
+            scriptErrorDialog.open()
+        }
     }
 
     function exportToJson() {
@@ -7269,9 +7291,9 @@ ApplicationWindow {
                 }
             }
             Button {
-                text: "Generate exel"
+                text: "Generate excel"
                 onClicked: {
-                    jsonSelectDialog.exportType = "exel"
+                    jsonSelectDialog.exportType = "excel"
                     onClicked: jsonSelectDialog.open()
                 }
             }

@@ -16,6 +16,7 @@
 #include <QJsonArray>
 #include <QMetaType>
 #include <QProcess>
+#include <QByteArray>
 class FileHandler : public QObject
 {
 Q_OBJECT
@@ -49,6 +50,7 @@ public slots:
 signals:
 	void pythonFinished(const QString &output);
 	void pythonError(const QString &error);
+	void pythonProcessResult(const QVariantMap &result);
 
 private:
 	bool ensureOutputDirectory() const;
@@ -58,6 +60,11 @@ private:
 	bool saveToRelativePath(const QString &relativePath, const QVariant &data);
 
 	QProcess *m_process;
+	QByteArray m_stdoutBuffer;
+	QByteArray m_stderrBuffer;
+	QString m_currentExecutable;
+	QString m_currentScript;
+	QString m_currentInputFile;
 
 };
 
