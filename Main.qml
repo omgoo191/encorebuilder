@@ -39,16 +39,28 @@ ApplicationWindow {
     property string currentObjectModelId: ""
     property string currentProtocolId: ""
     property string currentBldePath: ""
-    property int wideDesktopBreakpoint: 1600
-    property int compactBreakpoint: 1180
-    property bool isWideDesktop: rootwindow.width >= wideDesktopBreakpoint
-    property bool isCompactMode: rootwindow.width <= compactBreakpoint
+    property int workflowStep: 0
+    property bool hasUnsavedChanges: false
+    property int selectedSignalCount: 0
+    property string currentModelName: {
+        if (!currentObjectModelId)
+            return objectModelsConfig.count > 0 ? (objectModelsConfig.get(0).name || objectModelsConfig.get(0).id || "Не выбрана") : "Не выбрана"
+        for (var i = 0; i < objectModelsConfig.count; ++i) {
+            var model = objectModelsConfig.get(i)
+            if (model.id === currentObjectModelId)
+                return model.name || model.id
+        }
+        return "Не выбрана"
+    }
 
-    Material.theme: Material.System
+    function updateHeaderIndicators() {
+        var currentModel = getFilteredModel(currentType, false)
+        selectedSignalCount = currentModel ? currentModel.count : 0
+    }
 
-    Theme {
-        id: appTheme
-        materialTheme: rootwindow.Material.theme
+    function markDirty() {
+        if (!loadingState) hasUnsavedChanges = true
+        updateHeaderIndicators()
     }
 
     function setTypeCombo(choices, fieldName, item) {
@@ -109,6 +121,7 @@ ApplicationWindow {
     Component.onCompleted: {
         startDialog.open()
         __rebuildIndex()
+        updateHeaderIndicators()
     }
     Connections {
         target: dataModel
@@ -608,6 +621,8 @@ ApplicationWindow {
                 stateFileName = filePath
             }
             rootwindow.currentBldePath = filePath
+            hasUnsavedChanges = false
+            updateHeaderIndicators()
         }
     }
     MessageDialog {
@@ -728,18 +743,21 @@ ApplicationWindow {
         function onRowsInserted(parent, first, last) {
             for (var i = first; i <= last; i++) {
                 syncFilteredModels()
+                    markDirty()
             }
         }
 
         function onRowsRemoved(parent, first, last) {
             // Rebuild all filtered models after removal
             initializeFilteredModels()
+            markDirty()
         }
 
         function onDataChanged(topLeft, bottomRight, roles) {
             for (var i = topLeft.row; i <= bottomRight.row; i++) {
                 var item = dataModel.get(i)
                 console.log("change")
+                markDirty()
                 // If paramType changed, we need to re-categorize
                 if (roles.length === 0 || roles.indexOf("paramType") >= 0) {
                     syncFilteredModels()
@@ -2285,6 +2303,8 @@ ApplicationWindow {
         });
 
         loadingState = false;
+        hasUnsavedChanges = false;
+        updateHeaderIndicators();
     }
     }
     Dialog {
@@ -2760,6 +2780,8 @@ ApplicationWindow {
     function saveToBlde(path) {
         let json = exportToJson()
         fileHandler.saveToFile(path, json)
+        hasUnsavedChanges = false
+        updateHeaderIndicators()
     }
 
 
@@ -5548,7 +5570,66 @@ ApplicationWindow {
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
-        anchors.bottomMargin: controlPanel.height
+        anchors.bottomMargin: 70
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 52
+            color: "#f8fafc"
+            border.color: "#e2e8f0"
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
+                spacing: 18
+
+                Label { text: "Модель: " + currentModelName; font.bold: true; color: "#1e293b" }
+                Label { text: hasUnsavedChanges ? "● Несохраненные изменения" : "✓ Сохранено"; color: hasUnsavedChanges ? "#dc2626" : "#059669" }
+                Label { text: "Сигналов в разделе: " + selectedSignalCount; color: "#334155" }
+                Item { Layout.fillWidth: true }
+                Button {
+                    text: "Дополнительно"
+                    onClicked: advancedDrawer.open()
+                }
+            }
+        }
+
+        TabBar {
+            id: workflowTabs
+            Layout.fillWidth: true
+            currentIndex: workflowStep
+            onCurrentIndexChanged: workflowStep = currentIndex
+            TabButton { text: "1. Проект/модель" }
+            TabButton { text: "2. Сигналы" }
+            TabButton { text: "3. Протоколы" }
+            TabButton { text: "4. Валидация" }
+            TabButton { text: "5. Экспорт" }
+        }
+
+        Rectangle {
+            visible: workflowStep === 0
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            color: "#ffffff"
+            ColumnLayout {
+                anchors.centerIn: parent
+                spacing: 12
+                Label { text: "Шаг 1: выберите проект и объектную модель"; font.pixelSize: 20; font.bold: true }
+                RowLayout {
+                    Button { text: "Импорт проекта"; onClicked: fileDialog.open() }
+                    Button { text: "Управление моделями"; onClicked: objectModelsManagerDialog.open() }
+                    Button { text: "Управление протоколами"; onClicked: protocolManagerDialog.open() }
+                }
+            }
+        }
+
+        TabBar {
+            id: protocolTabs
+            visible: workflowStep >= 2
+
+            Layout.fillWidth: true
+            currentIndex: 0
+            property int tabWidth: 180
 
             // Add background styling to match header
             background: Rectangle {
@@ -5624,8 +5705,9 @@ ApplicationWindow {
                 }
             }
         }
-
-        Item {
+        TabBar {
+            id: tabBar
+            visible: workflowStep === 1 || workflowStep === 2
             Layout.fillWidth: true
             Layout.preferredHeight: tabBar.implicitHeight
             Layout.maximumHeight: tabBar.implicitHeight
@@ -5743,6 +5825,7 @@ ApplicationWindow {
 
         StackLayout {
             id: swipeView
+            visible: workflowStep === 1 || workflowStep === 2
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.minimumHeight: 280
@@ -5868,37 +5951,70 @@ ApplicationWindow {
                 sourceComponent: modbusPageComponent
                 asynchronous: true
             }
-            Loader { active: tabBar.currentIndex === 7 && mek; sourceComponent: mekPageComponent; asynchronous: true }
-            Loader { active: tabBar.currentIndex === 8; sourceComponent: mek101PageComponent; asynchronous: true }
-            Loader { active: tabBar.currentIndex === 9; sourceComponent: mek104PageComponent; asynchronous: true }
-        }
-    }
+            Loader {
+                active: tabBar.currentIndex === 7 && mek
+                sourceComponent: mekPageComponent
+                asynchronous: true
 
-    Rectangle {
-        id: controlPanel
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        height: rootwindow.isCompactMode ? 56 : 70
-        color: "#d0ffffff"
-        Behavior on color { ColorAnimation { duration: 200 } }
+            }
+            Loader {
+                active: tabBar.currentIndex === 8
+                sourceComponent: mek101PageComponent
+                asynchronous: true
+            }
+            Loader {
+                active: tabBar.currentIndex === 9
+                sourceComponent: mek104PageComponent
+                asynchronous: true
+            }
+
+         }
 
         Rectangle {
-            anchors.top: parent.top
-            width: parent.width
-            height: 1
-            color: "#dbeafe"
+            visible: workflowStep === 3
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            color: "#ffffff"
+            ColumnLayout {
+                anchors.centerIn: parent
+                spacing: 10
+                Label { text: "Шаг 4: валидация"; font.pixelSize: 20; font.bold: true }
+                Label { text: hasUnsavedChanges ? "Есть несохраненные изменения" : "Изменения сохранены" }
+                Label { text: "Проверьте заполнение сигналов и соответствия протоколам перед экспортом." }
+            }
         }
 
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: 12
-            anchors.rightMargin: 12
-            spacing: 10
+        Rectangle {
+            visible: workflowStep === 4
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            color: "#ffffff"
+            ColumnLayout {
+                anchors.centerIn: parent
+                spacing: 10
+                Label { text: "Шаг 5: экспорт/генерация"; font.pixelSize: 20; font.bold: true }
+                RowLayout {
+                    Button { text: "Экспорт JSON"; onClicked: saveFileDialog.open() }
+                    Button { text: "Генерация кода"; onClicked: { jsonSelectDialog.exportType = "code"; jsonSelectDialog.open() } }
+                    Button { text: "Генерация Excel"; onClicked: { jsonSelectDialog.exportType = "exel"; jsonSelectDialog.open() } }
+                }
+            }
+        }
+     }
 
+    Drawer {
+        id: advancedDrawer
+        edge: Qt.RightEdge
+        width: Math.min(rootwindow.width * 0.32, 420)
+        height: rootwindow.height
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 10
+            Label { text: "Расширенные и отладочные операции"; font.bold: true; font.pixelSize: 16 }
             Button {
-                text: modbus ? "Удалить Modbus" : "Добавить ModBus"
-                Layout.preferredWidth: rootwindow.isWideDesktop ? 170 : 145
+                text: modbus ? "Удалить Modbus" : "Добавить Modbus"
                 onClicked: {
                     modbus = !modbus;
                     if (modbus) tabBar.updateFocus();
@@ -5920,46 +6036,10 @@ ApplicationWindow {
                     }
                 }
             }
-
-            Button {
-                enabled: mek
-                visible: mek && !rootwindow.isCompactMode
-                text: mek_101 ? "Удалить MEK_101" : "Добавить MEK_101"
-                Layout.preferredWidth: 165
-                onClicked: {
-                    mek_101 = !mek_101;
-                    if (mek_101) tabBar.updateFocus();
-                }
-            }
-            Button {
-                enabled: mek
-                visible: mek && !rootwindow.isCompactMode
-                text: mek_104 ? "Удалить MEK_104" : "Добавить MEK_104"
-                Layout.preferredWidth: 165
-                onClicked: {
-                    mek_104 = !mek_104;
-                    if (mek_104) tabBar.updateFocus();
-                }
-            }
-
-            Button {
-                text: "Настроить ETH"
-                visible: !rootwindow.isCompactMode
-                Layout.preferredWidth: 130
-                onClicked: {
-                    ethcounter = ethcounter + 1
-                    ethConfigDialog.open()
-                }
-            }
-            Button {
-                text: "Настроить RS"
-                visible: !rootwindow.isCompactMode
-                Layout.preferredWidth: 130
-                onClicked: initializeMekProperties()
-            }
-
-            Item { Layout.fillWidth: true }
-
+            Button { enabled: mek; visible: mek; text: mek_101 ? "Удалить MEK_101" : "Добавить MEK_101"; onClicked: mek_101 = !mek_101 }
+            Button { enabled: mek; visible: mek; text: mek_104 ? "Удалить MEK_104" : "Добавить MEK_104"; onClicked: mek_104 = !mek_104 }
+            Button { text: "Настроить ETH"; onClicked: ethConfigDialog.open() }
+            Button { text: "Настроить RS"; onClicked: rsConfigDialog.open() }
             Button {
                 text: "Export to JSON"
                 visible: rootwindow.isWideDesktop && !rootwindow.isCompactMode
@@ -6002,85 +6082,78 @@ ApplicationWindow {
                     console.log("----- FULL MODEL DUMP -----");
                     for (var i = 0; i < dataModel.count; i++) {
                         var item = dataModel.get(i);
-                        console.log("\nItem " + i + ": " + item.paramType + " \"" + item.name + "\"");
-                        var props = Object.keys(item);
-                        for (var j = 0; j < props.length; j++) {
-                            var propName = props[j];
-                            if (!/^[A-Z]/.test(propName)) {
-                                console.log(`  ${propName}:`, item[propName]);
-                            }
-                        }
+                        console.log(`\nItem ${i}: ${item.paramType} "${item.name}"`);
                     }
                     console.log("----- END DUMP -----");
                 }
             }
+            Button { text: "MEK indexing"; onClicked: assignIOA }
+            Item { Layout.fillHeight: true }
+        }
+    }
 
-            ToolButton {
-                text: "⋯"
-                visible: rootwindow.isCompactMode
-                font.pixelSize: 22
-                Layout.preferredWidth: 48
-                onClicked: compactActionsMenu.open()
-            }
+    Rectangle {
+        id: controlPanel
+        anchors.bottom: parent.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: 70
+        color: "#d0ffffff"
+        Behavior on color { ColorAnimation { duration: 200 } }
+
+
+        Rectangle {
+            anchors.top: parent.top
+            width: parent.width
+            height: 1
+            color: "#e0e0e0"
         }
 
-        Menu {
-            id: compactActionsMenu
-            MenuItem {
-                text: mek_101 ? "Удалить MEK_101" : "Добавить MEK_101"
-                enabled: mek
-                onTriggered: {
-                    mek_101 = !mek_101
-                    if (mek_101) tabBar.updateFocus()
-                }
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 20
+            anchors.rightMargin: 20
+            spacing: 12
+
+            Label {
+                text: workflowStep === 4 ? "Готово к экспорту" : "Контекстные действия"
+                font.bold: true
+                color: "#334155"
             }
-            MenuItem {
-                text: mek_104 ? "Удалить MEK_104" : "Добавить MEK_104"
-                enabled: mek
-                onTriggered: {
-                    mek_104 = !mek_104
-                    if (mek_104) tabBar.updateFocus()
-                }
-            }
-            MenuSeparator {}
-            MenuItem {
-                text: "Настроить ETH"
-                onTriggered: {
-                    ethcounter = ethcounter + 1
-                    ethConfigDialog.open()
-                }
-            }
-            MenuItem { text: "Настроить RS"; onTriggered: initializeMekProperties() }
-            MenuItem { text: "Export to JSON"; onTriggered: saveFileDialog.open() }
-            MenuItem {
-                text: "Generate code"
-                onTriggered: {
-                    jsonSelectDialog.exportType = "code"
-                    jsonSelectDialog.open()
-                }
-            }
-            MenuItem {
-                text: "Generate exel"
-                onTriggered: {
-                    jsonSelectDialog.exportType = "exel"
-                    jsonSelectDialog.open()
-                }
-            }
-            MenuItem { text: "MEK indexing"; onTriggered: assignIOA }
-            MenuItem {
-                text: "Debug Full Model"
-                onTriggered: {
-                    if (dataModel.count === 0) {
-                        console.log("Model is empty!")
-                        return
+
+            Item { Layout.fillWidth: true }
+
+            Button {
+                text: "Сохранить"
+                highlighted: true
+                onClicked: {
+                    if (rootwindow.currentBldePath !== "") {
+                        saveToBlde(rootwindow.currentBldePath)
+                        hasUnsavedChanges = false
+                    } else {
+                        saveFileDialog.open()
                     }
-                    console.log("----- FULL MODEL DUMP -----")
-                    for (var i = 0; i < dataModel.count; i++) {
-                        var item = dataModel.get(i)
-                        console.log(`\nItem ${i}: ${item.paramType} "${item.name}"`)
-                    }
-                    console.log("----- END DUMP -----")
                 }
+            }
+
+            Button {
+                text: "Доп. действия"
+                onClicked: actionsMenu.open()
+            }
+
+            Menu {
+                id: actionsMenu
+                y: controlPanel.y - height
+                MenuItem { text: "Экспорт JSON"; onTriggered: saveFileDialog.open() }
+                MenuItem { text: "Генерация кода"; onTriggered: { jsonSelectDialog.exportType = "code"; jsonSelectDialog.open() } }
+                MenuItem { text: "Генерация Excel"; onTriggered: { jsonSelectDialog.exportType = "exel"; jsonSelectDialog.open() } }
+                MenuSeparator { }
+                MenuItem { text: "Расширенные"; onTriggered: advancedDrawer.open() }
+            }
+
+            Button {
+                text: "Экспорт"
+                onClicked: workflowStep = 4
             }
         }
     }
