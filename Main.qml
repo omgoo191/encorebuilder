@@ -12,6 +12,12 @@ ApplicationWindow {
     height: 1080
     visible: true
     title: "Генератор сигналов"
+    Material.theme: Material.Light
+    Material.primary: Material.BlueGrey
+    Material.accent: Material.Teal
+    Material.background: "#f1f5f9"
+    font.family: "Inter"
+    font.pixelSize: 14
     //region global properties
     property bool modbus: false
     property bool mek: false
@@ -7100,7 +7106,7 @@ ApplicationWindow {
             anchors.top: parent.top
             width: parent.width
             height: 1
-            color: "#e0e0e0"
+            color: "#dbeafe"
         }
 
         RowLayout {
