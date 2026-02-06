@@ -731,6 +731,6 @@ void Core::InitTelemeasurements() {{
 if __name__ == "__main__":
     json_path = r"C:\Users\v.suhanov\Desktop\encore_builder\cmake-build-release\1111.blde"
     if len(sys.argv) < 2:
-        print("Usage: python Generator_patched.py <json_file>", file=sys.stderr)
+        print("Usage: python Generator.py <json_file>", file=sys.stderr)
         sys.exit(1)
     sys.exit(main(sys.argv[1]))

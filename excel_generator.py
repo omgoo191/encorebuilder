@@ -121,12 +121,12 @@ def main(json_file):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ws.cell(row=current_row+1, column=1, value=f"{timestamp}")
 
-    wb.save("Инфо объекты.xlsx")
-    print(f"Excel file saved")
+    wb.save("Инфо_объекты.xlsx")
+    print("Excel generation completed: Инфо_объекты.xlsx")
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python Generator.py <json_file>", file=sys.stderr)
+        print("Usage: python excel_generator.py <json_file>", file=sys.stderr)
         sys.exit(1)
 
     sys.exit(main(sys.argv[1]))
