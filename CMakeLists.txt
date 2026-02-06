@@ -22,12 +22,33 @@ qt_add_qml_module(appGenerator
         Main.qml
 )
 
+set(TS_FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/i18n/app_ru.ts
+)
+
+find_program(LUPDATE_EXECUTABLE
+    NAMES lupdate qt6-lupdate lupdate-qt6
+)
+
+if(LUPDATE_EXECUTABLE)
+    add_custom_target(translations_update
+        COMMAND ${LUPDATE_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/Main.qml
+            ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp
+            -ts ${TS_FILES}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Updating Qt translation source files (.ts)"
+    )
+else()
+    message(WARNING "Qt lupdate tool was not found. 'translations_update' target is unavailable.")
+endif()
+
 #set(PYTHON_SCRIPT "${CMAKE_SOURCE_DIR}/Generator.py")
 #set(JSON_FILE "${CMAKE_SOURCE_DIR}/output/export.json")
 #add_custom_target(runPythonScript ALL
 #        COMMAND ${PYTHON_EXECUTABLE} ${PYTHON_SCRIPT} ${JSON_FILE}
 #        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-#        COMMENT "ƒ¥­¥à æ¨ï")
+#        COMMENT "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½")
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an
 # explicit, fixed bundle identifier manually though.
