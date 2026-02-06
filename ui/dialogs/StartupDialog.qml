@@ -4,7 +4,7 @@ import QtQuick.Layouts 1.15
 
 Dialog {
     id: startupDialog
-    title: "Выберите действие"
+    title: qsTr("Выберите действие")
     modal: true
     standardButtons: Dialog.NoButton
     anchors.centerIn: parent
@@ -68,7 +68,7 @@ Dialog {
         rowSpacing: 15
 
         Button {
-            text: "Создать новую конфигурацию"
+            text: qsTr("Создать новую конфигурацию")
             Layout.fillWidth: true
             Layout.preferredHeight: 40
             font.pixelSize: 14
@@ -91,7 +91,7 @@ Dialog {
         }
 
         Button {
-            text: "Открыть существующую"
+            text: qsTr("Открыть существующую")
             Layout.fillWidth: true
             Layout.preferredHeight: 40
             font.pixelSize: 14
