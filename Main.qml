@@ -10,7 +10,6 @@ ApplicationWindow {
     id: rootwindow
     width: 1920
     height: 1080
-    minimumWidth: 1920
     visible: true
     title: "Генератор сигналов"
     //region global properties
@@ -31,6 +30,10 @@ ApplicationWindow {
     property string currentObjectModelId: ""
     property string currentProtocolId: ""
     property string currentBldePath: ""
+    property int wideDesktopBreakpoint: 1600
+    property int compactBreakpoint: 1180
+    property bool isWideDesktop: rootwindow.width >= wideDesktopBreakpoint
+    property bool isCompactMode: rootwindow.width <= compactBreakpoint
 
     function setTypeCombo(choices, fieldName, item) {
         if (!item || !choices || choices.length === 0) {
@@ -6766,219 +6769,187 @@ ApplicationWindow {
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
-        anchors.bottomMargin: 70
-        TabBar {
-            id: protocolTabs
+        anchors.bottomMargin: controlPanel.height
+
+        Item {
             Layout.fillWidth: true
-            currentIndex: 0
-            property int tabWidth: 180
+            Layout.preferredHeight: protocolTabs.implicitHeight
+            Layout.maximumHeight: protocolTabs.implicitHeight
+            clip: true
 
-            // Add background styling to match header
-            background: Rectangle {
-                color: "#f1f5f9"
-                antialiasing: true
+            Flickable {
+                anchors.fill: parent
+                contentWidth: protocolTabs.implicitWidth
+                contentHeight: height
+                interactive: contentWidth > width
+                flickableDirection: Flickable.HorizontalFlick
+                boundsBehavior: Flickable.StopAtBounds
 
-                // Top separator line
-                Rectangle {
-                    anchors.top: parent.top
-                    width: parent.width
-                    height: 1
-                    color: "#e2e8f0"
-                }
+                TabBar {
+                    id: protocolTabs
+                    width: Math.max(parent.width, implicitWidth)
+                    currentIndex: 0
+                    property int tabPreferredWidth: rootwindow.isCompactMode ? 130 : 180
 
-                // Bottom separator line
-                Rectangle {
-                    anchors.bottom: parent.bottom
-                    width: parent.width
-                    height: 1
-                    color: "#cbd5e1"
-                }
+                    background: Rectangle {
+                        color: "#f1f5f9"
+                        antialiasing: true
+                        Rectangle {
+                            anchors.top: parent.top
+                            width: parent.width
+                            height: 1
+                            color: "#e2e8f0"
+                        }
+                        Rectangle {
+                            anchors.bottom: parent.bottom
+                            width: parent.width
+                            height: 1
+                            color: "#cbd5e1"
+                        }
+                        gradient: Gradient {
+                            GradientStop { position: 0.0; color: "#f8fafc" }
+                            GradientStop { position: 1.0; color: "#e2e8f0" }
+                        }
+                    }
 
-                // Gradient background
-                gradient: Gradient {
-                    GradientStop { position: 0.0; color: "#f8fafc" }
-                    GradientStop { position: 1.0; color: "#e2e8f0" }
-                }
-            }
-            TabButton{
-                text:"Общее"
-                background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
-                    border.width: parent.checked ? 1 : 0
-                }
-            }
-            TabButton{text:"Modbus"
-                visible: modbus
-                background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
-                    border.width: parent.checked ? 1 : 0
-                }
-                width: visible ? tabBar.tabWidth : 0
-            }
-            TabButton{
-                text:"MEK"
-                visible: mek
-                background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
-                    border.width: parent.checked ? 1 : 0
-                }
-                width: visible ? tabBar.tabWidth : 0
+                    TabButton {
+                        text: "Общее"
+                        Layout.preferredWidth: protocolTabs.tabPreferredWidth
+                        background: Rectangle {
+                            color: parent.checked ? "#e2e8f0" : "transparent"
+                            border.color: parent.checked ? "#cbd5e1" : "transparent"
+                            border.width: parent.checked ? 1 : 0
+                        }
+                    }
+                    TabButton {
+                        text: "Modbus"
+                        visible: modbus
+                        Layout.preferredWidth: protocolTabs.tabPreferredWidth
+                        background: Rectangle {
+                            color: parent.checked ? "#e2e8f0" : "transparent"
+                            border.color: parent.checked ? "#cbd5e1" : "transparent"
+                            border.width: parent.checked ? 1 : 0
+                        }
+                    }
+                    TabButton {
+                        text: "MEK"
+                        visible: mek
+                        Layout.preferredWidth: protocolTabs.tabPreferredWidth
+                        background: Rectangle {
+                            color: parent.checked ? "#e2e8f0" : "transparent"
+                            border.color: parent.checked ? "#cbd5e1" : "transparent"
+                            border.width: parent.checked ? 1 : 0
+                        }
+                    }
+                    TabButton {
+                        text: "MEK101"
+                        visible: mek_101
+                        Layout.preferredWidth: protocolTabs.tabPreferredWidth
+                        background: Rectangle {
+                            color: parent.checked ? "#e2e8f0" : "transparent"
+                            border.color: parent.checked ? "#cbd5e1" : "transparent"
+                            border.width: parent.checked ? 1 : 0
+                        }
+                    }
+                    TabButton {
+                        text: "MEK104"
+                        visible: mek_104
+                        Layout.preferredWidth: protocolTabs.tabPreferredWidth
+                        background: Rectangle {
+                            color: parent.checked ? "#e2e8f0" : "transparent"
+                            border.color: parent.checked ? "#cbd5e1" : "transparent"
+                            border.width: parent.checked ? 1 : 0
+                        }
+                    }
 
-            }
-            TabButton{text:"MEK101"
-                visible: mek_101
-                background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
-                    border.width: parent.checked ? 1 : 0
+                    onCurrentIndexChanged: {
+                        currentProtocol = protocolTabs.itemAt(currentIndex).text
+                        console.log(currentProtocol)
+                    }
                 }
-                width: visible ? tabBar.tabWidth : 0
-            }
-            TabButton{
-                text:"MEK104"
-                visible: mek_104
-                background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
-                    border.width: parent.checked ? 1 : 0
-                }
-                width: visible ? tabBar.tabWidth : 0
-            }
-            onCurrentIndexChanged: {
-                currentProtocol = protocolTabs.itemAt(currentIndex).text
-                console.log(currentProtocol)
             }
         }
-        TabBar {
-            id: tabBar
+
+        Item {
             Layout.fillWidth: true
-            currentIndex: 0
-            property int tabWidth: 180
+            Layout.preferredHeight: tabBar.implicitHeight
+            Layout.maximumHeight: tabBar.implicitHeight
+            clip: true
 
-            // Add background styling to match header
-            background: Rectangle {
-                color: "#f1f5f9"
-                antialiasing: true
+            Flickable {
+                anchors.fill: parent
+                contentWidth: tabBar.implicitWidth
+                contentHeight: height
+                interactive: contentWidth > width
+                flickableDirection: Flickable.HorizontalFlick
+                boundsBehavior: Flickable.StopAtBounds
 
-                // Top separator line
-                Rectangle {
-                    anchors.top: parent.top
-                    width: parent.width
-                    height: 1
-                    color: "#e2e8f0"
-                }
+                TabBar {
+                    id: tabBar
+                    width: Math.max(parent.width, implicitWidth)
+                    currentIndex: 0
 
-                // Bottom separator line
-                Rectangle {
-                    anchors.bottom: parent.bottom
-                    width: parent.width
-                    height: 1
-                    color: "#cbd5e1"
-                }
-
-                // Gradient background
-                gradient: Gradient {
-                    GradientStop { position: 0.0; color: "#f8fafc" }
-                    GradientStop { position: 1.0; color: "#e2e8f0" }
-                }
-            }
-
-            TabButton {
-                text: "Аналоговые входы"
-                background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
-                    border.width: parent.checked ? 1 : 0
-                }
-            }
-            TabButton {
-                text: "Дискретные входы"
-                background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
-                    border.width: parent.checked ? 1 : 0
-                }
-            }
-            TabButton {
-                text: "Аналоговый выход"
-                background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
-                    border.width: parent.checked ? 1 : 0
-                }
-            }
-            TabButton {
-                text: "Дискретный выход"
-                background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
-                    border.width: parent.checked ? 1 : 0
-                }
-            }
-            TabButton {
-                text: "Признаки"
-                background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
-                    border.width: parent.checked ? 1 : 0
-                }
-            }
-            TabButton {
-                text: "Команда уставки"
-                background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
-                    border.width: parent.checked ? 1 : 0
-                }
-            }
-            function activateTab(tabName) {
-                for (var i = 0; i < count; i++) {
-                    if (itemAt(i).text === tabName && itemAt(i).visible) {
-                        currentIndex = i;
-                        return true;
+                    background: Rectangle {
+                        color: "#f1f5f9"
+                        antialiasing: true
+                        Rectangle {
+                            anchors.top: parent.top
+                            width: parent.width
+                            height: 1
+                            color: "#e2e8f0"
+                        }
+                        Rectangle {
+                            anchors.bottom: parent.bottom
+                            width: parent.width
+                            height: 1
+                            color: "#cbd5e1"
+                        }
+                        gradient: Gradient {
+                            GradientStop { position: 0.0; color: "#f8fafc" }
+                            GradientStop { position: 1.0; color: "#e2e8f0" }
+                        }
                     }
-                }
-                return false;
-            }
 
-            function updateFocus() {
-                if (mek && mek_104 && activateTab("MEK_104")) return;
-                if (mek && mek_101 && activateTab("MEK_101")) return;
-                if (mek && activateTab("MEK")) return;
-                if (modbus && activateTab("Modbus")) return;
+                    TabButton { text: "Аналоговые входы"; background: Rectangle { color: parent.checked ? "#e2e8f0" : "transparent"; border.color: parent.checked ? "#cbd5e1" : "transparent"; border.width: parent.checked ? 1 : 0 } }
+                    TabButton { text: "Дискретные входы"; background: Rectangle { color: parent.checked ? "#e2e8f0" : "transparent"; border.color: parent.checked ? "#cbd5e1" : "transparent"; border.width: parent.checked ? 1 : 0 } }
+                    TabButton { text: "Аналоговый выход"; background: Rectangle { color: parent.checked ? "#e2e8f0" : "transparent"; border.color: parent.checked ? "#cbd5e1" : "transparent"; border.width: parent.checked ? 1 : 0 } }
+                    TabButton { text: "Дискретный выход"; background: Rectangle { color: parent.checked ? "#e2e8f0" : "transparent"; border.color: parent.checked ? "#cbd5e1" : "transparent"; border.width: parent.checked ? 1 : 0 } }
+                    TabButton { text: "Признаки"; background: Rectangle { color: parent.checked ? "#e2e8f0" : "transparent"; border.color: parent.checked ? "#cbd5e1" : "transparent"; border.width: parent.checked ? 1 : 0 } }
+                    TabButton { text: "Команда уставки"; background: Rectangle { color: parent.checked ? "#e2e8f0" : "transparent"; border.color: parent.checked ? "#cbd5e1" : "transparent"; border.width: parent.checked ? 1 : 0 } }
 
-                currentIndex = 0;
-            }
-
-            onCurrentIndexChanged: {
-                if (currentIndex >= 0) {
-                    swipeView.currentIndex = currentIndex;
-                    switch(swipeView.currentIndex) {
-                        case 0:
-                            rootwindow.currentType = "Аналоговые входы";
-                            break;
-                        case 1:
-                            rootwindow.currentType = "Дискретные входы";
-                            break;
-                        case 2:
-                            rootwindow.currentType = "Аналоговый выход";
-                            break;
-                        case 3:
-                            rootwindow.currentType = "Дискретный выход";
-                            break;
-                        case 4:
-                            rootwindow.currentType = "Признаки";
-                            break;
-                        case 5:
-                            rootwindow.currentType = "Уставка";
-                            break;
-                        default:
-                            rootwindow.currentType = "";
+                    function activateTab(tabName) {
+                        for (var i = 0; i < count; i++) {
+                            if (itemAt(i).text === tabName && itemAt(i).visible) {
+                                currentIndex = i;
+                                return true;
+                            }
+                        }
+                        return false;
                     }
-                    console.log(rootwindow.currentType);
+
+                    function updateFocus() {
+                        if (mek && mek_104 && activateTab("MEK_104")) return;
+                        if (mek && mek_101 && activateTab("MEK_101")) return;
+                        if (mek && activateTab("MEK")) return;
+                        if (modbus && activateTab("Modbus")) return;
+                        currentIndex = 0;
+                    }
+
+                    onCurrentIndexChanged: {
+                        if (currentIndex >= 0) {
+                            swipeView.currentIndex = currentIndex;
+                            switch(swipeView.currentIndex) {
+                                case 0: rootwindow.currentType = "Аналоговые входы"; break;
+                                case 1: rootwindow.currentType = "Дискретные входы"; break;
+                                case 2: rootwindow.currentType = "Аналоговый выход"; break;
+                                case 3: rootwindow.currentType = "Дискретный выход"; break;
+                                case 4: rootwindow.currentType = "Признаки"; break;
+                                case 5: rootwindow.currentType = "Уставка"; break;
+                                default: rootwindow.currentType = "";
+                            }
+                            console.log(rootwindow.currentType);
+                        }
+                    }
                 }
             }
         }
@@ -6987,8 +6958,8 @@ ApplicationWindow {
             id: swipeView
             Layout.fillWidth: true
             Layout.fillHeight: true
+            Layout.minimumHeight: 280
             currentIndex: tabBar.currentIndex
-            anchors.margins: 10
 
             Loader {
                 id: loader1
@@ -7006,12 +6977,9 @@ ApplicationWindow {
                 onLoaded: {
                     item.paramType = "Аналоговые входы"
                     item.listView = listView
-                        item.addClicked.connect(() => {
-                        rootwindow.currentType = "Аналоговые входы"
-                    })
+                    item.addClicked.connect(() => { rootwindow.currentType = "Аналоговые входы" })
                 }
             }
-
             Loader {
                 id: loader2
                 active: tabBar.currentIndex === 1
@@ -7028,13 +6996,9 @@ ApplicationWindow {
                 onLoaded: {
                     item.paramType = "Дискретные входы"
                     item.listView = listView
-                        item.addClicked.connect(() => {
-                        rootwindow.currentType = "Дискретные входы"
-
-                    })
+                    item.addClicked.connect(() => { rootwindow.currentType = "Дискретные входы" })
                 }
             }
-
             Loader {
                 id: loader3
                 active: tabBar.currentIndex === 2
@@ -7046,17 +7010,14 @@ ApplicationWindow {
                         case "MEK101": return mek101PageComponent
                         case "MEK104": return mek104PageComponent
                     }
-                }                asynchronous: true
+                }
+                asynchronous: true
                 onLoaded: {
                     item.paramType = "Аналоговый выход"
                     item.listView = listView
-                        item.addClicked.connect(() => {
-                        rootwindow.currentType = "Аналоговый выход"
-
-                    })
+                    item.addClicked.connect(() => { rootwindow.currentType = "Аналоговый выход" })
                 }
             }
-
             Loader {
                 id: loader4
                 active: tabBar.currentIndex === 3
@@ -7068,14 +7029,12 @@ ApplicationWindow {
                         case "MEK101": return mek101PageComponent
                         case "MEK104": return mek104PageComponent
                     }
-                }                asynchronous: true
+                }
+                asynchronous: true
                 onLoaded: {
                     item.paramType = "Дискретный выход"
                     item.listView = listView1
-                        item.addClicked.connect(() => {
-                        rootwindow.currentType = "Дискретный выход"
-
-                    })
+                    item.addClicked.connect(() => { rootwindow.currentType = "Дискретный выход" })
                 }
             }
             Loader {
@@ -7089,14 +7048,12 @@ ApplicationWindow {
                         case "MEK101": return mek101PageComponent
                         case "MEK104": return mek104PageComponent
                     }
-                }                asynchronous: true
+                }
+                asynchronous: true
                 onLoaded: {
                     item.paramType = "Признаки"
                     item.listView = listView
-                        item.addClicked.connect(() => {
-                        rootwindow.currentType = "Признаки"
-
-                    })
+                    item.addClicked.connect(() => { rootwindow.currentType = "Признаки" })
                 }
             }
             Loader {
@@ -7115,10 +7072,7 @@ ApplicationWindow {
                 onLoaded: {
                     item.paramType = "Уставка"
                     item.listView = listView
-                        item.addClicked.connect(() => {
-                        rootwindow.currentType = "Уставка"
-
-                    })
+                    item.addClicked.connect(() => { rootwindow.currentType = "Уставка" })
                 }
             }
             Loader {
@@ -7127,35 +7081,20 @@ ApplicationWindow {
                 sourceComponent: modbusPageComponent
                 asynchronous: true
             }
-            Loader {
-                active: tabBar.currentIndex === 7 && mek
-                sourceComponent: mekPageComponent
-                asynchronous: true
-
-            }
-            Loader {
-                active: tabBar.currentIndex === 8
-                sourceComponent: mek101PageComponent
-                asynchronous: true
-            }
-            Loader {
-                active: tabBar.currentIndex === 9
-                sourceComponent: mek104PageComponent
-                asynchronous: true
-            }
-
-         }
-     }
+            Loader { active: tabBar.currentIndex === 7 && mek; sourceComponent: mekPageComponent; asynchronous: true }
+            Loader { active: tabBar.currentIndex === 8; sourceComponent: mek101PageComponent; asynchronous: true }
+            Loader { active: tabBar.currentIndex === 9; sourceComponent: mek104PageComponent; asynchronous: true }
+        }
+    }
 
     Rectangle {
         id: controlPanel
-        anchors.bottom: parent.bottom
         anchors.left: parent.left
         anchors.right: parent.right
-        height: 70
+        anchors.bottom: parent.bottom
+        height: rootwindow.isCompactMode ? 56 : 70
         color: "#d0ffffff"
         Behavior on color { ColorAnimation { duration: 200 } }
-
 
         Rectangle {
             anchors.top: parent.top
@@ -7166,20 +7105,21 @@ ApplicationWindow {
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 20
-            anchors.rightMargin: 20
-            spacing: 15
+            anchors.leftMargin: 12
+            anchors.rightMargin: 12
+            spacing: 10
 
             Button {
                 text: modbus ? "Удалить Modbus" : "Добавить ModBus"
+                Layout.preferredWidth: rootwindow.isWideDesktop ? 170 : 145
                 onClicked: {
                     modbus = !modbus;
                     if (modbus) tabBar.updateFocus();
                 }
             }
-
             Button {
                 text: mek ? "Удалить MEK" : "Добавить MEK"
+                Layout.preferredWidth: rootwindow.isWideDesktop ? 150 : 130
                 onClicked: {
                     mek = !mek;
                     if (mek) {
@@ -7196,27 +7136,77 @@ ApplicationWindow {
 
             Button {
                 enabled: mek
-                visible: mek
+                visible: mek && !rootwindow.isCompactMode
                 text: mek_101 ? "Удалить MEK_101" : "Добавить MEK_101"
+                Layout.preferredWidth: 165
                 onClicked: {
                     mek_101 = !mek_101;
                     if (mek_101) tabBar.updateFocus();
                 }
             }
-
             Button {
                 enabled: mek
-                visible: mek
+                visible: mek && !rootwindow.isCompactMode
                 text: mek_104 ? "Удалить MEK_104" : "Добавить MEK_104"
+                Layout.preferredWidth: 165
                 onClicked: {
                     mek_104 = !mek_104;
                     if (mek_104) tabBar.updateFocus();
                 }
             }
 
+            Button {
+                text: "Настроить ETH"
+                visible: !rootwindow.isCompactMode
+                Layout.preferredWidth: 130
+                onClicked: {
+                    ethcounter = ethcounter + 1
+                    ethConfigDialog.open()
+                }
+            }
+            Button {
+                text: "Настроить RS"
+                visible: !rootwindow.isCompactMode
+                Layout.preferredWidth: 130
+                onClicked: initializeMekProperties()
+            }
+
+            Item { Layout.fillWidth: true }
 
             Button {
+                text: "Export to JSON"
+                visible: rootwindow.isWideDesktop && !rootwindow.isCompactMode
+                Layout.preferredWidth: 145
+                onClicked: saveFileDialog.open()
+            }
+            Button {
+                text: "Generate code"
+                visible: rootwindow.isWideDesktop && !rootwindow.isCompactMode
+                Layout.preferredWidth: 145
+                onClicked: {
+                    jsonSelectDialog.exportType = "code"
+                    jsonSelectDialog.open()
+                }
+            }
+            Button {
+                text: "Generate exel"
+                visible: rootwindow.isWideDesktop && !rootwindow.isCompactMode
+                Layout.preferredWidth: 145
+                onClicked: {
+                    jsonSelectDialog.exportType = "exel"
+                    jsonSelectDialog.open()
+                }
+            }
+            Button {
+                text: "MEK indexing"
+                visible: rootwindow.isWideDesktop && !rootwindow.isCompactMode
+                Layout.preferredWidth: 130
+                onClicked: assignIOA
+            }
+            Button {
                 text: "Debug Full Model"
+                visible: !rootwindow.isCompactMode
+                Layout.preferredWidth: 145
                 onClicked: {
                     if (dataModel.count === 0) {
                         console.log("Model is empty!")
@@ -7225,7 +7215,7 @@ ApplicationWindow {
                     console.log("----- FULL MODEL DUMP -----");
                     for (var i = 0; i < dataModel.count; i++) {
                         var item = dataModel.get(i);
-                        console.log(`\nItem ${i}: ${item.paramType} "${item.name}"`);
+                        console.log("\nItem " + i + ": " + item.paramType + " \"" + item.name + "\"");
                         var props = Object.keys(item);
                         for (var j = 0; j < props.length; j++) {
                             var propName = props[j];
@@ -7238,51 +7228,76 @@ ApplicationWindow {
                 }
             }
 
-            Button {
+            ToolButton {
+                text: "⋯"
+                visible: rootwindow.isCompactMode
+                font.pixelSize: 22
+                Layout.preferredWidth: 48
+                onClicked: compactActionsMenu.open()
+            }
+        }
+
+        Menu {
+            id: compactActionsMenu
+            MenuItem {
+                text: mek_101 ? "Удалить MEK_101" : "Добавить MEK_101"
+                enabled: mek
+                onTriggered: {
+                    mek_101 = !mek_101
+                    if (mek_101) tabBar.updateFocus()
+                }
+            }
+            MenuItem {
+                text: mek_104 ? "Удалить MEK_104" : "Добавить MEK_104"
+                enabled: mek
+                onTriggered: {
+                    mek_104 = !mek_104
+                    if (mek_104) tabBar.updateFocus()
+                }
+            }
+            MenuSeparator {}
+            MenuItem {
                 text: "Настроить ETH"
-                onClicked: {
+                onTriggered: {
                     ethcounter = ethcounter + 1
                     ethConfigDialog.open()
                 }
             }
-            Button {
-                text: "Настроить RS"
-                onClicked: {
-                    initializeMekProperties()
-                }
-            }
-            Item {
-                Layout.fillWidth: true
-            }
-
-            Button {
-                text: "Export to JSON"
-                onClicked: {
-                    saveFileDialog.open()
-                }
-            }
-            Button {
+            MenuItem { text: "Настроить RS"; onTriggered: initializeMekProperties() }
+            MenuItem { text: "Export to JSON"; onTriggered: saveFileDialog.open() }
+            MenuItem {
                 text: "Generate code"
-                onClicked: {
+                onTriggered: {
                     jsonSelectDialog.exportType = "code"
-                    onClicked: jsonSelectDialog.open()
+                    jsonSelectDialog.open()
                 }
             }
-            Button {
+            MenuItem {
                 text: "Generate exel"
-                onClicked: {
+                onTriggered: {
                     jsonSelectDialog.exportType = "exel"
-                    onClicked: jsonSelectDialog.open()
+                    jsonSelectDialog.open()
                 }
             }
-            Button {
-                text: "MEK indexing"
-                onClicked: {
-                    assignIOA
+            MenuItem { text: "MEK indexing"; onTriggered: assignIOA }
+            MenuItem {
+                text: "Debug Full Model"
+                onTriggered: {
+                    if (dataModel.count === 0) {
+                        console.log("Model is empty!")
+                        return
+                    }
+                    console.log("----- FULL MODEL DUMP -----")
+                    for (var i = 0; i < dataModel.count; i++) {
+                        var item = dataModel.get(i)
+                        console.log(`\nItem ${i}: ${item.paramType} "${item.name}"`)
+                    }
+                    console.log("----- END DUMP -----")
                 }
             }
         }
     }
+
 
 
     Material.theme: Material.Light
