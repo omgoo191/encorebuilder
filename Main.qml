@@ -7,11 +7,13 @@ import Qt.labs.platform 1.1 as Platform
 import FileIO 1.0
 import QtQuick.Dialogs
 import Qt5Compat.GraphicalEffects
+import "ui/shell"
+import "ui/dialogs"
+import "ui/components"
 ApplicationWindow {
     id: rootwindow
     width: 1920
     height: 1080
-    minimumWidth: 1920
     visible: true
     title: qsTr("Генератор сигналов")
     Accessible.name: title
@@ -34,6 +36,29 @@ ApplicationWindow {
     property string currentObjectModelId: ""
     property string currentProtocolId: ""
     property string currentBldePath: ""
+    property int workflowStep: 0
+    property bool hasUnsavedChanges: false
+    property int selectedSignalCount: 0
+    property string currentModelName: {
+        if (!currentObjectModelId)
+            return objectModelsConfig.count > 0 ? (objectModelsConfig.get(0).name || objectModelsConfig.get(0).id || "Не выбрана") : "Не выбрана"
+        for (var i = 0; i < objectModelsConfig.count; ++i) {
+            var model = objectModelsConfig.get(i)
+            if (model.id === currentObjectModelId)
+                return model.name || model.id
+        }
+        return "Не выбрана"
+    }
+
+    function updateHeaderIndicators() {
+        var currentModel = getFilteredModel(currentType, false)
+        selectedSignalCount = currentModel ? currentModel.count : 0
+    }
+
+    function markDirty() {
+        if (!loadingState) hasUnsavedChanges = true
+        updateHeaderIndicators()
+    }
 
     function setTypeCombo(choices, fieldName, item) {
         if (!item || !choices || choices.length === 0) {
@@ -93,6 +118,7 @@ ApplicationWindow {
     Component.onCompleted: {
         startDialog.open()
         __rebuildIndex()
+        updateHeaderIndicators()
     }
     Connections {
         target: dataModel
@@ -277,6 +303,15 @@ ApplicationWindow {
                 onTriggered: pickTelemeasureHeader.open()
             }
         }
+        onObjectModelManagerRequested: objectModelsManagerDialog.open()
+        onEthernetConfigRequested: ethConfigDialog.open()
+        onRsConfigRequested: rsConfigDialog.open()
+        onInterfaceManagerRequested: interfaceManagerDialog.open()
+        onCreateProtocolRequested: createProtocolDialog.open()
+        onProtocolManagerRequested: protocolManagerDialog.open()
+        onAddTuRequested: pickTelecommandHeader.open()
+        onAddTsRequested: pickTelesignalHeader.open()
+        onAddTiRequested: pickTelemeasureHeader.open()
     }
     // ===== Настройки единственного чекбокса Setpoint =====
     property var val_sp: { "flag": "val_setpoint_enabled",
@@ -581,7 +616,7 @@ ApplicationWindow {
     }
 
 
-    Dialog {
+    ManagerListDialog {
         id: removeInterfaceDialog
         title: qsTr("Удалить интерфейс")
         standardButtons: Dialog.Ok | Dialog.Cancel
@@ -604,7 +639,8 @@ ApplicationWindow {
             }
         }
     }
-    Dialog {
+
+    ManagerListDialog {
         id: removeObjectModelDialog
         title: qsTr("Удалить объектную модель")
         standardButtons: Dialog.Ok | Dialog.Cancel
@@ -629,6 +665,7 @@ ApplicationWindow {
                 }
             }
         }
+    }
 
     FileDialog {
         id: saveDialog
@@ -708,6 +745,8 @@ ApplicationWindow {
                 stateFileName = filePath
             }
             rootwindow.currentBldePath = filePath
+            hasUnsavedChanges = false
+            updateHeaderIndicators()
         }
     }
     MessageDialog {
@@ -828,18 +867,21 @@ ApplicationWindow {
         function onRowsInserted(parent, first, last) {
             for (var i = first; i <= last; i++) {
                 syncFilteredModels()
+                    markDirty()
             }
         }
 
         function onRowsRemoved(parent, first, last) {
             // Rebuild all filtered models after removal
             initializeFilteredModels()
+            markDirty()
         }
 
         function onDataChanged(topLeft, bottomRight, roles) {
             for (var i = topLeft.row; i <= bottomRight.row; i++) {
                 var item = dataModel.get(i)
                 console.log("change")
+                markDirty()
                 // If paramType changed, we need to re-categorize
                 if (roles.length === 0 || roles.indexOf("paramType") >= 0) {
                     syncFilteredModels()
@@ -862,7 +904,7 @@ ApplicationWindow {
 
 
 
-    Dialog {
+    StartupDialog {
         id: startDialog
         title: qsTr("Выберите действие")
         Accessible.name: title
@@ -1011,10 +1053,10 @@ ApplicationWindow {
         standardButtons: Dialog.NoButton
 
         background: Rectangle {
-            color: "#ffffff"
+            color: appTheme.surface
             radius: 8
             antialiasing: true
-            border.color: "#e2e8f0"
+            border.color: appTheme.border
             border.width: 1
 
             // Subtle shadow effect
@@ -1032,19 +1074,19 @@ ApplicationWindow {
         header: Rectangle {
             width: parent.width
             height: 50
-            color: "#f8fafc"
+            color: appTheme.surfaceVariant
             radius: 8
             antialiasing: true
             Rectangle {
                 anchors.bottom: parent.bottom
                 width: parent.width
                 height: 1
-                color: "#e2e8f0"
+                color: appTheme.border
             }
 
             gradient: Gradient {
-                GradientStop { position: 0.0; color: "#f8fafc" }
-                GradientStop { position: 1.0; color: "#f1f5f9" }
+                GradientStop { position: 0.0; color: appTheme.surfaceVariant }
+                GradientStop { position: 1.0; color: Qt.lighter(appTheme.surfaceVariant, 1.06) }
             }
 
             Label {
@@ -1052,7 +1094,7 @@ ApplicationWindow {
                 text: rsConfigDialog.title
                 font.pixelSize: 16
                 font.weight: Font.DemiBold
-                color: "#1e293b"
+                color: appTheme.textPrimary
             }
         }
 
@@ -1081,8 +1123,8 @@ ApplicationWindow {
                     font.pixelSize: 13
 
                     background: Rectangle {
-                        color: enabled ? "#ffffff" : "#f8fafc"
-                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                        color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                        border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                         border.width: 1
                         radius: 4
                         antialiasing: true
@@ -1107,8 +1149,8 @@ ApplicationWindow {
                     font.pixelSize: 13
 
                     background: Rectangle {
-                        color: enabled ? "#ffffff" : "#f8fafc"
-                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                        color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                        border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                         border.width: 1
                         radius: 4
                         antialiasing: true
@@ -1128,7 +1170,7 @@ ApplicationWindow {
                 TextField {
                     id: lenField
                     Layout.preferredHeight: 32
-                    color: "#1e293b"
+                    color: appTheme.textPrimary
                     font.pixelSize: 13
                     font.weight: Font.Normal
 
@@ -1141,8 +1183,8 @@ ApplicationWindow {
                     verticalAlignment: TextInput.AlignVCenter
 
                     background: Rectangle {
-                        color: enabled ? "#ffffff" : "#f8fafc"
-                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                        color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                        border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                         border.width: 1
                         radius: 4
                         antialiasing: true
@@ -1152,7 +1194,7 @@ ApplicationWindow {
                             anchors.fill: parent
                             anchors.margins: -1
                             color: "transparent"
-                            border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                            border.color: parent.parent.activeFocus ? Qt.rgba(appTheme.accent.r, appTheme.accent.g, appTheme.accent.b, 0.13) : "transparent"
                             border.width: 2
                             radius: 5
                             visible: parent.parent.activeFocus
@@ -1176,8 +1218,8 @@ ApplicationWindow {
                     font.pixelSize: 13
                     Layout.preferredWidth: 120
                     background: Rectangle {
-                        color: enabled ? "#ffffff" : "#f8fafc"
-                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                        color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                        border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                         border.width: 1
                         radius: 4
                         antialiasing: true
@@ -1197,7 +1239,7 @@ ApplicationWindow {
                 TextField {
                     id: addField
                     Layout.preferredHeight: 32
-                    color: "#1e293b"
+                    color: appTheme.textPrimary
                     font.pixelSize: 13
                     font.weight: Font.Normal
 
@@ -1210,8 +1252,8 @@ ApplicationWindow {
                     verticalAlignment: TextInput.AlignVCenter
 
                     background: Rectangle {
-                        color: enabled ? "#ffffff" : "#f8fafc"
-                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                        color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                        border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                         border.width: 1
                         radius: 4
                         antialiasing: true
@@ -1221,7 +1263,7 @@ ApplicationWindow {
                             anchors.fill: parent
                             anchors.margins: -1
                             color: "transparent"
-                            border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                            border.color: parent.parent.activeFocus ? Qt.rgba(appTheme.accent.r, appTheme.accent.g, appTheme.accent.b, 0.13) : "transparent"
                             border.width: 2
                             radius: 5
                             visible: parent.parent.activeFocus
@@ -1247,7 +1289,7 @@ ApplicationWindow {
                 font.weight: Font.Medium
 
                 background: Rectangle {
-                    color: parent.pressed ? "#059669" : (parent.hovered ? "#10b981" : "#22c55e")
+                    color: parent.pressed ? Qt.darker(appTheme.success, 1.3) : (parent.hovered ? Qt.darker(appTheme.success, 1.1) : appTheme.success)
                     radius: 6
                     antialiasing: true
 
@@ -1306,10 +1348,10 @@ ApplicationWindow {
         standardButtons: Dialog.NoButton
 
         background: Rectangle {
-            color: "#ffffff"
+            color: appTheme.surface
             radius: 8
             antialiasing: true
-            border.color: "#e2e8f0"
+            border.color: appTheme.border
             border.width: 1
             Rectangle {
                 anchors.fill: parent
@@ -1325,7 +1367,7 @@ ApplicationWindow {
         header: Rectangle {
             width: parent.width
             height: 50
-            color: "#f8fafc"
+            color: appTheme.surfaceVariant
             radius: 8
             antialiasing: true
 
@@ -1333,12 +1375,12 @@ ApplicationWindow {
                 anchors.bottom: parent.bottom
                 width: parent.width
                 height: 1
-                color: "#e2e8f0"
+                color: appTheme.border
             }
 
             gradient: Gradient {
-                GradientStop { position: 0.0; color: "#f8fafc" }
-                GradientStop { position: 1.0; color: "#f1f5f9" }
+                GradientStop { position: 0.0; color: appTheme.surfaceVariant }
+                GradientStop { position: 1.0; color: Qt.lighter(appTheme.surfaceVariant, 1.06) }
             }
 
             Label {
@@ -1346,7 +1388,7 @@ ApplicationWindow {
                 text: ethConfigDialog.title
                 font.pixelSize: 16
                 font.weight: Font.DemiBold
-                color: "#1e293b"
+                color: appTheme.textPrimary
             }
         }
 
@@ -1378,7 +1420,7 @@ ApplicationWindow {
                         inputMask: "000.000.000.000;_"
                         placeholderText: qsTr("192.168.0.1")
                         Layout.preferredHeight: 32
-                        color: "#1e293b"
+                        color: appTheme.textPrimary
                         font.pixelSize: 13
 
                         leftPadding: 8
@@ -1387,8 +1429,8 @@ ApplicationWindow {
                         verticalAlignment: TextInput.AlignVCenter
 
                         background: Rectangle {
-                            color: enabled ? "#ffffff" : "#f8fafc"
-                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                            border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                             border.width: 1
                             radius: 4
                             antialiasing: true
@@ -1397,7 +1439,7 @@ ApplicationWindow {
                                 anchors.fill: parent
                                 anchors.margins: -1
                                 color: "transparent"
-                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.color: parent.parent.activeFocus ? Qt.rgba(appTheme.accent.r, appTheme.accent.g, appTheme.accent.b, 0.13) : "transparent"
                                 border.width: 2
                                 radius: 5
                                 visible: parent.parent.activeFocus
@@ -1420,7 +1462,7 @@ ApplicationWindow {
                         inputMask: "000.000.000.000;_"
                         placeholderText: qsTr("255.255.255.0")
                         Layout.preferredHeight: 32
-                        color: "#1e293b"
+                        color: appTheme.textPrimary
                         font.pixelSize: 13
 
                         leftPadding: 8
@@ -1429,8 +1471,8 @@ ApplicationWindow {
                         verticalAlignment: TextInput.AlignVCenter
 
                         background: Rectangle {
-                            color: enabled ? "#ffffff" : "#f8fafc"
-                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                            border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                             border.width: 1
                             radius: 4
                             antialiasing: true
@@ -1438,7 +1480,7 @@ ApplicationWindow {
                                 anchors.fill: parent
                                 anchors.margins: -1
                                 color: "transparent"
-                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.color: parent.parent.activeFocus ? Qt.rgba(appTheme.accent.r, appTheme.accent.g, appTheme.accent.b, 0.13) : "transparent"
                                 border.width: 2
                                 radius: 5
                                 visible: parent.parent.activeFocus
@@ -1461,7 +1503,7 @@ ApplicationWindow {
                         inputMask: "000.000.000.000;_"
                         placeholderText: qsTr("192.168.0.254")
                         Layout.preferredHeight: 32
-                        color: "#1e293b"
+                        color: appTheme.textPrimary
                         font.pixelSize: 13
 
                         leftPadding: 8
@@ -1470,8 +1512,8 @@ ApplicationWindow {
                         verticalAlignment: TextInput.AlignVCenter
 
                         background: Rectangle {
-                            color: enabled ? "#ffffff" : "#f8fafc"
-                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                            border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                             border.width: 1
                             radius: 4
                             antialiasing: true
@@ -1480,7 +1522,7 @@ ApplicationWindow {
                                 anchors.fill: parent
                                 anchors.margins: -1
                                 color: "transparent"
-                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.color: parent.parent.activeFocus ? Qt.rgba(appTheme.accent.r, appTheme.accent.g, appTheme.accent.b, 0.13) : "transparent"
                                 border.width: 2
                                 radius: 5
                                 visible: parent.parent.activeFocus
@@ -1503,7 +1545,7 @@ ApplicationWindow {
                         inputMask: "HH:HH:HH;_"
                         placeholderText: qsTr("00:1A:2B")
                         Layout.preferredHeight: 32
-                        color: "#1e293b"
+                        color: appTheme.textPrimary
                         font.pixelSize: 13
 
                         leftPadding: 8
@@ -1512,8 +1554,8 @@ ApplicationWindow {
                         verticalAlignment: TextInput.AlignVCenter
 
                         background: Rectangle {
-                            color: enabled ? "#ffffff" : "#f8fafc"
-                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                            border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                             border.width: 1
                             radius: 4
                             antialiasing: true
@@ -1522,7 +1564,7 @@ ApplicationWindow {
                                 anchors.fill: parent
                                 anchors.margins: -1
                                 color: "transparent"
-                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.color: parent.parent.activeFocus ? Qt.rgba(appTheme.accent.r, appTheme.accent.g, appTheme.accent.b, 0.13) : "transparent"
                                 border.width: 2
                                 radius: 5
                                 visible: parent.parent.activeFocus
@@ -1543,7 +1585,7 @@ ApplicationWindow {
                         inputMask: "HH:HH:HH;_"
                         placeholderText: qsTr("3C:4D:5E")
                         Layout.preferredHeight: 32
-                        color: "#1e293b"
+                        color: appTheme.textPrimary
                         font.pixelSize: 13
 
                         leftPadding: 8
@@ -1552,8 +1594,8 @@ ApplicationWindow {
                         verticalAlignment: TextInput.AlignVCenter
 
                         background: Rectangle {
-                            color: enabled ? "#ffffff" : "#f8fafc"
-                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                            border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                             border.width: 1
                             radius: 4
                             antialiasing: true
@@ -1562,7 +1604,7 @@ ApplicationWindow {
                                 anchors.fill: parent
                                 anchors.margins: -1
                                 color: "transparent"
-                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.color: parent.parent.activeFocus ? Qt.rgba(appTheme.accent.r, appTheme.accent.g, appTheme.accent.b, 0.13) : "transparent"
                                 border.width: 2
                                 radius: 5
                                 visible: parent.parent.activeFocus
@@ -1585,7 +1627,7 @@ ApplicationWindow {
                         inputMask: "000.000.000.000;_"
                         placeholderText: qsTr("192.168.0.10")
                         Layout.preferredHeight: 32
-                        color: "#1e293b"
+                        color: appTheme.textPrimary
                         font.pixelSize: 13
 
                         leftPadding: 8
@@ -1594,8 +1636,8 @@ ApplicationWindow {
                         verticalAlignment: TextInput.AlignVCenter
 
                         background: Rectangle {
-                            color: enabled ? "#ffffff" : "#f8fafc"
-                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                            border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                             border.width: 1
                             radius: 4
                             antialiasing: true
@@ -1604,7 +1646,7 @@ ApplicationWindow {
                                 anchors.fill: parent
                                 anchors.margins: -1
                                 color: "transparent"
-                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.color: parent.parent.activeFocus ? Qt.rgba(appTheme.accent.r, appTheme.accent.g, appTheme.accent.b, 0.13) : "transparent"
                                 border.width: 2
                                 radius: 5
                                 visible: parent.parent.activeFocus
@@ -1627,7 +1669,7 @@ ApplicationWindow {
                         inputMask: "000.000.000.000;_"
                         placeholderText: qsTr("192.168.0.11")
                         Layout.preferredHeight: 32
-                        color: "#1e293b"
+                        color: appTheme.textPrimary
                         font.pixelSize: 13
 
                         leftPadding: 8
@@ -1635,8 +1677,8 @@ ApplicationWindow {
                         selectByMouse: true
                         verticalAlignment: TextInput.AlignVCenter
                         background: Rectangle {
-                            color: enabled ? "#ffffff" : "#f8fafc"
-                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                            border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                             border.width: 1
                             radius: 4
                             antialiasing: true
@@ -1645,7 +1687,7 @@ ApplicationWindow {
                                 anchors.fill: parent
                                 anchors.margins: -1
                                 color: "transparent"
-                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.color: parent.parent.activeFocus ? Qt.rgba(appTheme.accent.r, appTheme.accent.g, appTheme.accent.b, 0.13) : "transparent"
                                 border.width: 2
                                 radius: 5
                                 visible: parent.parent.activeFocus
@@ -1668,7 +1710,7 @@ ApplicationWindow {
                         inputMask: "000.000.000.000;_"
                         placeholderText: qsTr("192.168.0.12")
                         Layout.preferredHeight: 32
-                        color: "#1e293b"
+                        color: appTheme.textPrimary
                         font.pixelSize: 13
 
                         leftPadding: 8
@@ -1677,8 +1719,8 @@ ApplicationWindow {
                         verticalAlignment: TextInput.AlignVCenter
 
                         background: Rectangle {
-                            color: enabled ? "#ffffff" : "#f8fafc"
-                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                            border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                             border.width: 1
                             radius: 4
                             antialiasing: true
@@ -1687,7 +1729,7 @@ ApplicationWindow {
                                 anchors.fill: parent
                                 anchors.margins: -1
                                 color: "transparent"
-                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.color: parent.parent.activeFocus ? Qt.rgba(appTheme.accent.r, appTheme.accent.g, appTheme.accent.b, 0.13) : "transparent"
                                 border.width: 2
                                 radius: 5
                                 visible: parent.parent.activeFocus
@@ -1710,7 +1752,7 @@ ApplicationWindow {
                         inputMask: "000.000.000.000;_"
                         placeholderText: qsTr("192.168.0.13")
                         Layout.preferredHeight: 32
-                        color: "#1e293b"
+                        color: appTheme.textPrimary
                         font.pixelSize: 13
 
                         leftPadding: 8
@@ -1719,8 +1761,8 @@ ApplicationWindow {
                         verticalAlignment: TextInput.AlignVCenter
 
                         background: Rectangle {
-                            color: enabled ? "#ffffff" : "#f8fafc"
-                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                            border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                             border.width: 1
                             radius: 4
                             antialiasing: true
@@ -1729,7 +1771,7 @@ ApplicationWindow {
                                 anchors.fill: parent
                                 anchors.margins: -1
                                 color: "transparent"
-                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.color: parent.parent.activeFocus ? Qt.rgba(appTheme.accent.r, appTheme.accent.g, appTheme.accent.b, 0.13) : "transparent"
                                 border.width: 2
                                 radius: 5
                                 visible: parent.parent.activeFocus
@@ -1748,7 +1790,7 @@ ApplicationWindow {
                     TextField {
                         id: addrField
                         Layout.preferredHeight: 32
-                        color: "#1e293b"
+                        color: appTheme.textPrimary
                         font.pixelSize: 13
 
                         leftPadding: 8
@@ -1757,8 +1799,8 @@ ApplicationWindow {
                         verticalAlignment: TextInput.AlignVCenter
 
                         background: Rectangle {
-                            color: enabled ? "#ffffff" : "#f8fafc"
-                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                            border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                             border.width: 1
                             radius: 4
                             antialiasing: true
@@ -1767,7 +1809,7 @@ ApplicationWindow {
                                 anchors.fill: parent
                                 anchors.margins: -1
                                 color: "transparent"
-                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.color: parent.parent.activeFocus ? Qt.rgba(appTheme.accent.r, appTheme.accent.g, appTheme.accent.b, 0.13) : "transparent"
                                 border.width: 2
                                 radius: 5
                                 visible: parent.parent.activeFocus
@@ -1789,7 +1831,7 @@ ApplicationWindow {
                         id: port1Field
                         validator: IntValidator { bottom: 1; top: 65535 }
                         Layout.preferredHeight: 32
-                        color: "#1e293b"
+                        color: appTheme.textPrimary
                         font.pixelSize: 13
 
                         leftPadding: 8
@@ -1798,8 +1840,8 @@ ApplicationWindow {
                         verticalAlignment: TextInput.AlignVCenter
 
                         background: Rectangle {
-                            color: enabled ? "#ffffff" : "#f8fafc"
-                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                            border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                             border.width: 1
                             radius: 4
                             antialiasing: true
@@ -1808,7 +1850,7 @@ ApplicationWindow {
                                 anchors.fill: parent
                                 anchors.margins: -1
                                 color: "transparent"
-                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.color: parent.parent.activeFocus ? Qt.rgba(appTheme.accent.r, appTheme.accent.g, appTheme.accent.b, 0.13) : "transparent"
                                 border.width: 2
                                 radius: 5
                                 visible: parent.parent.activeFocus
@@ -1830,7 +1872,7 @@ ApplicationWindow {
                         id: port2Field
                         validator: IntValidator { bottom: 1; top: 65535 }
                         Layout.preferredHeight: 32
-                        color: "#1e293b"
+                        color: appTheme.textPrimary
                         font.pixelSize: 13
 
                         leftPadding: 8
@@ -1839,8 +1881,8 @@ ApplicationWindow {
                         verticalAlignment: TextInput.AlignVCenter
 
                         background: Rectangle {
-                            color: enabled ? "#ffffff" : "#f8fafc"
-                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                            border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                             border.width: 1
                             radius: 4
                             antialiasing: true
@@ -1849,7 +1891,7 @@ ApplicationWindow {
                                 anchors.fill: parent
                                 anchors.margins: -1
                                 color: "transparent"
-                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.color: parent.parent.activeFocus ? Qt.rgba(appTheme.accent.r, appTheme.accent.g, appTheme.accent.b, 0.13) : "transparent"
                                 border.width: 2
                                 radius: 5
                                 visible: parent.parent.activeFocus
@@ -1870,7 +1912,7 @@ ApplicationWindow {
                         id: port3Field
                         validator: IntValidator { bottom: 1; top: 65535 }
                         Layout.preferredHeight: 32
-                        color: "#1e293b"
+                        color: appTheme.textPrimary
                         font.pixelSize: 13
 
                         leftPadding: 8
@@ -1879,8 +1921,8 @@ ApplicationWindow {
                         verticalAlignment: TextInput.AlignVCenter
 
                         background: Rectangle {
-                            color: enabled ? "#ffffff" : "#f8fafc"
-                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                            border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                             border.width: 1
                             radius: 4
                             antialiasing: true
@@ -1889,7 +1931,7 @@ ApplicationWindow {
                                 anchors.fill: parent
                                 anchors.margins: -1
                                 color: "transparent"
-                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.color: parent.parent.activeFocus ? Qt.rgba(appTheme.accent.r, appTheme.accent.g, appTheme.accent.b, 0.13) : "transparent"
                                 border.width: 2
                                 radius: 5
                                 visible: parent.parent.activeFocus
@@ -1910,7 +1952,7 @@ ApplicationWindow {
                         id: port4Field
                         validator: IntValidator { bottom: 1; top: 65535 }
                         Layout.preferredHeight: 32
-                        color: "#1e293b"
+                        color: appTheme.textPrimary
                         font.pixelSize: 13
 
                         leftPadding: 8
@@ -1919,8 +1961,8 @@ ApplicationWindow {
                         verticalAlignment: TextInput.AlignVCenter
 
                         background: Rectangle {
-                            color: enabled ? "#ffffff" : "#f8fafc"
-                            border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                            color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                            border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                             border.width: 1
                             radius: 4
                             antialiasing: true
@@ -1929,7 +1971,7 @@ ApplicationWindow {
                                 anchors.fill: parent
                                 anchors.margins: -1
                                 color: "transparent"
-                                border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                border.color: parent.parent.activeFocus ? Qt.rgba(appTheme.accent.r, appTheme.accent.g, appTheme.accent.b, 0.13) : "transparent"
                                 border.width: 2
                                 radius: 5
                                 visible: parent.parent.activeFocus
@@ -1949,7 +1991,7 @@ ApplicationWindow {
                 font.weight: Font.Medium
 
                 background: Rectangle {
-                    color: parent.pressed ? "#059669" : (parent.hovered ? "#10b981" : "#22c55e")
+                    color: parent.pressed ? Qt.darker(appTheme.success, 1.3) : (parent.hovered ? Qt.darker(appTheme.success, 1.1) : appTheme.success)
                     radius: 6
                     antialiasing: true
 
@@ -2047,10 +2089,10 @@ ApplicationWindow {
         property string objectModel: ""
         property string interfacet: ""
         background: Rectangle {
-            color: "#ffffff"
+            color: appTheme.surface
             radius: 8
             antialiasing: true
-            border.color: "#e2e8f0"
+            border.color: appTheme.border
             border.width: 1
 
             // Subtle shadow effect
@@ -2068,24 +2110,24 @@ ApplicationWindow {
         header: Rectangle {
             width: parent.width
             height: 50
-            color: "#f8fafc"
+            color: appTheme.surfaceVariant
             radius: 8
             antialiasing: true
             Rectangle {
                 anchors.bottom: parent.bottom
                 width: parent.width
                 height: 1
-                color: "#e2e8f0"
+                color: appTheme.border
             }
 
             gradient: Gradient {
                 GradientStop { position: 0.0
                     ;
-                    color: "#f8fafc"
+                    color: appTheme.surfaceVariant
                 }
                 GradientStop { position: 1.0
                     ;
-                    color: "#f1f5f9"
+                    color: Qt.lighter(appTheme.surfaceVariant, 1.06)
                 }
             }
 
@@ -2094,7 +2136,7 @@ ApplicationWindow {
                 text: rsConfigDialog.title
                 font.pixelSize: 16
                 font.weight: Font.DemiBold
-                color: "#1e293b"
+                color: appTheme.textPrimary
             }
         }
 
@@ -2118,7 +2160,7 @@ ApplicationWindow {
                 TextField {
                     id: asduField
                     Layout.preferredHeight: 32
-                    color: "#1e293b"
+                    color: appTheme.textPrimary
                     font.pixelSize: 13
                     font.weight: Font.Normal
 
@@ -2131,8 +2173,8 @@ ApplicationWindow {
                     verticalAlignment: TextInput.AlignVCenter
 
                     background: Rectangle {
-                        color: enabled ? "#ffffff" : "#f8fafc"
-                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                        color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                        border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                         border.width: 1
                         radius: 4
                         antialiasing: true
@@ -2142,7 +2184,7 @@ ApplicationWindow {
                             anchors.fill: parent
                             anchors.margins: -1
                             color: "transparent"
-                            border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                            border.color: parent.parent.activeFocus ? Qt.rgba(appTheme.accent.r, appTheme.accent.g, appTheme.accent.b, 0.13) : "transparent"
                             border.width: 2
                             radius: 5
                             visible: parent.parent.activeFocus
@@ -2169,8 +2211,8 @@ ApplicationWindow {
                     font.pixelSize: 13
 
                     background: Rectangle {
-                        color: enabled ? "#ffffff" : "#f8fafc"
-                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                        color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                        border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                         border.width: 1
                         radius: 4
                         antialiasing: true
@@ -2196,8 +2238,8 @@ ApplicationWindow {
                     font.pixelSize: 13
 
                     background: Rectangle {
-                        color: enabled ? "#ffffff" : "#f8fafc"
-                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                        color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                        border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                         border.width: 1
                         radius: 4
                         antialiasing: true
@@ -2221,8 +2263,8 @@ ApplicationWindow {
                     font.pixelSize: 13
                     Layout.preferredWidth: 120
                     background: Rectangle {
-                        color: enabled ? "#ffffff" : "#f8fafc"
-                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                        color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                        border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                         border.width: 1
                         radius: 4
                         antialiasing: true
@@ -2248,8 +2290,8 @@ ApplicationWindow {
                     font.pixelSize: 13
 
                     background: Rectangle {
-                        color: enabled ? "#ffffff" : "#f8fafc"
-                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                        color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                        border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                         border.width: 1
                         radius: 4
                         antialiasing: true
@@ -2274,8 +2316,8 @@ ApplicationWindow {
                     font.pixelSize: 13
 
                     background: Rectangle {
-                        color: enabled ? "#ffffff" : "#f8fafc"
-                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                        color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                        border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                         border.width: 1
                         radius: 4
                         antialiasing: true
@@ -2301,8 +2343,8 @@ ApplicationWindow {
                 font.pixelSize: 13
 
                 background: Rectangle {
-                    color: enabled ? "#ffffff" : "#f8fafc"
-                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                    color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                    border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                     border.width: 1
                     radius: 4
                     antialiasing: true
@@ -2322,7 +2364,7 @@ ApplicationWindow {
             TextField {
                 id: percycField
                 Layout.preferredHeight: 32
-                color: "#1e293b"
+                color: appTheme.textPrimary
                 font.pixelSize: 13
                 font.weight: Font.Normal
 
@@ -2335,8 +2377,8 @@ ApplicationWindow {
                 verticalAlignment: TextInput.AlignVCenter
 
                 background: Rectangle {
-                    color: enabled ? "#ffffff" : "#f8fafc"
-                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                    color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                    border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                     border.width: 1
                     radius: 4
                     antialiasing: true
@@ -2346,7 +2388,7 @@ ApplicationWindow {
                         anchors.fill: parent
                         anchors.margins: -1
                         color: "transparent"
-                        border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                        border.color: parent.parent.activeFocus ? Qt.rgba(appTheme.accent.r, appTheme.accent.g, appTheme.accent.b, 0.13) : "transparent"
                         border.width: 2
                         radius: 5
                         visible: parent.parent.activeFocus
@@ -2367,7 +2409,7 @@ ApplicationWindow {
             TextField {
                 id: backField
                 Layout.preferredHeight: 32
-                color: "#1e293b"
+                color: appTheme.textPrimary
                 font.pixelSize: 13
                 font.weight: Font.Normal
 
@@ -2380,8 +2422,8 @@ ApplicationWindow {
                 verticalAlignment: TextInput.AlignVCenter
 
                 background: Rectangle {
-                    color: enabled ? "#ffffff" : "#f8fafc"
-                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                    color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                    border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                     border.width: 1
                     radius: 4
                     antialiasing: true
@@ -2391,7 +2433,7 @@ ApplicationWindow {
                         anchors.fill: parent
                         anchors.margins: -1
                         color: "transparent"
-                        border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                        border.color: parent.parent.activeFocus ? Qt.rgba(appTheme.accent.r, appTheme.accent.g, appTheme.accent.b, 0.13) : "transparent"
                         border.width: 2
                         radius: 5
                         visible: parent.parent.activeFocus
@@ -2416,7 +2458,7 @@ ApplicationWindow {
                 font.weight: Font.Medium
 
                 background: Rectangle {
-                    color: parent.pressed ? "#059669" : (parent.hovered ? "#10b981" : "#22c55e")
+                    color: parent.pressed ? Qt.darker(appTheme.success, 1.3) : (parent.hovered ? Qt.darker(appTheme.success, 1.1) : appTheme.success)
                     radius: 6
                     antialiasing: true
 
@@ -2518,6 +2560,8 @@ ApplicationWindow {
         });
 
         loadingState = false;
+        hasUnsavedChanges = false;
+        updateHeaderIndicators();
     }
     }
     Dialog {
@@ -2527,10 +2571,10 @@ ApplicationWindow {
         Accessible.description: qsTr("Диалог создания объектной модели")
         height: 200
         background: Rectangle {
-            color: "#ffffff"
+            color: appTheme.surface
             radius: 8
             antialiasing: true
-            border.color: "#e2e8f0"
+            border.color: appTheme.border
             border.width: 1
             Rectangle {
                 anchors.fill: parent
@@ -2546,7 +2590,7 @@ ApplicationWindow {
         header: Rectangle {
             width: parent.width
             height: 50
-            color: "#f8fafc"
+            color: appTheme.surfaceVariant
             radius: 8
             antialiasing: true
 
@@ -2554,12 +2598,12 @@ ApplicationWindow {
                 anchors.bottom: parent.bottom
                 width: parent.width
                 height: 1
-                color: "#e2e8f0"
+                color: appTheme.border
             }
 
             gradient: Gradient {
-                GradientStop { position: 0.0; color: "#f8fafc" }
-                GradientStop { position: 1.0; color: "#f1f5f9" }
+                GradientStop { position: 0.0; color: appTheme.surfaceVariant }
+                GradientStop { position: 1.0; color: Qt.lighter(appTheme.surfaceVariant, 1.06) }
             }
 
             Label {
@@ -2567,7 +2611,7 @@ ApplicationWindow {
                 text: createObjectModelDialog.title
                 font.pixelSize: 16
                 font.weight: Font.DemiBold
-                color: "#1e293b"
+                color: appTheme.textPrimary
             }
         }
         Column {
@@ -2579,7 +2623,7 @@ ApplicationWindow {
                 Accessible.name: qsTr("Имя объектной модели")
                 Accessible.description: qsTr("Введите имя новой объектной модели")
                 Layout.preferredHeight: 32
-                color: "#1e293b"
+                color: appTheme.textPrimary
                 font.pixelSize: 13
 
                 leftPadding: 8
@@ -2588,8 +2632,8 @@ ApplicationWindow {
                 verticalAlignment: TextInput.AlignVCenter
 
                 background: Rectangle {
-                    color: enabled ? "#ffffff" : "#f8fafc"
-                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                    color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                    border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                     border.width: 1
                     radius: 4
                     antialiasing: true
@@ -2598,7 +2642,7 @@ ApplicationWindow {
                         anchors.fill: parent
                         anchors.margins: -1
                         color: "transparent"
-                        border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                        border.color: parent.parent.activeFocus ? Qt.rgba(appTheme.accent.r, appTheme.accent.g, appTheme.accent.b, 0.13) : "transparent"
                         border.width: 2
                         radius: 5
                         visible: parent.parent.activeFocus
@@ -2621,8 +2665,8 @@ ApplicationWindow {
                 font.pixelSize: 13
                 width: 120
                 background: Rectangle {
-                    color: enabled ? "#ffffff" : "#f8fafc"
-                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                    color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                    border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                     border.width: 1
                     radius: 4
                     antialiasing: true
@@ -2648,7 +2692,7 @@ ApplicationWindow {
                     font.weight: Font.Medium
 
                     background: Rectangle {
-                        color: parent.pressed ? "#059669" : (parent.hovered ? "#10b981" : "#22c55e")
+                        color: parent.pressed ? Qt.darker(appTheme.success, 1.3) : (parent.hovered ? Qt.darker(appTheme.success, 1.1) : appTheme.success)
                         radius: 6
                         antialiasing: true
 
@@ -2684,7 +2728,7 @@ ApplicationWindow {
                     font.weight: Font.Medium
 
                     background: Rectangle {
-                        color: parent.pressed ? "#b91c1c" : (parent.hovered ? "#dc2626" : "#ef4444")
+                        color: parent.pressed ? Qt.darker(appTheme.danger, 1.2) : (parent.hovered ? appTheme.danger : Qt.lighter(appTheme.danger, 1.2))
                         radius: 6
                         antialiasing: true
 
@@ -2773,7 +2817,7 @@ ApplicationWindow {
                 Accessible.name: qsTr("Имя протокола")
                 Accessible.description: qsTr("Введите имя протокола")
                 Layout.preferredHeight: 32
-                color: "#1e293b"
+                color: appTheme.textPrimary
                 font.pixelSize: 13
                 font.weight: Font.Normal
 
@@ -2786,8 +2830,8 @@ ApplicationWindow {
                 verticalAlignment: TextInput.AlignVCenter
 
                 background: Rectangle {
-                    color: enabled ? "#ffffff" : "#f8fafc"
-                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                    color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                    border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                     border.width: 1
                     radius: 4
                     antialiasing: true
@@ -2797,7 +2841,7 @@ ApplicationWindow {
                         anchors.fill: parent
                         anchors.margins: -1
                         color: "transparent"
-                        border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                        border.color: parent.parent.activeFocus ? Qt.rgba(appTheme.accent.r, appTheme.accent.g, appTheme.accent.b, 0.13) : "transparent"
                         border.width: 2
                         radius: 5
                         visible: parent.parent.activeFocus
@@ -2820,8 +2864,8 @@ ApplicationWindow {
                 font.pixelSize: 13
                 width: 120
                 background: Rectangle {
-                    color: enabled ? "#ffffff" : "#f8fafc"
-                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                    color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                    border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                     border.width: 1
                     radius: 4
                     antialiasing: true
@@ -2844,8 +2888,8 @@ ApplicationWindow {
                 font.pixelSize: 13
                 width: 120
                 background: Rectangle {
-                    color: enabled ? "#ffffff" : "#f8fafc"
-                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                    color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                    border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                     border.width: 1
                     radius: 4
                     antialiasing: true
@@ -2868,8 +2912,8 @@ ApplicationWindow {
                 font.pixelSize: 13
                 width: 120
                 background: Rectangle {
-                    color: enabled ? "#ffffff" : "#f8fafc"
-                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                    color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                    border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                     border.width: 1
                     radius: 4
                     antialiasing: true
@@ -2895,7 +2939,7 @@ ApplicationWindow {
                     font.weight: Font.Medium
 
                     background: Rectangle {
-                        color: parent.pressed ? "#059669" : (parent.hovered ? "#10b981" : "#22c55e")
+                        color: parent.pressed ? Qt.darker(appTheme.success, 1.3) : (parent.hovered ? Qt.darker(appTheme.success, 1.1) : appTheme.success)
                         radius: 6
                         antialiasing: true
 
@@ -2934,7 +2978,7 @@ ApplicationWindow {
                     font.weight: Font.Medium
 
                     background: Rectangle {
-                        color: parent.pressed ? "#b91c1c" : (parent.hovered ? "#dc2626" : "#ef4444")
+                        color: parent.pressed ? Qt.darker(appTheme.danger, 1.2) : (parent.hovered ? appTheme.danger : Qt.lighter(appTheme.danger, 1.2))
                         radius: 6
                         antialiasing: true
 
@@ -3061,6 +3105,8 @@ ApplicationWindow {
     function saveToBlde(path) {
         let json = exportToJson()
         fileHandler.saveToFile(path, json)
+        hasUnsavedChanges = false
+        updateHeaderIndicators()
     }
 
 
@@ -3092,43 +3138,76 @@ ApplicationWindow {
                     interactive: true
                     clip: true
                     headerPositioning: ListView.OverlayHeader
-                    header: Rectangle {
+                    header: TableHeaderRow {
                         z: 2
                         width: listView1.width
-                        height: 32
-                        color: "#f1f5f9"
-                        antialiasing: true
+                        columns: [
+                            { title: "IO", width: 50 },
+                            { title: "Наименование", width: 350 },
+                            { title: "Англ.название", width: 350 },
+                            { title: "Индекс ТУ", width: 150 },
+                            { title: "S/D", width: 44 },
+                            { title: "Логика", width: 100 },
+                            { title: "Сохранение", width: 100 },
+                            { title: "Триггер", width: 140 }
+                        ]
+                    }
 
-                        Rectangle {
-                            anchors.bottom: parent.bottom
-                            width: parent.width
-                            height: 1
-                            color: "#cbd5e1"
+                    delegate: Rectangle {
+                        width: Math.max(listView.width, 1600)
+                        id: rowItem
+                        height: Math.max(180, nameField.height + 20)
+                        color: index % 2 === 0 ? "#ffffff" : "#f8fafc"
+                        property bool hasDuplicateName: itemData.isNameDuplicate || false
+                        property bool hasDuplicateCodeName: itemData.isCodeNameDuplicate || false
+
+                        required property int index
+                        property string ioIndex
+                        property string paramType
+                        property string name
+                        property string codeName
+                        property string type
+                        property string logicuse
+                        property string saving
+                        property string aperture
+                        property string ktt
+                        property string def_value
+                        property string ad
+                        property string oc
+                        property string sector
+                        property string tosp
+                        property string tolp
+
+                        property int originalIndex: {
+                            switch (pageRoot.paramType) {
+                                case "Аналоговые входы":
+                                    return analogInputsModel.get(index).originalIndex
+                                case "Дискретные входы":
+                                    return digitalInputsModel.get(index).originalIndex
+                                case "Аналоговый выход":
+                                    return analogOutputsModel.get(index).originalIndex
+                                case "Дискретный выход":
+                                    return digitalOutputsModel.get(index).originalIndex
+                                case "Признаки":
+                                    return flagsModel.get(index).originalIndex
+                                case "Уставка":
+                                    return settingsModel.get(index).originalIndex
+                                default:
+                                    return -1
+                            }
                         }
-
-                        Rectangle {
-                            anchors.top: parent.top
-                            width: parent.width
-                            height: 1
-                            color: "#e2e8f0"
-                        }
-
-                        gradient: Gradient {
-                            GradientStop { position: 0.0; color: "#f8fafc" }
-                            GradientStop { position: 1.0; color: "#e2e8f0" }
-                        }
-
-                        layer.enabled: false
-
+                        property var itemData: dataModel.get(originalIndex)
                         RowLayout {
+                            z: 1
                             anchors.fill: parent
-                            anchors.leftMargin: 12
-                            anchors.rightMargin: 12
                             spacing: 0
 
                             Label {
                                 text: qsTr("IO")
                                 Layout.preferredWidth: 50
+                                Layout.preferredHeight: 32
+                                Layout.minimumWidth: 50
+                                Layout.maximumWidth: 50
                                 color: "#1e293b"
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
@@ -4126,8 +4205,8 @@ ApplicationWindow {
                                 verticalAlignment: TextInput.AlignVCenter
 
                                 background: Rectangle {
-                                    color: enabled ? "#ffffff" : "#f8fafc"
-                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                    border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                     border.width: 1
                                     radius: 4
                                     antialiasing: true
@@ -4147,7 +4226,7 @@ ApplicationWindow {
                                 Layout.minimumHeight: 32
                                 Layout.preferredHeight: Math.max(32, contentHeight + topPadding + bottomPadding)
 
-                                color: (itemData.isNameDuplicate || false) ? "#dc2626" : "#1e293b"
+                                color: (itemData.isNameDuplicate || false) ? appTheme.danger : appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.Normal
 
@@ -4161,9 +4240,9 @@ ApplicationWindow {
                                 wrapMode: TextInput.WordWrap  // Перенос по словам
 
                                 background: Rectangle {
-                                    color: enabled ? "#ffffff" : "#f8fafc"
-                                    border.color: (itemData.isNameDuplicate || false) ? "#dc2626" :
-                                        (parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0"))
+                                    color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                    border.color: (itemData.isNameDuplicate || false) ? appTheme.danger :
+                                        (parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border))
                                     border.width: 1
                                     radius: 4
                                     antialiasing: true
@@ -4184,7 +4263,7 @@ ApplicationWindow {
                                 Layout.preferredWidth: 250
                                 Layout.preferredHeight: 32
                                 Layout.minimumWidth: 200
-                                color: itemData.isCodeNameDuplicate ? "#dc2626" : "#1e293b"
+                                color: itemData.isCodeNameDuplicate ? appTheme.danger : appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.Normal
 
@@ -4197,9 +4276,9 @@ ApplicationWindow {
                                 verticalAlignment: TextInput.AlignVCenter
 
                                 background: Rectangle {
-                                    color: enabled ? "#ffffff" : "#f8fafc"
-                                    border.color: (itemData.isCodeNameDuplicate || false) ? "#dc2626" :
-                                        (parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0"))
+                                    color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                    border.color: (itemData.isCodeNameDuplicate || false) ? appTheme.danger :
+                                        (parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border))
                                     border.width: 1
                                     radius: 4
                                     antialiasing: true
@@ -4237,8 +4316,8 @@ ApplicationWindow {
                                         }
                                     }
                                     background: Rectangle {
-                                        color: enabled ? "#ffffff" : "#f8fafc"
-                                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                        color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                        border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                         border.width: 1
                                         radius: 4
                                         antialiasing: true
@@ -4265,8 +4344,8 @@ ApplicationWindow {
                                 font.pixelSize: 13
 
                                 background: Rectangle {
-                                    color: enabled ? "#ffffff" : "#f8fafc"
-                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                    border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                     border.width: 1
                                     radius: 4
                                     antialiasing: true
@@ -4287,8 +4366,8 @@ ApplicationWindow {
                                 font.pixelSize: 13
 
                                 background: Rectangle {
-                                    color: enabled ? "#ffffff" : "#f8fafc"
-                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                    border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                     border.width: 1
                                     radius: 4
                                     antialiasing: true
@@ -4312,8 +4391,8 @@ ApplicationWindow {
                                     anchors.fill: parent
                                     anchors.margins: 0
                                     background: Rectangle {
-                                        color: enabled ? "#ffffff" : "#f8fafc"
-                                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                        color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                        border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                         border.width: 1
                                         radius: 4
                                         antialiasing: true
@@ -4338,8 +4417,8 @@ ApplicationWindow {
                                     anchors.fill: parent
                                     anchors.margins: 0
                                     background: Rectangle {
-                                        color: enabled ? "#ffffff" : "#f8fafc"
-                                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                        color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                        border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                         border.width: 1
                                         radius: 4
                                         antialiasing: true
@@ -4426,9 +4505,9 @@ ApplicationWindow {
                                                     }
 
                                                     background: Rectangle {
-                                                        color: enabled ? "#ffffff" : "#f8fafc"
-                                                        border.color: parent.activeFocus ? "#3b82f6"
-                                                            : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                                        color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                                        border.color: parent.activeFocus ? appTheme.accent
+                                                            : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                                         border.width: 1
                                                         radius: 4
                                                         antialiasing: true
@@ -4447,7 +4526,7 @@ ApplicationWindow {
                                 TextField {
                                     opacity: !(rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Дискретные входы")
                                     text: itemData.def_value
-                                    color: "#1e293b"
+                                    color: appTheme.textPrimary
                                     font.pixelSize: 13
                                     font.weight: Font.Normal
                                     anchors.fill: parent
@@ -4461,8 +4540,8 @@ ApplicationWindow {
                                     verticalAlignment: TextInput.AlignVCenter
 
                                     background: Rectangle {
-                                        color: enabled ? "#ffffff" : "#f8fafc"
-                                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                        color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                        border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                         border.width: 1
                                         radius: 4
                                         antialiasing: true
@@ -4482,7 +4561,7 @@ ApplicationWindow {
                                 TextField {
                                     text: itemData.ad
                                     opacity: rootwindow.currentType === "Дискретные входы"
-                                    color: "#1e293b"
+                                    color: appTheme.textPrimary
                                     font.pixelSize: 13
                                     font.weight: Font.Normal
                                     anchors.fill: parent
@@ -4496,8 +4575,8 @@ ApplicationWindow {
                                     verticalAlignment: TextInput.AlignVCenter
 
                                     background: Rectangle {
-                                        color: enabled ? "#ffffff" : "#f8fafc"
-                                        border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                        color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                        border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                         border.width: 1
                                         radius: 4
                                         antialiasing: true
@@ -4575,7 +4654,7 @@ ApplicationWindow {
                                 font.weight: Font.Medium
 
                                 background: Rectangle {
-                                    color: parent.pressed ? "#b91c1c" : (parent.hovered ? "#dc2626" : "#ef4444")
+                                    color: parent.pressed ? Qt.darker(appTheme.danger, 1.2) : (parent.hovered ? appTheme.danger : Qt.lighter(appTheme.danger, 1.2))
                                     radius: 4
                                     antialiasing: true
 
@@ -4608,7 +4687,7 @@ ApplicationWindow {
                 font.weight: Font.Medium
 
                 background: Rectangle {
-                    color: parent.pressed ? "#059669" : (parent.hovered ? "#10b981" : "#22c55e")
+                    color: parent.pressed ? Qt.darker(appTheme.success, 1.3) : (parent.hovered ? Qt.darker(appTheme.success, 1.1) : appTheme.success)
                     radius: 6
                     antialiasing: true
 
@@ -4788,7 +4867,7 @@ ApplicationWindow {
                     delegate: Rectangle {
                         width: listView.width
                         height: 70
-                        color: index % 2 === 0 ? "#ffffff" : "#f8fafc"
+                        color: index % 2 === 0 ? appTheme.surface : appTheme.surfaceVariant
                         required property int index
                         required property var model
 
@@ -4826,7 +4905,7 @@ ApplicationWindow {
                                 text: itemData.ioIndex || ""
                                 Layout.preferredWidth: 50
                                 Layout.alignment: Qt.AlignVCenter
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -4838,7 +4917,7 @@ ApplicationWindow {
                                 text: itemData.name || ""
                                 Layout.preferredWidth: 200
                                 Layout.alignment: Qt.AlignVCenter
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -4858,7 +4937,7 @@ ApplicationWindow {
                                 text: itemData.type || ""
                                 Layout.preferredWidth: 100
                                 Layout.alignment: Qt.AlignVCenter
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -4880,7 +4959,7 @@ ApplicationWindow {
                                     return ""
                                 }
 
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.Normal
 
@@ -4897,9 +4976,9 @@ ApplicationWindow {
                                 validator: IntValidator { bottom: 1; top: 65535 }
 
                                 background: Rectangle {
-                                    color: enabled ? "#ffffff" : "#f8fafc"
-                                    border.color: parent.activeFocus ? "#3b82f6" :
-                                        (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                    border.color: parent.activeFocus ? appTheme.accent :
+                                        (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                     border.width: 1
                                     radius: 4
                                     antialiasing: true
@@ -4965,9 +5044,9 @@ ApplicationWindow {
                                 }
 
                                 background: Rectangle {
-                                    color: enabled ? "#ffffff" : "#f8fafc"
-                                    border.color: parent.activeFocus ? "#3b82f6" :
-                                        (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                    border.color: parent.activeFocus ? appTheme.accent :
+                                        (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                     border.width: 1
                                     radius: 4
                                     antialiasing: true
@@ -4998,8 +5077,8 @@ ApplicationWindow {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 60
-                color: "#f8fafc"
-                border.color: "#e2e8f0"
+                color: appTheme.surfaceVariant
+                border.color: appTheme.border
                 border.width: 1
                 radius: 6
 
@@ -5014,7 +5093,7 @@ ApplicationWindow {
                             text: qsTr("Объектная модель: ") + getCurrentObjectModelName()
                             font.pixelSize: 14
                             font.weight: Font.DemiBold
-                            color: "#1e293b"
+                            color: appTheme.textPrimary
                         }
 
                         Text {
@@ -5069,26 +5148,26 @@ ApplicationWindow {
                         z: 3
                         width: listView.width
                         height: 32
-                        color: "#f1f5f9"
+                        color: Qt.lighter(appTheme.surfaceVariant, 1.06)
                         antialiasing: true
 
                         Rectangle {
                             anchors.bottom: parent.bottom
                             width: parent.width
                             height: 1
-                            color: "#cbd5e1"
+                            color: Qt.lighter(appTheme.border, 1.1)
                         }
 
                         Rectangle {
                             anchors.top: parent.top
                             width: parent.width
                             height: 1
-                            color: "#e2e8f0"
+                            color: appTheme.border
                         }
 
                         gradient: Gradient {
-                            GradientStop { position: 0.0; color: "#f8fafc" }
-                            GradientStop { position: 1.0; color: "#e2e8f0" }
+                            GradientStop { position: 0.0; color: appTheme.surfaceVariant }
+                            GradientStop { position: 1.0; color: appTheme.border }
                         }
 
                         layer.enabled: false
@@ -5101,7 +5180,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("✓")
                                 Layout.preferredWidth: 30
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -5110,7 +5189,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Наименование")
                                 Layout.preferredWidth: 200
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -5119,7 +5198,7 @@ ApplicationWindow {
                                 text: rootwindow.currentType === "Аналоговые входы" ? "Параметры": (rootwindow.currentType === "Уставка" ? "Тип" : "")
                                 visible: (rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Уставка")
                                 Layout.preferredWidth: (rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Уставка") ? 100 : 0
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -5127,7 +5206,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Тип данных")
                                 Layout.preferredWidth: 100
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -5135,7 +5214,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Адрес ОИ")
                                 Layout.preferredWidth: 100
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -5143,7 +5222,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Адрес АСДУ")
                                 Layout.preferredWidth: 100
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -5151,7 +5230,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Номер буфера")
                                 Layout.preferredWidth: 130
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -5159,7 +5238,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Тип при спорадике")
                                 Layout.preferredWidth: 130
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -5167,7 +5246,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Тип при фоновом")
                                 Layout.preferredWidth: 130
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -5175,7 +5254,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Тип при пер/цик")
                                 Layout.preferredWidth: 130
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -5183,7 +5262,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Тип при общем")
                                 Layout.preferredWidth: 130
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -5199,7 +5278,7 @@ ApplicationWindow {
                         width: listView.width
                         id: rowItem
                         height: 180
-                        color: index % 2 === 0 ? "#ffffff" : "#f8fafc"
+                        color: index % 2 === 0 ? appTheme.surface : appTheme.surfaceVariant
                         required property int index
                         required property var model
 
@@ -5268,7 +5347,7 @@ ApplicationWindow {
                                 text: itemData.name
                                 Layout.preferredWidth: 200
                                 Layout.alignment: Qt.AlignVCenter
-                                color: isVal ? "#6b7280" : "#1e293b" // Серый цвет для команд
+                                color: isVal ? "#6b7280" : appTheme.textPrimary // Серый цвет для команд
                                 wrapMode: Text.WordWrap
                                 maximumLineCount: 4
                                 font.pixelSize: 13
@@ -5311,7 +5390,7 @@ ApplicationWindow {
                                         text: __getByRole(modelData, "type")
                                         elide: Text.ElideRight
                                         verticalAlignment: Text.AlignVCenter
-                                        color: isVal ? "#6b7280" : "#1e293b"
+                                        color: isVal ? "#6b7280" : appTheme.textPrimary
                                         font.pixelSize: 12
                                         Layout.preferredWidth: 100
                                     }
@@ -5350,12 +5429,12 @@ ApplicationWindow {
                                         selectByMouse: true
                                         Layout.preferredWidth: 100
                                         Layout.preferredHeight: 32
-                                        color: isVal ? "#6b7280" : "#1e293b"
+                                        color: isVal ? "#6b7280" : appTheme.textPrimary
                                         font.pixelSize: 13
                                         background: Rectangle {
-                                            color: enabled ? "#ffffff" : "#f8fafc"
-                                            border.color: parent.activeFocus ? "#3b82f6"
-                                                : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                            color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                            border.color: parent.activeFocus ? appTheme.accent
+                                                : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                             border.width: 1
                                             radius: 4
                                             antialiasing: true
@@ -5382,12 +5461,12 @@ ApplicationWindow {
                                         selectByMouse: true
                                         Layout.preferredWidth: 100
                                         Layout.preferredHeight: 32
-                                        color: isVal ? "#6b7280" : "#1e293b"
+                                        color: isVal ? "#6b7280" : appTheme.textPrimary
                                         font.pixelSize: 13
                                         background: Rectangle {
-                                            color: enabled ? "#ffffff" : "#f8fafc"
-                                            border.color: parent.activeFocus ? "#3b82f6"
-                                                : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                            color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                            border.color: parent.activeFocus ? appTheme.accent
+                                                : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                             border.width: 1
                                             radius: 4
                                             antialiasing: true
@@ -5428,9 +5507,9 @@ ApplicationWindow {
                                         }
 
                                         background: Rectangle {
-                                            color: enabled ? "#ffffff" : "#f8fafc"
-                                            border.color: parent.activeFocus ? "#3b82f6"
-                                                : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                            color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                            border.color: parent.activeFocus ? appTheme.accent
+                                                : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                             border.width: 1
                                             radius: 4
                                             antialiasing: true
@@ -5493,9 +5572,9 @@ ApplicationWindow {
                                         }
 
                                         background: Rectangle {
-                                            color: enabled ? "#ffffff" : "#f8fafc"
-                                            border.color: parent.activeFocus ? "#3b82f6"
-                                                : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                            color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                            border.color: parent.activeFocus ? appTheme.accent
+                                                : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                             border.width: 1
                                             radius: 4
                                             antialiasing: true
@@ -5556,9 +5635,9 @@ ApplicationWindow {
                                         }
 
                                         background: Rectangle {
-                                            color: enabled ? "#ffffff" : "#f8fafc"
-                                            border.color: parent.activeFocus ? "#3b82f6"
-                                                : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                            color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                            border.color: parent.activeFocus ? appTheme.accent
+                                                : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                             border.width: 1
                                             radius: 4
                                             antialiasing: true
@@ -5617,9 +5696,9 @@ ApplicationWindow {
                                         }
 
                                         background: Rectangle {
-                                            color: enabled ? "#ffffff" : "#f8fafc"
-                                            border.color: parent.activeFocus ? "#3b82f6"
-                                                : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                            color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                            border.color: parent.activeFocus ? appTheme.accent
+                                                : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                             border.width: 1
                                             radius: 4
                                             antialiasing: true
@@ -5679,9 +5758,9 @@ ApplicationWindow {
                                         }
 
                                         background: Rectangle {
-                                            color: enabled ? "#ffffff" : "#f8fafc"
-                                            border.color: parent.activeFocus ? "#3b82f6"
-                                                : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                            color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                            border.color: parent.activeFocus ? appTheme.accent
+                                                : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                             border.width: 1
                                             radius: 4
                                             antialiasing: true
@@ -5724,7 +5803,7 @@ ApplicationWindow {
                 delegate: Rectangle {
                     width: parent.width
                     height: 40
-                    color: mouse.containsMouse ? "#f1f5f9" : "transparent"
+                    color: mouse.containsMouse ? Qt.lighter(appTheme.surfaceVariant, 1.06) : "transparent"
                     border.color: currentObjectModelId === model.id ? "#0ea5e9" : "transparent"
                     border.width: 2
                     radius: 4
@@ -5749,7 +5828,7 @@ ApplicationWindow {
                             width: 8
                             height: 8
                             radius: 4
-                            color: model.type === "MEK" ? "#10b981" : "#3b82f6"
+                            color: model.type === "MEK" ? Qt.darker(appTheme.success, 1.1) : appTheme.accent
                             anchors.verticalCenter: parent.verticalCenter
                         }
 
@@ -5820,26 +5899,26 @@ ApplicationWindow {
                         z: 2
                         width: listView.width
                         height: 32
-                        color: "#f1f5f9"
+                        color: Qt.lighter(appTheme.surfaceVariant, 1.06)
                         antialiasing: true
 
                         Rectangle {
                             anchors.bottom: parent.bottom
                             width: parent.width
                             height: 1
-                            color: "#cbd5e1"
+                            color: Qt.lighter(appTheme.border, 1.1)
                         }
 
                         Rectangle {
                             anchors.top: parent.top
                             width: parent.width
                             height: 1
-                            color: "#e2e8f0"
+                            color: appTheme.border
                         }
 
                         gradient: Gradient {
-                            GradientStop { position: 0.0; color: "#f8fafc" }
-                            GradientStop { position: 1.0; color: "#e2e8f0" }
+                            GradientStop { position: 0.0; color: appTheme.surfaceVariant }
+                            GradientStop { position: 1.0; color: appTheme.border }
                         }
 
                         layer.enabled: false
@@ -5853,7 +5932,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("IO")
                                 Layout.preferredWidth: 50
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -5861,7 +5940,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Наименование")
                                 Layout.preferredWidth: 200
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -5869,7 +5948,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Адрес ОИ")
                                 Layout.preferredWidth: 100
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -5877,7 +5956,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Адрес АСДУ")
                                 Layout.preferredWidth: 100
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -5885,7 +5964,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Исп. в спорадике")
                                 Layout.preferredWidth: 100
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -5893,7 +5972,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Исп. в цикл/период")
                                 Layout.preferredWidth: 100
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -5901,7 +5980,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Исп. в фон. сканир")
                                 Layout.preferredWidth: 100
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -5909,7 +5988,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Разрешить адрес")
                                 Layout.preferredWidth: 150
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -5917,7 +5996,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Группа опроса")
                                 Layout.preferredWidth: 150
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -5932,7 +6011,7 @@ ApplicationWindow {
                     delegate: Rectangle {
                         width: listView.width
                         height: 70
-                        color: index % 2 === 0 ? "#ffffff" : "#f8fafc"
+                        color: index % 2 === 0 ? appTheme.surface : appTheme.surfaceVariant
                         required property int index
                         required property var model
 
@@ -5969,7 +6048,7 @@ ApplicationWindow {
                                 text: itemData.ioIndex
                                 Layout.preferredWidth: 50
                                 Layout.alignment: Qt.AlignVCenter
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.Normal
                                 verticalAlignment: Text.AlignVCenter
@@ -5980,7 +6059,7 @@ ApplicationWindow {
                                 text: itemData.name
                                 Layout.preferredWidth: 200
                                 Layout.alignment: Qt.AlignVCenter
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.Normal
                                 verticalAlignment: Text.AlignVCenter
@@ -6002,7 +6081,7 @@ ApplicationWindow {
                                 Layout.preferredHeight: 32
                                 Layout.alignment: Qt.AlignVCenter
 
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.Normal
 
@@ -6015,8 +6094,8 @@ ApplicationWindow {
                                 verticalAlignment: TextInput.AlignVCenter
 
                                 background: Rectangle {
-                                    color: enabled ? "#ffffff" : "#f8fafc"
-                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                    border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                     border.width: 1
                                     radius: 4
                                     antialiasing: true
@@ -6036,7 +6115,7 @@ ApplicationWindow {
                                 Layout.preferredHeight: 32
                                 Layout.alignment: Qt.AlignVCenter
 
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.Normal
 
@@ -6049,8 +6128,8 @@ ApplicationWindow {
                                 verticalAlignment: TextInput.AlignVCenter
 
                                 background: Rectangle {
-                                    color: enabled ? "#ffffff" : "#f8fafc"
-                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                    border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                     border.width: 1
                                     radius: 4
                                     antialiasing: true
@@ -6077,9 +6156,9 @@ ApplicationWindow {
                                     height: 24
                                     radius: 12
 
-                                    color: parent.checked ? "#3b82f6" : "#f8fafc"
-                                    border.color: parent.checked ? "#3b82f6" :
-                                        (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    color: parent.checked ? appTheme.accent : appTheme.surfaceVariant
+                                    border.color: parent.checked ? appTheme.accent :
+                                        (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                     border.width: 1
 
                                     Behavior on color {
@@ -6099,7 +6178,7 @@ ApplicationWindow {
                                         x: parent.parent.checked ? parent.width - width - 3 : 3
 
                                         color: "#ffffff"
-                                        border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                        border.color: parent.parent.checked ? "#ffffff" : Qt.lighter(appTheme.border, 1.25)
                                         border.width: 1
 
                                         Behavior on x {
@@ -6128,9 +6207,9 @@ ApplicationWindow {
                                     height: 24
                                     radius: 12
 
-                                    color: parent.checked ? "#3b82f6" : "#f8fafc"
-                                    border.color: parent.checked ? "#3b82f6" :
-                                        (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    color: parent.checked ? appTheme.accent : appTheme.surfaceVariant
+                                    border.color: parent.checked ? appTheme.accent :
+                                        (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                     border.width: 1
 
                                     Behavior on color {
@@ -6150,7 +6229,7 @@ ApplicationWindow {
                                         x: parent.parent.checked ? parent.width - width - 3 : 3
 
                                         color: "#ffffff"
-                                        border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                        border.color: parent.parent.checked ? "#ffffff" : Qt.lighter(appTheme.border, 1.25)
                                         border.width: 1
 
                                         Behavior on x {
@@ -6179,9 +6258,9 @@ ApplicationWindow {
                                     height: 24
                                     radius: 12
 
-                                    color: parent.checked ? "#3b82f6" : "#f8fafc"
-                                    border.color: parent.checked ? "#3b82f6" :
-                                        (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    color: parent.checked ? appTheme.accent : appTheme.surfaceVariant
+                                    border.color: parent.checked ? appTheme.accent :
+                                        (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                     border.width: 1
 
                                     Behavior on color {
@@ -6201,7 +6280,7 @@ ApplicationWindow {
                                         x: parent.parent.checked ? parent.width - width - 3 : 3
 
                                         color: "#ffffff"
-                                        border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                        border.color: parent.parent.checked ? "#ffffff" : Qt.lighter(appTheme.border, 1.25)
                                         border.width: 1
 
                                         Behavior on x {
@@ -6230,9 +6309,9 @@ ApplicationWindow {
                                     height: 24
                                     radius: 12
 
-                                    color: parent.checked ? "#3b82f6" : "#f8fafc"
-                                    border.color: parent.checked ? "#3b82f6" :
-                                        (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    color: parent.checked ? appTheme.accent : appTheme.surfaceVariant
+                                    border.color: parent.checked ? appTheme.accent :
+                                        (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                     border.width: 1
 
                                     Behavior on color {
@@ -6252,7 +6331,7 @@ ApplicationWindow {
                                         x: parent.parent.checked ? parent.width - width - 3 : 3
 
                                         color: "#ffffff"
-                                        border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                        border.color: parent.parent.checked ? "#ffffff" : Qt.lighter(appTheme.border, 1.25)
                                         border.width: 1
 
                                         Behavior on x {
@@ -6278,8 +6357,8 @@ ApplicationWindow {
                                 font.pixelSize: 13
 
                                 background: Rectangle {
-                                    color: enabled ? "#ffffff" : "#f8fafc"
-                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                    border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                     border.width: 1
                                     radius: 4
                                     antialiasing: true
@@ -6358,26 +6437,26 @@ ApplicationWindow {
                         z: 2
                         width: listView.width
                         height: 32
-                        color: "#f1f5f9"
+                        color: Qt.lighter(appTheme.surfaceVariant, 1.06)
                         antialiasing: true
 
                         Rectangle {
                             anchors.bottom: parent.bottom
                             width: parent.width
                             height: 1
-                            color: "#cbd5e1"
+                            color: Qt.lighter(appTheme.border, 1.1)
                         }
 
                         Rectangle {
                             anchors.top: parent.top
                             width: parent.width
                             height: 1
-                            color: "#e2e8f0"
+                            color: appTheme.border
                         }
 
                         gradient: Gradient {
-                            GradientStop { position: 0.0; color: "#f8fafc" }
-                            GradientStop { position: 1.0; color: "#e2e8f0" }
+                            GradientStop { position: 0.0; color: appTheme.surfaceVariant }
+                            GradientStop { position: 1.0; color: appTheme.border }
                         }
 
                         layer.enabled: false
@@ -6391,7 +6470,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("IO")
                                 Layout.preferredWidth: 50
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -6399,7 +6478,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Наименование")
                                 Layout.preferredWidth: 200
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -6407,7 +6486,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Адрес ОИ")
                                 Layout.preferredWidth: 100
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -6415,7 +6494,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Адрес АСДУ")
                                 Layout.preferredWidth: 100
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -6423,7 +6502,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Исп. в спорадике")
                                 Layout.preferredWidth: 100
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -6431,7 +6510,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Исп. в цикл/период")
                                 Layout.preferredWidth: 100
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -6439,7 +6518,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Исп. в фон. сканир")
                                 Layout.preferredWidth: 100
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -6447,7 +6526,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Разрешить адрес")
                                 Layout.preferredWidth: 150
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -6455,7 +6534,7 @@ ApplicationWindow {
                             Label {
                                 text: qsTr("Группа опроса")
                                 Layout.preferredWidth: 150
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.DemiBold
                                 verticalAlignment: Text.AlignVCenter
@@ -6470,7 +6549,7 @@ ApplicationWindow {
                     delegate: Rectangle {
                         width: listView.width
                         height: 70
-                        color: index % 2 === 0 ? "#ffffff" : "#f8fafc"
+                        color: index % 2 === 0 ? appTheme.surface : appTheme.surfaceVariant
                         required property int index
                         required property var model
 
@@ -6507,7 +6586,7 @@ ApplicationWindow {
                                 text: itemData.ioIndex
                                 Layout.preferredWidth: 50
                                 Layout.alignment: Qt.AlignVCenter
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.Normal
                                 verticalAlignment: Text.AlignVCenter
@@ -6518,7 +6597,7 @@ ApplicationWindow {
                                 text: itemData.name
                                 Layout.preferredWidth: 200
                                 Layout.alignment: Qt.AlignVCenter
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.Normal
                                 verticalAlignment: Text.AlignVCenter
@@ -6540,7 +6619,7 @@ ApplicationWindow {
                                 Layout.preferredHeight: 32
                                 Layout.alignment: Qt.AlignVCenter
 
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.Normal
 
@@ -6553,8 +6632,8 @@ ApplicationWindow {
                                 verticalAlignment: TextInput.AlignVCenter
 
                                 background: Rectangle {
-                                    color: enabled ? "#ffffff" : "#f8fafc"
-                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                    border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                     border.width: 1
                                     radius: 4
                                     antialiasing: true
@@ -6574,7 +6653,7 @@ ApplicationWindow {
                                 Layout.preferredHeight: 32
                                 Layout.alignment: Qt.AlignVCenter
 
-                                color: "#1e293b"
+                                color: appTheme.textPrimary
                                 font.pixelSize: 13
                                 font.weight: Font.Normal
 
@@ -6587,8 +6666,8 @@ ApplicationWindow {
                                 verticalAlignment: TextInput.AlignVCenter
 
                                 background: Rectangle {
-                                    color: enabled ? "#ffffff" : "#f8fafc"
-                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                    border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                     border.width: 1
                                     radius: 4
                                     antialiasing: true
@@ -6615,9 +6694,9 @@ ApplicationWindow {
                                     height: 24
                                     radius: 12
 
-                                    color: parent.checked ? "#3b82f6" : "#f8fafc"
-                                    border.color: parent.checked ? "#3b82f6" :
-                                        (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    color: parent.checked ? appTheme.accent : appTheme.surfaceVariant
+                                    border.color: parent.checked ? appTheme.accent :
+                                        (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                     border.width: 1
 
                                     Behavior on color {
@@ -6637,7 +6716,7 @@ ApplicationWindow {
                                         x: parent.parent.checked ? parent.width - width - 3 : 3
 
                                         color: "#ffffff"
-                                        border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                        border.color: parent.parent.checked ? "#ffffff" : Qt.lighter(appTheme.border, 1.25)
                                         border.width: 1
 
                                         Behavior on x {
@@ -6666,9 +6745,9 @@ ApplicationWindow {
                                     height: 24
                                     radius: 12
 
-                                    color: parent.checked ? "#3b82f6" : "#f8fafc"
-                                    border.color: parent.checked ? "#3b82f6" :
-                                        (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    color: parent.checked ? appTheme.accent : appTheme.surfaceVariant
+                                    border.color: parent.checked ? appTheme.accent :
+                                        (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                     border.width: 1
 
                                     Behavior on color {
@@ -6688,7 +6767,7 @@ ApplicationWindow {
                                         x: parent.parent.checked ? parent.width - width - 3 : 3
 
                                         color: "#ffffff"
-                                        border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                        border.color: parent.parent.checked ? "#ffffff" : Qt.lighter(appTheme.border, 1.25)
                                         border.width: 1
 
                                         Behavior on x {
@@ -6717,9 +6796,9 @@ ApplicationWindow {
                                     height: 24
                                     radius: 12
 
-                                    color: parent.checked ? "#3b82f6" : "#f8fafc"
-                                    border.color: parent.checked ? "#3b82f6" :
-                                        (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    color: parent.checked ? appTheme.accent : appTheme.surfaceVariant
+                                    border.color: parent.checked ? appTheme.accent :
+                                        (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                     border.width: 1
 
                                     Behavior on color {
@@ -6739,7 +6818,7 @@ ApplicationWindow {
                                         x: parent.parent.checked ? parent.width - width - 3 : 3
 
                                         color: "#ffffff"
-                                        border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                        border.color: parent.parent.checked ? "#ffffff" : Qt.lighter(appTheme.border, 1.25)
                                         border.width: 1
 
                                         Behavior on x {
@@ -6768,9 +6847,9 @@ ApplicationWindow {
                                     height: 24
                                     radius: 12
 
-                                    color: parent.checked ? "#3b82f6" : "#f8fafc"
-                                    border.color: parent.checked ? "#3b82f6" :
-                                        (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    color: parent.checked ? appTheme.accent : appTheme.surfaceVariant
+                                    border.color: parent.checked ? appTheme.accent :
+                                        (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                     border.width: 1
 
                                     Behavior on color {
@@ -6790,7 +6869,7 @@ ApplicationWindow {
                                         x: parent.parent.checked ? parent.width - width - 3 : 3
 
                                         color: "#ffffff"
-                                        border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                        border.color: parent.parent.checked ? "#ffffff" : Qt.lighter(appTheme.border, 1.25)
                                         border.width: 1
 
                                         Behavior on x {
@@ -6816,8 +6895,8 @@ ApplicationWindow {
                                 font.pixelSize: 13
 
                                 background: Rectangle {
-                                    color: enabled ? "#ffffff" : "#f8fafc"
-                                    border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                    color: enabled ? appTheme.surface : appTheme.surfaceVariant
+                                    border.color: parent.activeFocus ? appTheme.accent : (parent.hovered ? Qt.lighter(appTheme.border, 1.25) : appTheme.border)
                                     border.width: 1
                                     radius: 4
                                     antialiasing: true
@@ -6868,15 +6947,69 @@ ApplicationWindow {
         anchors.fill: parent
         spacing: 0
         anchors.bottomMargin: 70
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 52
+            color: "#f8fafc"
+            border.color: "#e2e8f0"
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
+                spacing: 18
+
+                Label { text: "Модель: " + currentModelName; font.bold: true; color: "#1e293b" }
+                Label { text: hasUnsavedChanges ? "● Несохраненные изменения" : "✓ Сохранено"; color: hasUnsavedChanges ? "#dc2626" : "#059669" }
+                Label { text: "Сигналов в разделе: " + selectedSignalCount; color: "#334155" }
+                Item { Layout.fillWidth: true }
+                Button {
+                    text: "Дополнительно"
+                    onClicked: advancedDrawer.open()
+                }
+            }
+        }
+
+        TabBar {
+            id: workflowTabs
+            Layout.fillWidth: true
+            currentIndex: workflowStep
+            onCurrentIndexChanged: workflowStep = currentIndex
+            TabButton { text: "1. Проект/модель" }
+            TabButton { text: "2. Сигналы" }
+            TabButton { text: "3. Протоколы" }
+            TabButton { text: "4. Валидация" }
+            TabButton { text: "5. Экспорт" }
+        }
+
+        Rectangle {
+            visible: workflowStep === 0
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            color: "#ffffff"
+            ColumnLayout {
+                anchors.centerIn: parent
+                spacing: 12
+                Label { text: "Шаг 1: выберите проект и объектную модель"; font.pixelSize: 20; font.bold: true }
+                RowLayout {
+                    Button { text: "Импорт проекта"; onClicked: fileDialog.open() }
+                    Button { text: "Управление моделями"; onClicked: objectModelsManagerDialog.open() }
+                    Button { text: "Управление протоколами"; onClicked: protocolManagerDialog.open() }
+                }
+            }
+        }
+
         TabBar {
             id: protocolTabs
+            visible: workflowStep >= 2
+
             Layout.fillWidth: true
             currentIndex: 0
             property int tabWidth: 180
 
             // Add background styling to match header
             background: Rectangle {
-                color: "#f1f5f9"
+                color: Qt.lighter(appTheme.surfaceVariant, 1.06)
                 antialiasing: true
 
                 // Top separator line
@@ -6884,7 +7017,7 @@ ApplicationWindow {
                     anchors.top: parent.top
                     width: parent.width
                     height: 1
-                    color: "#e2e8f0"
+                    color: appTheme.border
                 }
 
                 // Bottom separator line
@@ -6892,21 +7025,21 @@ ApplicationWindow {
                     anchors.bottom: parent.bottom
                     width: parent.width
                     height: 1
-                    color: "#cbd5e1"
+                    color: Qt.lighter(appTheme.border, 1.1)
                 }
 
                 // Gradient background
                 gradient: Gradient {
-                    GradientStop { position: 0.0; color: "#f8fafc" }
-                    GradientStop { position: 1.0; color: "#e2e8f0" }
+                    GradientStop { position: 0.0; color: appTheme.surfaceVariant }
+                    GradientStop { position: 1.0; color: appTheme.border }
                 }
             }
             TabButton{text: qsTr("Общее")
                 Accessible.name: text
                 Accessible.description: qsTr("Вкладка общих параметров")
                 background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    color: parent.checked ? appTheme.border : "transparent"
+                    border.color: parent.checked ? Qt.lighter(appTheme.border, 1.1) : "transparent"
                     border.width: parent.checked ? 1 : 0
                 }
             }
@@ -6915,8 +7048,8 @@ ApplicationWindow {
                 Accessible.description: qsTr("Вкладка настроек Modbus")
                 visible: modbus
                 background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    color: parent.checked ? appTheme.border : "transparent"
+                    border.color: parent.checked ? Qt.lighter(appTheme.border, 1.1) : "transparent"
                     border.width: parent.checked ? 1 : 0
                 }
                 width: visible ? tabBar.tabWidth : 0
@@ -6926,8 +7059,8 @@ ApplicationWindow {
                 Accessible.description: qsTr("Вкладка настроек MEK")
                 visible: mek
                 background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    color: parent.checked ? appTheme.border : "transparent"
+                    border.color: parent.checked ? Qt.lighter(appTheme.border, 1.1) : "transparent"
                     border.width: parent.checked ? 1 : 0
                 }
                 width: visible ? tabBar.tabWidth : 0
@@ -6938,8 +7071,8 @@ ApplicationWindow {
                 Accessible.description: qsTr("Вкладка настроек MEK101")
                 visible: mek_101
                 background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    color: parent.checked ? appTheme.border : "transparent"
+                    border.color: parent.checked ? Qt.lighter(appTheme.border, 1.1) : "transparent"
                     border.width: parent.checked ? 1 : 0
                 }
                 width: visible ? tabBar.tabWidth : 0
@@ -6949,26 +7082,23 @@ ApplicationWindow {
                 Accessible.description: qsTr("Вкладка настроек MEK104")
                 visible: mek_104
                 background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    color: parent.checked ? appTheme.border : "transparent"
+                    border.color: parent.checked ? Qt.lighter(appTheme.border, 1.1) : "transparent"
                     border.width: parent.checked ? 1 : 0
                 }
-                width: visible ? tabBar.tabWidth : 0
-            }
-            onCurrentIndexChanged: {
-                currentProtocol = protocolTabs.itemAt(currentIndex).text
-                console.log(currentProtocol)
             }
         }
         TabBar {
             id: tabBar
+            visible: workflowStep === 1 || workflowStep === 2
             Layout.fillWidth: true
-            currentIndex: 0
-            property int tabWidth: 180
+            Layout.preferredHeight: tabBar.implicitHeight
+            Layout.maximumHeight: tabBar.implicitHeight
+            clip: true
 
             // Add background styling to match header
             background: Rectangle {
-                color: "#f1f5f9"
+                color: Qt.lighter(appTheme.surfaceVariant, 1.06)
                 antialiasing: true
 
                 // Top separator line
@@ -6976,7 +7106,7 @@ ApplicationWindow {
                     anchors.top: parent.top
                     width: parent.width
                     height: 1
-                    color: "#e2e8f0"
+                    color: appTheme.border
                 }
 
                 // Bottom separator line
@@ -6984,13 +7114,13 @@ ApplicationWindow {
                     anchors.bottom: parent.bottom
                     width: parent.width
                     height: 1
-                    color: "#cbd5e1"
+                    color: Qt.lighter(appTheme.border, 1.1)
                 }
 
                 // Gradient background
                 gradient: Gradient {
-                    GradientStop { position: 0.0; color: "#f8fafc" }
-                    GradientStop { position: 1.0; color: "#e2e8f0" }
+                    GradientStop { position: 0.0; color: appTheme.surfaceVariant }
+                    GradientStop { position: 1.0; color: appTheme.border }
                 }
             }
 
@@ -6999,8 +7129,8 @@ ApplicationWindow {
                 Accessible.name: text
                 Accessible.description: qsTr("Вкладка аналоговых входов")
                 background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    color: parent.checked ? appTheme.border : "transparent"
+                    border.color: parent.checked ? Qt.lighter(appTheme.border, 1.1) : "transparent"
                     border.width: parent.checked ? 1 : 0
                 }
             }
@@ -7009,8 +7139,8 @@ ApplicationWindow {
                 Accessible.name: text
                 Accessible.description: qsTr("Вкладка дискретных входов")
                 background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    color: parent.checked ? appTheme.border : "transparent"
+                    border.color: parent.checked ? Qt.lighter(appTheme.border, 1.1) : "transparent"
                     border.width: parent.checked ? 1 : 0
                 }
             }
@@ -7019,8 +7149,8 @@ ApplicationWindow {
                 Accessible.name: text
                 Accessible.description: qsTr("Вкладка аналоговых выходов")
                 background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    color: parent.checked ? appTheme.border : "transparent"
+                    border.color: parent.checked ? Qt.lighter(appTheme.border, 1.1) : "transparent"
                     border.width: parent.checked ? 1 : 0
                 }
             }
@@ -7029,8 +7159,8 @@ ApplicationWindow {
                 Accessible.name: text
                 Accessible.description: qsTr("Вкладка дискретных выходов")
                 background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    color: parent.checked ? appTheme.border : "transparent"
+                    border.color: parent.checked ? Qt.lighter(appTheme.border, 1.1) : "transparent"
                     border.width: parent.checked ? 1 : 0
                 }
             }
@@ -7039,8 +7169,8 @@ ApplicationWindow {
                 Accessible.name: text
                 Accessible.description: qsTr("Вкладка признаков")
                 background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    color: parent.checked ? appTheme.border : "transparent"
+                    border.color: parent.checked ? Qt.lighter(appTheme.border, 1.1) : "transparent"
                     border.width: parent.checked ? 1 : 0
                 }
             }
@@ -7049,8 +7179,8 @@ ApplicationWindow {
                 Accessible.name: text
                 Accessible.description: qsTr("Вкладка команд уставок")
                 background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    color: parent.checked ? appTheme.border : "transparent"
+                    border.color: parent.checked ? Qt.lighter(appTheme.border, 1.1) : "transparent"
                     border.width: parent.checked ? 1 : 0
                 }
             }
@@ -7060,55 +7190,41 @@ ApplicationWindow {
                         currentIndex = i;
                         return true;
                     }
-                }
-                return false;
-            }
 
-            function updateFocus() {
-                if (mek && mek_104 && activateTab("MEK_104")) return;
-                if (mek && mek_101 && activateTab("MEK_101")) return;
-                if (mek && activateTab("MEK")) return;
-                if (modbus && activateTab("Modbus")) return;
-
-                currentIndex = 0;
-            }
-
-            onCurrentIndexChanged: {
-                if (currentIndex >= 0) {
-                    swipeView.currentIndex = currentIndex;
-                    switch(swipeView.currentIndex) {
-                        case 0:
-                            rootwindow.currentType = "Аналоговые входы";
-                            break;
-                        case 1:
-                            rootwindow.currentType = "Дискретные входы";
-                            break;
-                        case 2:
-                            rootwindow.currentType = "Аналоговый выход";
-                            break;
-                        case 3:
-                            rootwindow.currentType = "Дискретный выход";
-                            break;
-                        case 4:
-                            rootwindow.currentType = "Признаки";
-                            break;
-                        case 5:
-                            rootwindow.currentType = "Уставка";
-                            break;
-                        default:
-                            rootwindow.currentType = "";
+                    function updateFocus() {
+                        if (mek && mek_104 && activateTab("MEK_104")) return;
+                        if (mek && mek_101 && activateTab("MEK_101")) return;
+                        if (mek && activateTab("MEK")) return;
+                        if (modbus && activateTab("Modbus")) return;
+                        currentIndex = 0;
                     }
-                    console.log(rootwindow.currentType);
+
+                    onCurrentIndexChanged: {
+                        if (currentIndex >= 0) {
+                            swipeView.currentIndex = currentIndex;
+                            switch(swipeView.currentIndex) {
+                                case 0: rootwindow.currentType = "Аналоговые входы"; break;
+                                case 1: rootwindow.currentType = "Дискретные входы"; break;
+                                case 2: rootwindow.currentType = "Аналоговый выход"; break;
+                                case 3: rootwindow.currentType = "Дискретный выход"; break;
+                                case 4: rootwindow.currentType = "Признаки"; break;
+                                case 5: rootwindow.currentType = "Уставка"; break;
+                                default: rootwindow.currentType = "";
+                            }
+                            console.log(rootwindow.currentType);
+                        }
+                    }
                 }
             }
         }
 
         StackLayout {
             id: swipeView
+            visible: workflowStep === 1 || workflowStep === 2
             Layout.fillWidth: true
             Layout.fillHeight: true
+            Layout.minimumHeight: 280
             currentIndex: tabBar.currentIndex
-            anchors.margins: 10
 
             Loader {
                 id: loader1
@@ -7126,12 +7242,9 @@ ApplicationWindow {
                 onLoaded: {
                     item.paramType = "Аналоговые входы"
                     item.listView = listView
-                        item.addClicked.connect(() => {
-                        rootwindow.currentType = "Аналоговые входы"
-                    })
+                    item.addClicked.connect(() => { rootwindow.currentType = "Аналоговые входы" })
                 }
             }
-
             Loader {
                 id: loader2
                 active: tabBar.currentIndex === 1
@@ -7148,13 +7261,9 @@ ApplicationWindow {
                 onLoaded: {
                     item.paramType = "Дискретные входы"
                     item.listView = listView
-                        item.addClicked.connect(() => {
-                        rootwindow.currentType = "Дискретные входы"
-
-                    })
+                    item.addClicked.connect(() => { rootwindow.currentType = "Дискретные входы" })
                 }
             }
-
             Loader {
                 id: loader3
                 active: tabBar.currentIndex === 2
@@ -7166,17 +7275,14 @@ ApplicationWindow {
                         case "MEK101": return mek101PageComponent
                         case "MEK104": return mek104PageComponent
                     }
-                }                asynchronous: true
+                }
+                asynchronous: true
                 onLoaded: {
                     item.paramType = "Аналоговый выход"
                     item.listView = listView
-                        item.addClicked.connect(() => {
-                        rootwindow.currentType = "Аналоговый выход"
-
-                    })
+                    item.addClicked.connect(() => { rootwindow.currentType = "Аналоговый выход" })
                 }
             }
-
             Loader {
                 id: loader4
                 active: tabBar.currentIndex === 3
@@ -7188,14 +7294,12 @@ ApplicationWindow {
                         case "MEK101": return mek101PageComponent
                         case "MEK104": return mek104PageComponent
                     }
-                }                asynchronous: true
+                }
+                asynchronous: true
                 onLoaded: {
                     item.paramType = "Дискретный выход"
                     item.listView = listView1
-                        item.addClicked.connect(() => {
-                        rootwindow.currentType = "Дискретный выход"
-
-                    })
+                    item.addClicked.connect(() => { rootwindow.currentType = "Дискретный выход" })
                 }
             }
             Loader {
@@ -7209,14 +7313,12 @@ ApplicationWindow {
                         case "MEK101": return mek101PageComponent
                         case "MEK104": return mek104PageComponent
                     }
-                }                asynchronous: true
+                }
+                asynchronous: true
                 onLoaded: {
                     item.paramType = "Признаки"
                     item.listView = listView
-                        item.addClicked.connect(() => {
-                        rootwindow.currentType = "Признаки"
-
-                    })
+                    item.addClicked.connect(() => { rootwindow.currentType = "Признаки" })
                 }
             }
             Loader {
@@ -7235,10 +7337,7 @@ ApplicationWindow {
                 onLoaded: {
                     item.paramType = "Уставка"
                     item.listView = listView
-                        item.addClicked.connect(() => {
-                        rootwindow.currentType = "Уставка"
-
-                    })
+                    item.addClicked.connect(() => { rootwindow.currentType = "Уставка" })
                 }
             }
             Loader {
@@ -7265,41 +7364,60 @@ ApplicationWindow {
             }
 
          }
-     }
-
-    Rectangle {
-        id: controlPanel
-        anchors.bottom: parent.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-        height: 70
-        color: "#d0ffffff"
-        Behavior on color { ColorAnimation { duration: 200 } }
-
 
         Rectangle {
-            anchors.top: parent.top
-            width: parent.width
-            height: 1
-            color: "#e0e0e0"
+            visible: workflowStep === 3
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            color: "#ffffff"
+            ColumnLayout {
+                anchors.centerIn: parent
+                spacing: 10
+                Label { text: "Шаг 4: валидация"; font.pixelSize: 20; font.bold: true }
+                Label { text: hasUnsavedChanges ? "Есть несохраненные изменения" : "Изменения сохранены" }
+                Label { text: "Проверьте заполнение сигналов и соответствия протоколам перед экспортом." }
+            }
         }
 
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: 20
-            anchors.rightMargin: 20
-            spacing: 15
+        Rectangle {
+            visible: workflowStep === 4
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            color: "#ffffff"
+            ColumnLayout {
+                anchors.centerIn: parent
+                spacing: 10
+                Label { text: "Шаг 5: экспорт/генерация"; font.pixelSize: 20; font.bold: true }
+                RowLayout {
+                    Button { text: "Экспорт JSON"; onClicked: saveFileDialog.open() }
+                    Button { text: "Генерация кода"; onClicked: { jsonSelectDialog.exportType = "code"; jsonSelectDialog.open() } }
+                    Button { text: "Генерация Excel"; onClicked: { jsonSelectDialog.exportType = "exel"; jsonSelectDialog.open() } }
+                }
+            }
+        }
+     }
 
+    Drawer {
+        id: advancedDrawer
+        edge: Qt.RightEdge
+        width: Math.min(rootwindow.width * 0.32, 420)
+        height: rootwindow.height
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 10
+            Label { text: "Расширенные и отладочные операции"; font.bold: true; font.pixelSize: 16 }
             Button {
-                text: modbus ? "Удалить Modbus" : "Добавить ModBus"
+                text: modbus ? "Удалить Modbus" : "Добавить Modbus"
                 onClicked: {
                     modbus = !modbus;
                     if (modbus) tabBar.updateFocus();
                 }
             }
-
             Button {
                 text: mek ? "Удалить MEK" : "Добавить MEK"
+                Layout.preferredWidth: rootwindow.isWideDesktop ? 150 : 130
                 onClicked: {
                     mek = !mek;
                     if (mek) {
@@ -7313,28 +7431,40 @@ ApplicationWindow {
                     }
                 }
             }
-
+            Button { enabled: mek; visible: mek; text: mek_101 ? "Удалить MEK_101" : "Добавить MEK_101"; onClicked: mek_101 = !mek_101 }
+            Button { enabled: mek; visible: mek; text: mek_104 ? "Удалить MEK_104" : "Добавить MEK_104"; onClicked: mek_104 = !mek_104 }
+            Button { text: "Настроить ETH"; onClicked: ethConfigDialog.open() }
+            Button { text: "Настроить RS"; onClicked: rsConfigDialog.open() }
             Button {
-                enabled: mek
-                visible: mek
-                text: mek_101 ? "Удалить MEK_101" : "Добавить MEK_101"
+                text: "Export to JSON"
+                visible: rootwindow.isWideDesktop && !rootwindow.isCompactMode
+                Layout.preferredWidth: 145
+                onClicked: saveFileDialog.open()
+            }
+            Button {
+                text: "Generate code"
+                visible: rootwindow.isWideDesktop && !rootwindow.isCompactMode
+                Layout.preferredWidth: 145
                 onClicked: {
-                    mek_101 = !mek_101;
-                    if (mek_101) tabBar.updateFocus();
+                    jsonSelectDialog.exportType = "code"
+                    jsonSelectDialog.open()
                 }
             }
-
             Button {
-                enabled: mek
-                visible: mek
-                text: mek_104 ? "Удалить MEK_104" : "Добавить MEK_104"
+                text: "Generate exel"
+                visible: rootwindow.isWideDesktop && !rootwindow.isCompactMode
+                Layout.preferredWidth: 145
                 onClicked: {
-                    mek_104 = !mek_104;
-                    if (mek_104) tabBar.updateFocus();
+                    jsonSelectDialog.exportType = "exel"
+                    jsonSelectDialog.open()
                 }
             }
-
-
+            Button {
+                text: "MEK indexing"
+                visible: rootwindow.isWideDesktop && !rootwindow.isCompactMode
+                Layout.preferredWidth: 130
+                onClicked: assignIOA
+            }
             Button {
                 text: qsTr("Debug Full Model")
                 onClicked: {
@@ -7346,17 +7476,14 @@ ApplicationWindow {
                     for (var i = 0; i < dataModel.count; i++) {
                         var item = dataModel.get(i);
                         console.log(`\nItem ${i}: ${item.paramType} "${item.name}"`);
-                        var props = Object.keys(item);
-                        for (var j = 0; j < props.length; j++) {
-                            var propName = props[j];
-                            if (!/^[A-Z]/.test(propName)) {
-                                console.log(`  ${propName}:`, item[propName]);
-                            }
-                        }
                     }
                     console.log("----- END DUMP -----");
                 }
             }
+            Button { text: "MEK indexing"; onClicked: assignIOA }
+            Item { Layout.fillHeight: true }
+        }
+    }
 
             Button {
                 text: qsTr("Настроить ETH")
@@ -7375,12 +7502,20 @@ ApplicationWindow {
                 Layout.fillWidth: true
             }
 
+            Item { Layout.fillWidth: true }
+
             Button {
                 text: qsTr("Export to JSON")
                 onClicked: {
-                    saveFileDialog.open()
+                    if (rootwindow.currentBldePath !== "") {
+                        saveToBlde(rootwindow.currentBldePath)
+                        hasUnsavedChanges = false
+                    } else {
+                        saveFileDialog.open()
+                    }
                 }
             }
+
             Button {
                 text: qsTr("Generate code")
                 onClicked: {
@@ -7395,6 +7530,7 @@ ApplicationWindow {
                     onClicked: jsonSelectDialog.open()
                 }
             }
+
             Button {
                 text: qsTr("MEK indexing")
                 onClicked: {
@@ -7403,6 +7539,7 @@ ApplicationWindow {
             }
         }
     }
+
 
 
     Material.theme: Material.Light
