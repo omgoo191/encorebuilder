@@ -13,6 +13,12 @@ ApplicationWindow {
     minimumWidth: 1920
     visible: true
     title: "Генератор сигналов"
+    Material.theme: Material.Light
+    Material.primary: Material.BlueGrey
+    Material.accent: Material.Teal
+    Material.background: "#f1f5f9"
+    font.family: "Inter"
+    font.pixelSize: 14
     //region global properties
     property bool modbus: false
     property bool mek: false
@@ -6803,17 +6809,25 @@ ApplicationWindow {
             TabButton{
                 text:"Общее"
                 background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    radius: 8
+                    color: parent.checked
+                        ? "#dbeafe"
+                        : (parent.hovered ? "#eef2ff" : "transparent")
+                    border.color: parent.checked ? "#60a5fa" : "#00000000"
                     border.width: parent.checked ? 1 : 0
+                    Behavior on color { ColorAnimation { duration: 120 } }
                 }
             }
             TabButton{text:"Modbus"
                 visible: modbus
                 background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    radius: 8
+                    color: parent.checked
+                        ? "#dbeafe"
+                        : (parent.hovered ? "#eef2ff" : "transparent")
+                    border.color: parent.checked ? "#60a5fa" : "#00000000"
                     border.width: parent.checked ? 1 : 0
+                    Behavior on color { ColorAnimation { duration: 120 } }
                 }
                 width: visible ? tabBar.tabWidth : 0
             }
@@ -6821,9 +6835,13 @@ ApplicationWindow {
                 text:"MEK"
                 visible: mek
                 background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    radius: 8
+                    color: parent.checked
+                        ? "#dbeafe"
+                        : (parent.hovered ? "#eef2ff" : "transparent")
+                    border.color: parent.checked ? "#60a5fa" : "#00000000"
                     border.width: parent.checked ? 1 : 0
+                    Behavior on color { ColorAnimation { duration: 120 } }
                 }
                 width: visible ? tabBar.tabWidth : 0
 
@@ -6831,9 +6849,13 @@ ApplicationWindow {
             TabButton{text:"MEK101"
                 visible: mek_101
                 background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    radius: 8
+                    color: parent.checked
+                        ? "#dbeafe"
+                        : (parent.hovered ? "#eef2ff" : "transparent")
+                    border.color: parent.checked ? "#60a5fa" : "#00000000"
                     border.width: parent.checked ? 1 : 0
+                    Behavior on color { ColorAnimation { duration: 120 } }
                 }
                 width: visible ? tabBar.tabWidth : 0
             }
@@ -6841,9 +6863,13 @@ ApplicationWindow {
                 text:"MEK104"
                 visible: mek_104
                 background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    radius: 8
+                    color: parent.checked
+                        ? "#dbeafe"
+                        : (parent.hovered ? "#eef2ff" : "transparent")
+                    border.color: parent.checked ? "#60a5fa" : "#00000000"
                     border.width: parent.checked ? 1 : 0
+                    Behavior on color { ColorAnimation { duration: 120 } }
                 }
                 width: visible ? tabBar.tabWidth : 0
             }
@@ -6889,49 +6915,73 @@ ApplicationWindow {
             TabButton {
                 text: "Аналоговые входы"
                 background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    radius: 8
+                    color: parent.checked
+                        ? "#dbeafe"
+                        : (parent.hovered ? "#eef2ff" : "transparent")
+                    border.color: parent.checked ? "#60a5fa" : "#00000000"
                     border.width: parent.checked ? 1 : 0
+                    Behavior on color { ColorAnimation { duration: 120 } }
                 }
             }
             TabButton {
                 text: "Дискретные входы"
                 background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    radius: 8
+                    color: parent.checked
+                        ? "#dbeafe"
+                        : (parent.hovered ? "#eef2ff" : "transparent")
+                    border.color: parent.checked ? "#60a5fa" : "#00000000"
                     border.width: parent.checked ? 1 : 0
+                    Behavior on color { ColorAnimation { duration: 120 } }
                 }
             }
             TabButton {
                 text: "Аналоговый выход"
                 background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    radius: 8
+                    color: parent.checked
+                        ? "#dbeafe"
+                        : (parent.hovered ? "#eef2ff" : "transparent")
+                    border.color: parent.checked ? "#60a5fa" : "#00000000"
                     border.width: parent.checked ? 1 : 0
+                    Behavior on color { ColorAnimation { duration: 120 } }
                 }
             }
             TabButton {
                 text: "Дискретный выход"
                 background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    radius: 8
+                    color: parent.checked
+                        ? "#dbeafe"
+                        : (parent.hovered ? "#eef2ff" : "transparent")
+                    border.color: parent.checked ? "#60a5fa" : "#00000000"
                     border.width: parent.checked ? 1 : 0
+                    Behavior on color { ColorAnimation { duration: 120 } }
                 }
             }
             TabButton {
                 text: "Признаки"
                 background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    radius: 8
+                    color: parent.checked
+                        ? "#dbeafe"
+                        : (parent.hovered ? "#eef2ff" : "transparent")
+                    border.color: parent.checked ? "#60a5fa" : "#00000000"
                     border.width: parent.checked ? 1 : 0
+                    Behavior on color { ColorAnimation { duration: 120 } }
                 }
             }
             TabButton {
                 text: "Команда уставки"
                 background: Rectangle {
-                    color: parent.checked ? "#e2e8f0" : "transparent"
-                    border.color: parent.checked ? "#cbd5e1" : "transparent"
+                    radius: 8
+                    color: parent.checked
+                        ? "#dbeafe"
+                        : (parent.hovered ? "#eef2ff" : "transparent")
+                    border.color: parent.checked ? "#60a5fa" : "#00000000"
                     border.width: parent.checked ? 1 : 0
+                    Behavior on color { ColorAnimation { duration: 120 } }
                 }
             }
             function activateTab(tabName) {
@@ -7152,16 +7202,23 @@ ApplicationWindow {
         anchors.bottom: parent.bottom
         anchors.left: parent.left
         anchors.right: parent.right
-        height: 70
-        color: "#d0ffffff"
+        height: 76
+        color: "#ecf3ff"
+        radius: 10
+        border.color: "#bfdbfe"
+        border.width: 1
         Behavior on color { ColorAnimation { duration: 200 } }
 
+        gradient: Gradient {
+            GradientStop { position: 0.0; color: "#f8fbff" }
+            GradientStop { position: 1.0; color: "#e5efff" }
+        }
 
         Rectangle {
             anchors.top: parent.top
             width: parent.width
             height: 1
-            color: "#e0e0e0"
+            color: "#dbeafe"
         }
 
         RowLayout {
@@ -7172,6 +7229,22 @@ ApplicationWindow {
 
             Button {
                 text: modbus ? "Удалить Modbus" : "Добавить ModBus"
+                flat: true
+                font.pixelSize: 13
+                background: Rectangle {
+                    radius: 8
+                    color: parent.down ? "#1d4ed8" : (parent.hovered ? "#2563eb" : "#3b82f6")
+                    border.color: "#1d4ed8"
+                    border.width: 1
+                    opacity: parent.enabled ? 1.0 : 0.6
+                }
+                contentItem: Text {
+                    text: parent.text
+                    color: "white"
+                    font: parent.font
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
                 onClicked: {
                     modbus = !modbus;
                     if (modbus) tabBar.updateFocus();
@@ -7180,6 +7253,22 @@ ApplicationWindow {
 
             Button {
                 text: mek ? "Удалить MEK" : "Добавить MEK"
+                flat: true
+                font.pixelSize: 13
+                background: Rectangle {
+                    radius: 8
+                    color: parent.down ? "#047857" : (parent.hovered ? "#059669" : "#10b981")
+                    border.color: "#047857"
+                    border.width: 1
+                    opacity: parent.enabled ? 1.0 : 0.45
+                }
+                contentItem: Text {
+                    text: parent.text
+                    color: "white"
+                    font: parent.font
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
                 onClicked: {
                     mek = !mek;
                     if (mek) {
@@ -7198,6 +7287,22 @@ ApplicationWindow {
                 enabled: mek
                 visible: mek
                 text: mek_101 ? "Удалить MEK_101" : "Добавить MEK_101"
+                flat: true
+                font.pixelSize: 13
+                background: Rectangle {
+                    radius: 8
+                    color: parent.down ? "#047857" : (parent.hovered ? "#059669" : "#10b981")
+                    border.color: "#047857"
+                    border.width: 1
+                    opacity: parent.enabled ? 1.0 : 0.45
+                }
+                contentItem: Text {
+                    text: parent.text
+                    color: "white"
+                    font: parent.font
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
                 onClicked: {
                     mek_101 = !mek_101;
                     if (mek_101) tabBar.updateFocus();
@@ -7208,6 +7313,22 @@ ApplicationWindow {
                 enabled: mek
                 visible: mek
                 text: mek_104 ? "Удалить MEK_104" : "Добавить MEK_104"
+                flat: true
+                font.pixelSize: 13
+                background: Rectangle {
+                    radius: 8
+                    color: parent.down ? "#047857" : (parent.hovered ? "#059669" : "#10b981")
+                    border.color: "#047857"
+                    border.width: 1
+                    opacity: parent.enabled ? 1.0 : 0.45
+                }
+                contentItem: Text {
+                    text: parent.text
+                    color: "white"
+                    font: parent.font
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
                 onClicked: {
                     mek_104 = !mek_104;
                     if (mek_104) tabBar.updateFocus();
