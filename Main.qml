@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Controls.Material 2.15
+import QtQuick.Accessibility 1.0
 import QtQuick.Layouts 1.15
 import Qt.labs.platform 1.1 as Platform
 import FileIO 1.0
@@ -14,13 +15,9 @@ ApplicationWindow {
     width: 1920
     height: 1080
     visible: true
-    title: "Генератор сигналов"
-    Material.theme: Material.Light
-    Material.primary: Material.BlueGrey
-    Material.accent: Material.Teal
-    Material.background: "#f1f5f9"
-    font.family: "Inter"
-    font.pixelSize: 14
+    title: qsTr("Генератор сигналов")
+    Accessible.name: title
+    Accessible.description: qsTr("Главное окно генератора сигналов")
     //region global properties
     property bool modbus: false
     property bool mek: false
@@ -175,26 +172,136 @@ ApplicationWindow {
 
 
 //endregion
-    menuBar: AppShell {
-        onSaveRequested: {
-            if (rootwindow.currentBldePath !== "") {
-                saveToBlde(rootwindow.currentBldePath)
-            } else {
-                saveFileDialog.open()
+    menuBar: MenuBar {
+        Menu {
+            title: qsTr("Файл")
+
+            MenuItem {
+                id: saveMenuItem
+                text: qsTr("Сохранить")
+                Accessible.name: text
+                Accessible.description: qsTr("Сохранить текущую конфигурацию")
+                onTriggered: {
+                    if (rootwindow.currentBldePath !== "") {
+                        saveToBlde(rootwindow.currentBldePath)
+                    } else {
+                        saveFileDialog.open()
+                    }
+                }
+            }
+
+            MenuItem {
+                id: saveAsMenuItem
+                text: qsTr("Сохранить как...")
+                Accessible.name: text
+                Accessible.description: qsTr("Открыть диалог сохранения в новый файл")
+                onTriggered: {saveFileDialog.open(); console.log("trigger")}
+            }
+
+            Menu {
+                title: qsTr("Экспорт...")
+                MenuItem{
+                    id: exportExcelMenuItem
+                    text: qsTr("Excel")
+                    Accessible.name: text
+                    Accessible.description: qsTr("Экспортировать данные в файл Excel")
+                    onTriggered: {
+                        exportExcelDialog.open()
+                        console.log("trigger")
+                    }
+                }
+                    MenuItem{
+                        id: exportCodeMenuItem
+                        text: qsTr("Код")
+                        Accessible.name: text
+                        Accessible.description: qsTr("Экспортировать исходный код")
+                        onTriggered:{
+                            exportCodeDialog.open()
+                        }
+                    }
+                }
+
+            MenuItem{
+                id: importMenuItem
+                text: qsTr("Импорт")
+                Accessible.name: text
+                Accessible.description: qsTr("Импортировать конфигурацию из файла")
+                onTriggered: fileDialog.open()
+            }
+
+            MenuItem {
+                id: exitMenuItem
+                text: qsTr("Выход")
+                Accessible.name: text
+                Accessible.description: qsTr("Закрыть приложение")
+                onTriggered: {confirmExitDialog.open(); console.log("trigger")}
             }
         }
-        onSaveAsRequested: saveFileDialog.open()
-        onExportExcelRequested: exportExcelDialog.open()
-        onExportCodeRequested: exportCodeDialog.open()
-        onImportRequested: fileDialog.open()
-        onExitRequested: confirmExitDialog.open()
-        onCreateMekModelRequested: {
-            objectModelTypeCombo.currentIndex = 0
-            createObjectModelDialog.open()
+        Menu {
+            title: qsTr("Объектные модели")
+            MenuItem {
+                text: qsTr("Создать MEK модель")
+                onTriggered: {
+                    objectModelTypeCombo.currentIndex = 0 // MEK
+                    createObjectModelDialog.open()
+                }
+            }
+            MenuItem {
+                text: qsTr("Создать MODBUS модель")
+                onTriggered: {
+                    objectModelTypeCombo.currentIndex = 1 // MODBUS
+                    createObjectModelDialog.open()
+                }
+            }
+            MenuSeparator {}
+            MenuItem {
+                text: qsTr("Управление моделями")
+                onTriggered: objectModelsManagerDialog.open()
+            }
         }
-        onCreateModbusModelRequested: {
-            objectModelTypeCombo.currentIndex = 1
-            createObjectModelDialog.open()
+
+        Menu {
+            title: qsTr("Интерфейсы")
+            MenuItem {
+                text: qsTr("Ethernet")
+                onTriggered: ethConfigDialog.open()
+            }
+            MenuItem{
+                text: qsTr("RS")
+                onTriggered: rsConfigDialog.open()
+            }
+            MenuItem {
+                text: qsTr("Управление интерфейсами")
+                onTriggered: interfaceManagerDialog.open()
+            }
+        }
+
+        Menu {
+            title: qsTr("Протоколы")
+            MenuItem {
+                text: qsTr("Создать протокол")
+                onTriggered: createProtocolDialog.open()
+            }
+            MenuItem {
+                text: qsTr("Управление протоколами")
+                onTriggered: protocolManagerDialog.open()
+            }
+        }
+
+        Menu{
+            title: qsTr("Дополнительно")
+            MenuItem{
+                text: qsTr("Добавить ТУ")
+                onTriggered: pickTelecommandHeader.open()
+            }
+            MenuItem{
+                text: qsTr("Добавить ТC")
+                onTriggered: pickTelesignalHeader.open()
+            }
+            MenuItem{
+                text: qsTr("Добавить ТИ")
+                onTriggered: pickTelemeasureHeader.open()
+            }
         }
         onObjectModelManagerRequested: objectModelsManagerDialog.open()
         onEthernetConfigRequested: ethConfigDialog.open()
@@ -455,7 +562,7 @@ ApplicationWindow {
     // ===== DIALOG: Telecommands =====
     FileDialog {
         id: pickTelecommandHeader
-        title: "Выберите заголовок с TelecommandIndexes"
+        title: qsTr("Выберите заголовок с TelecommandIndexes")
         nameFilters: ["C/C++ headers (*.h)", "All files (*)"]
         onAccepted: {
             const url = (typeof selectedFile !== "undefined" && selectedFile) ? selectedFile
@@ -474,7 +581,7 @@ ApplicationWindow {
     // ===== DIALOG: Telesignalizations =====
     FileDialog {
         id: pickTelesignalHeader
-        title: "Выберите заголовок с TelesignalizationIndexes"
+        title: qsTr("Выберите заголовок с TelesignalizationIndexes")
         nameFilters: ["C/C++ headers (*.h)", "All files (*)"]
         onAccepted: {
             const url = (typeof selectedFile !== "undefined" && selectedFile) ? selectedFile
@@ -492,7 +599,7 @@ ApplicationWindow {
     // ===== DIALOG: Telemeasurements =====
     FileDialog {
         id: pickTelemeasureHeader
-        title: "Выберите заголовок с TelemeasurementIndexes"
+        title: qsTr("Выберите заголовок с TelemeasurementIndexes")
         nameFilters: ["C/C++ headers (*.h)", "All files (*)"]
         onAccepted: {
             const url = (typeof selectedFile !== "undefined" && selectedFile) ? selectedFile
@@ -511,41 +618,58 @@ ApplicationWindow {
 
     ManagerListDialog {
         id: removeInterfaceDialog
-        title: "Удалить интерфейс"
-        listModel: interfaceModel
-        onItemSelected: (selectedIndex) => {
-            const item = interfaceModel.get(selectedIndex)
-            interfaceModel.remove(selectedIndex)
-            if (item.type === "ETH") {
-                ethcounter--
-            } else if (item.type === "rs") {
-                rscounter--
+        title: qsTr("Удалить интерфейс")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        height: 500
+        ListView {
+            width: 300
+            height: 500
+            model: interfaceModel
+            delegate: ItemDelegate {
+                text: model.type + " (" + model.id + ")"
+                onClicked: {
+                    interfaceModel.remove(index)
+                    if (item.type === "ETH") {
+                        ethcounter--
+                    } else if (item.type === "rs") {
+                        rscounter--
+                    }
+                    removeInterfaceDialog.close()
+                }
             }
-            removeInterfaceDialog.close()
         }
     }
 
     ManagerListDialog {
         id: removeObjectModelDialog
-        title: "Удалить объектную модель"
-        listModel: objectModels
-        onItemSelected: (selectedIndex) => {
-            const item = objectModels.get(selectedIndex)
-            objectModels.remove(selectedIndex)
-            if (item.type === "MEK") {
-                mekcounter--
-                mekcounter === 0 ? mek = false : true
-            } else if (item.type === "Modbus") {
-                mbcounter--
-                mbcounter === 0 ? modbus = false : true
+        title: qsTr("Удалить объектную модель")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        height: 500
+        ListView {
+            width: 300
+            height: 500
+            model: objectModels
+            delegate: ItemDelegate {
+                text: model.type + " (" + model.id + ")"
+                onClicked: {
+                    objectModels.remove(index)
+                        if (item.type === "MEK") {
+                            mekcounter--
+                            mekcounter === 0 ? mek = false : true
+                        } else if (item.type === "Modbus") {
+                            mbcounter--
+                            mbcounter === 0 ? modbus = false : true
+                        }
+                    removeObjectModelDialog.close()
+                    }
+                }
             }
-            removeObjectModelDialog.close()
         }
     }
 
     FileDialog {
         id: saveDialog
-        title: "Сохранить как..."
+        title: qsTr("Сохранить как...")
         fileMode: FileDialog.SaveFile
         nameFilters: ["BLDE (*.blde)"]
         onAccepted: {
@@ -558,7 +682,7 @@ ApplicationWindow {
 
     Platform.FileDialog {
         id: exportExcelDialog
-        title: "Экспортировать в Excel"
+        title: qsTr("Экспортировать в Excel")
         fileMode: FileDialog.SaveFile
         nameFilters: ["Excel (*.xlsx)"]
         onAccepted: {
@@ -585,7 +709,7 @@ ApplicationWindow {
 
     FileDialog {
         id: exportCodeDialog
-        title: "Экспортировать в Excel"
+        title: qsTr("Экспортировать в Excel")
         fileMode: FileDialog.SaveFile
         onAccepted: {
             let path = String(file).replace("file://", "")
@@ -611,7 +735,7 @@ ApplicationWindow {
 
     Platform.FileDialog {
         id: saveFileDialog
-        title: "Сохранить как..."
+        title: qsTr("Сохранить как...")
         nameFilters: ["BLDE (*.blde)"]
         defaultSuffix: "blde"
         fileMode: Platform.FileDialog.SaveFile
@@ -627,8 +751,8 @@ ApplicationWindow {
     }
     MessageDialog {
         id: confirmExitDialog
-        title: "Выход"
-        text: "Сохранить перед выходом?"
+        title: qsTr("Выход")
+        text: qsTr("Сохранить перед выходом?")
         buttons: StandardButton.Yes | StandardButton.No | StandardButton.Cancel
         onAccepted: {
             switch (clickedButton) {
@@ -782,8 +906,141 @@ ApplicationWindow {
 
     StartupDialog {
         id: startDialog
-        onCreateNewRequested: dataModel.clear()
-        onOpenExistingRequested: fileDialog.open()
+        title: qsTr("Выберите действие")
+        Accessible.name: title
+        Accessible.description: qsTr("Диалог выбора создания новой или открытия существующей конфигурации")
+        modal: true
+        standardButtons: Dialog.NoButton
+        anchors.centerIn: parent
+        width: 400
+        height: 200
+
+        background: Rectangle {
+            color: "#ffffff"
+            radius: 8
+            antialiasing: true
+            border.color: "#e2e8f0"
+            border.width: 1
+
+            // Subtle shadow effect
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: -2
+                color: "transparent"
+                border.color: "#00000010"
+                border.width: 2
+                radius: 10
+                z: -1
+            }
+        }
+
+        header: Rectangle {
+            width: parent.width
+            height: 50
+            color: "#f8fafc"
+            radius: 8
+            antialiasing: true
+
+            Rectangle {
+                anchors.bottom: parent.bottom
+                width: parent.width
+                height: 1
+                color: "#e2e8f0"
+            }
+
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: "#f8fafc" }
+                GradientStop { position: 1.0; color: "#f1f5f9" }
+            }
+
+            Label {
+                anchors.centerIn: parent
+                text: startDialog.title
+                font.pixelSize: 16
+                font.weight: Font.DemiBold
+                color: "#1e293b"
+            }
+        }
+
+        GridLayout {
+            anchors.fill: parent
+            anchors.margins: 20
+            columns: 1
+            columnSpacing: 10
+            rowSpacing: 15
+
+            Button {
+                id: startCreateButton
+                text: qsTr("Создать новую конфигурацию")
+                focus: true
+                KeyNavigation.tab: startOpenButton
+                Accessible.name: text
+                Accessible.description: qsTr("Создать пустую конфигурацию")
+                Layout.fillWidth: true
+                Layout.preferredHeight: 40
+                font.pixelSize: 14
+                font.weight: Font.Medium
+
+                background: Rectangle {
+                    color: parent.pressed ? "#059669" : (parent.hovered ? "#10b981" : "#22c55e")
+                    radius: 6
+                    antialiasing: true
+
+                    Behavior on color {
+                        ColorAnimation { duration: 150 }
+                    }
+                }
+
+                contentItem: Text {
+                    text: parent.text
+                    font: parent.font
+                    color: "#ffffff"
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+
+                onClicked: {
+                    dataModel.clear()
+                    startDialog.close()
+                }
+            }
+
+            Button {
+                id: startOpenButton
+                text: qsTr("Открыть существующую")
+                KeyNavigation.tab: startCreateButton
+                KeyNavigation.backtab: startCreateButton
+                Accessible.name: text
+                Accessible.description: qsTr("Открыть конфигурацию из файла")
+                Layout.fillWidth: true
+                Layout.preferredHeight: 40
+                font.pixelSize: 14
+                font.weight: Font.Medium
+
+                background: Rectangle {
+                    color: parent.pressed ? "#1d4ed8" : (parent.hovered ? "#2563eb" : "#3b82f6")
+                    radius: 6
+                    antialiasing: true
+
+                    Behavior on color {
+                        ColorAnimation { duration: 150 }
+                    }
+                }
+
+                contentItem: Text {
+                    text: parent.text
+                    font: parent.font
+                    color: "#ffffff"
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+
+                onClicked: {
+                    fileDialog.open()
+                    startDialog.close()
+                }
+            }
+        }
     }
 
     Dialog {
@@ -791,7 +1048,7 @@ ApplicationWindow {
         width: 500
         height: 600
         anchors.centerIn: parent
-        title: "Настройка RS"
+        title: qsTr("Настройка RS")
         modal: true
         standardButtons: Dialog.NoButton
 
@@ -853,8 +1110,8 @@ ApplicationWindow {
                 Layout.fillWidth: true
 
                 Label {
-                    text: "Четность"
-                    color: appTheme.textSecondary
+                    text: qsTr("Четность")
+                    color: "#374151"
                     font.pixelSize: 13
                     font.weight: Font.DemiBold
                 }
@@ -879,8 +1136,8 @@ ApplicationWindow {
                 }
 
                 Label {
-                    text: "Скорость"
-                    color: appTheme.textSecondary
+                    text: qsTr("Скорость")
+                    color: "#374151"
                     font.pixelSize: 13
                     font.weight: Font.DemiBold
                 }
@@ -905,8 +1162,8 @@ ApplicationWindow {
                 }
 
                 Label {
-                    text: "Длина слова"
-                    color: appTheme.textSecondary
+                    text: qsTr("Длина слова")
+                    color: "#374151"
                     font.pixelSize: 13
                     font.weight: Font.DemiBold
                 }
@@ -949,8 +1206,8 @@ ApplicationWindow {
                     }
                 }
                 Label {
-                    text: "Стоп-бит"
-                    color: appTheme.textSecondary
+                    text: qsTr("Стоп-бит")
+                    color: "#374151"
                     font.pixelSize: 13
                     font.weight: Font.DemiBold
                 }
@@ -974,8 +1231,8 @@ ApplicationWindow {
                 }
 
                 Label {
-                    text: "Адрес устройства"
-                    color: appTheme.textSecondary
+                    text: qsTr("Адрес устройства")
+                    color: "#374151"
                     font.pixelSize: 13
                     font.weight: Font.DemiBold
                 }
@@ -1024,7 +1281,7 @@ ApplicationWindow {
             }
 
             Button {
-                text: "Сохранить"
+                text: qsTr("Сохранить")
                 Layout.alignment: Qt.AlignRight
                 Layout.preferredWidth: 120
                 Layout.preferredHeight: 40
@@ -1086,7 +1343,7 @@ ApplicationWindow {
         width: 500
         height: 800
         anchors.centerIn: parent
-        title: "Настройка ETH"
+        title: qsTr("Настройка ETH")
         modal: true
         standardButtons: Dialog.NoButton
 
@@ -1153,15 +1410,15 @@ ApplicationWindow {
                     rowSpacing: 15
 
                     Label {
-                        text: "IP адрес"
-                        color: appTheme.textSecondary
+                        text: qsTr("IP адрес")
+                        color: "#374151"
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
                     }
                     TextField {
                         id: ipAddressField
                         inputMask: "000.000.000.000;_"
-                        placeholderText: "192.168.0.1"
+                        placeholderText: qsTr("192.168.0.1")
                         Layout.preferredHeight: 32
                         color: appTheme.textPrimary
                         font.pixelSize: 13
@@ -1195,15 +1452,15 @@ ApplicationWindow {
                     }
 
                     Label {
-                        text: "Маска подсети"
-                        color: appTheme.textSecondary
+                        text: qsTr("Маска подсети")
+                        color: "#374151"
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
                     }
                     TextField {
                         id: subnetMaskField
                         inputMask: "000.000.000.000;_"
-                        placeholderText: "255.255.255.0"
+                        placeholderText: qsTr("255.255.255.0")
                         Layout.preferredHeight: 32
                         color: appTheme.textPrimary
                         font.pixelSize: 13
@@ -1236,15 +1493,15 @@ ApplicationWindow {
                     }
 
                     Label {
-                        text: "Шлюз"
-                        color: appTheme.textSecondary
+                        text: qsTr("Шлюз")
+                        color: "#374151"
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
                     }
                     TextField {
                         id: gatewayField
                         inputMask: "000.000.000.000;_"
-                        placeholderText: "192.168.0.254"
+                        placeholderText: qsTr("192.168.0.254")
                         Layout.preferredHeight: 32
                         color: appTheme.textPrimary
                         font.pixelSize: 13
@@ -1278,15 +1535,15 @@ ApplicationWindow {
                     }
 
                     Label {
-                        text: "Старшие 3 байта MAC адреса"
-                        color: appTheme.textSecondary
+                        text: qsTr("Старшие 3 байта MAC адреса")
+                        color: "#374151"
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
                     }
                     TextField {
                         id: macHighField
                         inputMask: "HH:HH:HH;_"
-                        placeholderText: "00:1A:2B"
+                        placeholderText: qsTr("00:1A:2B")
                         Layout.preferredHeight: 32
                         color: appTheme.textPrimary
                         font.pixelSize: 13
@@ -1318,15 +1575,15 @@ ApplicationWindow {
                             }
                         }
                     }Label {
-                        text: "Младшие 3 байта MAC адреса"
-                        color: appTheme.textSecondary
+                        text: qsTr("Младшие 3 байта MAC адреса")
+                        color: "#374151"
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
                     }
                     TextField {
                         id: macLowField
                         inputMask: "HH:HH:HH;_"
-                        placeholderText: "3C:4D:5E"
+                        placeholderText: qsTr("3C:4D:5E")
                         Layout.preferredHeight: 32
                         color: appTheme.textPrimary
                         font.pixelSize: 13
@@ -1360,15 +1617,15 @@ ApplicationWindow {
                     }
 
                     Label {
-                        text: "IP адрес клиента 1"
-                        color: appTheme.textSecondary
+                        text: qsTr("IP адрес клиента 1")
+                        color: "#374151"
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
                     }
                     TextField {
                         id: clientIp1Field
                         inputMask: "000.000.000.000;_"
-                        placeholderText: "192.168.0.10"
+                        placeholderText: qsTr("192.168.0.10")
                         Layout.preferredHeight: 32
                         color: appTheme.textPrimary
                         font.pixelSize: 13
@@ -1402,15 +1659,15 @@ ApplicationWindow {
                     }
 
                     Label {
-                        text: "IP адрес клиента 2"
-                        color: appTheme.textSecondary
+                        text: qsTr("IP адрес клиента 2")
+                        color: "#374151"
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
                     }
                     TextField {
                         id: clientIp2Field
                         inputMask: "000.000.000.000;_"
-                        placeholderText: "192.168.0.11"
+                        placeholderText: qsTr("192.168.0.11")
                         Layout.preferredHeight: 32
                         color: appTheme.textPrimary
                         font.pixelSize: 13
@@ -1443,15 +1700,15 @@ ApplicationWindow {
                     }
 
                     Label {
-                        text: "IP адрес клиента 3"
-                        color: appTheme.textSecondary
+                        text: qsTr("IP адрес клиента 3")
+                        color: "#374151"
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
                     }
                     TextField {
                         id: clientIp3Field
                         inputMask: "000.000.000.000;_"
-                        placeholderText: "192.168.0.12"
+                        placeholderText: qsTr("192.168.0.12")
                         Layout.preferredHeight: 32
                         color: appTheme.textPrimary
                         font.pixelSize: 13
@@ -1485,15 +1742,15 @@ ApplicationWindow {
                     }
 
                     Label {
-                        text: "IP адрес клиента 4"
-                        color: appTheme.textSecondary
+                        text: qsTr("IP адрес клиента 4")
+                        color: "#374151"
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
                     }
                     TextField {
                         id: clientIp4Field
                         inputMask: "000.000.000.000;_"
-                        placeholderText: "192.168.0.13"
+                        placeholderText: qsTr("192.168.0.13")
                         Layout.preferredHeight: 32
                         color: appTheme.textPrimary
                         font.pixelSize: 13
@@ -1525,8 +1782,8 @@ ApplicationWindow {
                     }
 
                     Label {
-                        text: "ETH адрес устройства"
-                        color: appTheme.textSecondary
+                        text: qsTr("ETH адрес устройства")
+                        color: "#374151"
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
                     }
@@ -1565,8 +1822,8 @@ ApplicationWindow {
                     }
 
                     Label {
-                        text: "Порт 1"
-                        color: appTheme.textSecondary
+                        text: qsTr("Порт 1")
+                        color: "#374151"
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
                     }
@@ -1606,8 +1863,8 @@ ApplicationWindow {
                     }
 
                     Label {
-                        text: "Порт 2"
-                        color: appTheme.textSecondary
+                        text: qsTr("Порт 2")
+                        color: "#374151"
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
                     }
@@ -1646,8 +1903,8 @@ ApplicationWindow {
                         }
                     }
                     Label {
-                        text: "Порт 3"
-                        color: appTheme.textSecondary
+                        text: qsTr("Порт 3")
+                        color: "#374151"
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
                     }
@@ -1686,8 +1943,8 @@ ApplicationWindow {
                         }
                     }
                     Label {
-                        text: "Порт 4"
-                        color: appTheme.textSecondary
+                        text: qsTr("Порт 4")
+                        color: "#374151"
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
                     }
@@ -1726,7 +1983,7 @@ ApplicationWindow {
                         }
                     }
             Button {
-                text: "Сохранить"
+                text: qsTr("Сохранить")
                 Layout.alignment: Qt.AlignRight
                 Layout.preferredWidth: 120
                 Layout.preferredHeight: 40
@@ -1795,7 +2052,7 @@ ApplicationWindow {
 
     FileDialog {
         id: jsonSelectDialog
-        title: "Выберите JSON файл"
+        title: qsTr("Выберите JSON файл")
         fileMode: FileDialog.OpenFile
         // nameFilters: ["JSON файлы (*.json)", "(*.blde)"]
         property string exportType: ""
@@ -1824,7 +2081,7 @@ ApplicationWindow {
         width: 500
         height: 600
         anchors.centerIn: parent
-        title: "Настройка RS"
+        title: qsTr("Настройка RS")
         modal: true
         standardButtons: Dialog.NoButton
         property string protocolName: ""
@@ -1895,8 +2152,8 @@ ApplicationWindow {
                 Layout.fillWidth: true
 
                 Label {
-                    text: "АСДУ адрес"
-                    color: appTheme.textSecondary
+                    text: qsTr("АСДУ адрес")
+                    color: "#374151"
                     font.pixelSize: 13
                     font.weight: Font.DemiBold
                 }
@@ -1941,8 +2198,8 @@ ApplicationWindow {
                 }
 
                 Label {
-                    text: "Длина адресного поля"
-                    color: appTheme.textSecondary
+                    text: qsTr("Длина адресного поля")
+                    color: "#374151"
                     font.pixelSize: 13
                     font.weight: Font.DemiBold
                 }
@@ -1968,8 +2225,8 @@ ApplicationWindow {
                 }
 
                 Label {
-                    text: "Длина АСДУ"
-                    color: appTheme.textSecondary
+                    text: qsTr("Длина АСДУ")
+                    color: "#374151"
                     font.pixelSize: 13
                     font.weight: Font.DemiBold
                 }
@@ -1994,8 +2251,8 @@ ApplicationWindow {
                     }
                 }
                 Label {
-                    text: "Длина причина передачи"
-                    color: appTheme.textSecondary
+                    text: qsTr("Длина причина передачи")
+                    color: "#374151"
                     font.pixelSize: 13
                     font.weight: Font.DemiBold
                 }
@@ -2020,8 +2277,8 @@ ApplicationWindow {
                 }
 
                 Label {
-                    text: "Длина IOA"
-                    color: appTheme.textSecondary
+                    text: qsTr("Длина IOA")
+                    color: "#374151"
                     font.pixelSize: 13
                     font.weight: Font.DemiBold
                 }
@@ -2046,8 +2303,8 @@ ApplicationWindow {
                     }
                 }
                 Label {
-                    text: "Синхронизация"
-                    color: appTheme.textSecondary
+                    text: qsTr("Синхронизация")
+                    color: "#374151"
                     font.pixelSize: 13
                     font.weight: Font.DemiBold
                 }
@@ -2073,8 +2330,8 @@ ApplicationWindow {
                 }
             }
             Label {
-                text: "Телеконтроль"
-                color: appTheme.textSecondary
+                text: qsTr("Телеконтроль")
+                color: "#374151"
                 font.pixelSize: 13
                 font.weight: Font.DemiBold
             }
@@ -2099,8 +2356,8 @@ ApplicationWindow {
                 }
             }
             Label {
-                text: "Период перцик"
-                color: appTheme.textSecondary
+                text: qsTr("Период перцик")
+                color: "#374151"
                 font.pixelSize: 13
                 font.weight: Font.DemiBold
             }
@@ -2144,8 +2401,8 @@ ApplicationWindow {
                 }
             }
             Label {
-                text: "Период фонового"
-                color: appTheme.textSecondary
+                text: qsTr("Период фонового")
+                color: "#374151"
                 font.pixelSize: 13
                 font.weight: Font.DemiBold
             }
@@ -2193,7 +2450,7 @@ ApplicationWindow {
             }
 
             Button {
-                text: "Сохранить"
+                text: qsTr("Сохранить")
                 Layout.alignment: Qt.AlignRight
                 Layout.preferredWidth: 120
                 Layout.preferredHeight: 40
@@ -2245,7 +2502,7 @@ ApplicationWindow {
     }
     Platform.FileDialog {
         id: fileDialog
-        title: "Выберите файл конфигурации"
+        title: qsTr("Выберите файл конфигурации")
         // nameFilters: ["JSON files (*.json)"]
         onAccepted: {
             const cleanPath = fileHandler.cleanPath(String(file));
@@ -2309,7 +2566,9 @@ ApplicationWindow {
     }
     Dialog {
         id: createObjectModelDialog
-        title: "Создать объектную модель"
+        title: qsTr("Создать объектную модель")
+        Accessible.name: title
+        Accessible.description: qsTr("Диалог создания объектной модели")
         height: 200
         background: Rectangle {
             color: appTheme.surface
@@ -2358,7 +2617,11 @@ ApplicationWindow {
         Column {
             TextField {
                 id: objectModelNameField
-                placeholderText: "Имя объектной модели"
+                placeholderText: qsTr("Имя объектной модели")
+                focus: createObjectModelDialog.visible
+                KeyNavigation.tab: objectModelTypeCombo
+                Accessible.name: qsTr("Имя объектной модели")
+                Accessible.description: qsTr("Введите имя новой объектной модели")
                 Layout.preferredHeight: 32
                 color: appTheme.textPrimary
                 font.pixelSize: 13
@@ -2394,6 +2657,10 @@ ApplicationWindow {
             ComboBox {
                 id: objectModelTypeCombo
                 model: ["MEK", "MODBUS"]
+                KeyNavigation.tab: createObjectModelConfirmButton
+                KeyNavigation.backtab: objectModelNameField
+                Accessible.name: qsTr("Тип объектной модели")
+                Accessible.description: qsTr("Выберите тип создаваемой объектной модели")
                 height: 32
                 font.pixelSize: 13
                 width: 120
@@ -2412,7 +2679,12 @@ ApplicationWindow {
 
             Row {
                 Button {
-                    text: "Создать"
+                    id: createObjectModelConfirmButton
+                    text: qsTr("Создать")
+                    KeyNavigation.tab: createObjectModelCancelButton
+                    KeyNavigation.backtab: objectModelTypeCombo
+                    Accessible.name: text
+                    Accessible.description: qsTr("Подтвердить создание объектной модели")
                     Layout.alignment: Qt.AlignRight
                     Layout.preferredWidth: 120
                     Layout.preferredHeight: 40
@@ -2443,7 +2715,12 @@ ApplicationWindow {
                     }
                 }
                 Button {
-                    text: "Отмена"
+                    id: createObjectModelCancelButton
+                    text: qsTr("Отмена")
+                    KeyNavigation.tab: objectModelNameField
+                    KeyNavigation.backtab: createObjectModelConfirmButton
+                    Accessible.name: text
+                    Accessible.description: qsTr("Закрыть диалог без создания модели")
                     Layout.alignment: Qt.AlignRight
                     Layout.preferredWidth: 120
                     Layout.preferredHeight: 40
@@ -2474,17 +2751,27 @@ ApplicationWindow {
     }
     Dialog {
         id: createInterfaceDialog
-        title: "Создать интерфейс"
+        title: qsTr("Создать интерфейс")
+        Accessible.name: title
+        Accessible.description: qsTr("Диалог создания интерфейса")
 
         Column {
             TextField {
                 id: interfaceNameField
-                placeholderText: "Имя интерфейса"
+                placeholderText: qsTr("Имя интерфейса")
+                focus: createInterfaceDialog.visible
+                KeyNavigation.tab: interfaceTypeCombo
+                Accessible.name: qsTr("Имя интерфейса")
+                Accessible.description: qsTr("Введите имя интерфейса")
             }
 
             ComboBox {
                 id: interfaceTypeCombo
                 model: ["ETH", "RS485", "RS232"]
+                KeyNavigation.tab: createInterfaceConfirmButton
+                KeyNavigation.backtab: interfaceNameField
+                Accessible.name: qsTr("Тип интерфейса")
+                Accessible.description: qsTr("Выберите тип интерфейса")
             }
 
             // Здесь будут поля для настройки интерфейса
@@ -2492,14 +2779,24 @@ ApplicationWindow {
 
             Row {
                 Button {
-                    text: "Создать"
+                    id: createInterfaceConfirmButton
+                    text: qsTr("Создать")
+                    KeyNavigation.tab: createInterfaceCancelButton
+                    KeyNavigation.backtab: interfaceTypeCombo
+                    Accessible.name: text
+                    Accessible.description: qsTr("Подтвердить создание интерфейса")
                     onClicked: {
                         createInterface(interfaceNameField.text, interfaceTypeCombo.currentText)
                         createInterfaceDialog.close()
                     }
                 }
                 Button {
-                    text: "Отмена"
+                    id: createInterfaceCancelButton
+                    text: qsTr("Отмена")
+                    KeyNavigation.tab: interfaceNameField
+                    KeyNavigation.backtab: createInterfaceConfirmButton
+                    Accessible.name: text
+                    Accessible.description: qsTr("Закрыть диалог без создания интерфейса")
                     onClicked: createInterfaceDialog.close()
                 }
             }
@@ -2507,12 +2804,18 @@ ApplicationWindow {
     }
     Dialog {
         id: createProtocolDialog
-        title: "Создать протокол"
+        title: qsTr("Создать протокол")
+        Accessible.name: title
+        Accessible.description: qsTr("Диалог создания протокола")
 
         Column {
             TextField {
                 id: protocolNameField
-                placeholderText: "Имя протокола"
+                placeholderText: qsTr("Имя протокола")
+                focus: createProtocolDialog.visible
+                KeyNavigation.tab: protocolTypeCombo
+                Accessible.name: qsTr("Имя протокола")
+                Accessible.description: qsTr("Введите имя протокола")
                 Layout.preferredHeight: 32
                 color: appTheme.textPrimary
                 font.pixelSize: 13
@@ -2553,6 +2856,10 @@ ApplicationWindow {
             ComboBox {
                 id: protocolTypeCombo
                 model: ["MEK_101", "MEK_104"]
+                KeyNavigation.tab: objectModelCombo
+                KeyNavigation.backtab: protocolNameField
+                Accessible.name: qsTr("Тип протокола")
+                Accessible.description: qsTr("Выберите тип протокола")
                 height: 32
                 font.pixelSize: 13
                 width: 120
@@ -2571,6 +2878,10 @@ ApplicationWindow {
 
             ComboBox {
                 id: objectModelCombo
+                KeyNavigation.tab: interfaceCombo
+                KeyNavigation.backtab: protocolTypeCombo
+                Accessible.name: qsTr("Объектная модель")
+                Accessible.description: qsTr("Выберите объектную модель для протокола")
                 textRole: "name"
                 model: objectModelsConfig
                 height: 32
@@ -2591,6 +2902,10 @@ ApplicationWindow {
 
             ComboBox {
                 id: interfaceCombo
+                KeyNavigation.tab: createProtocolConfirmButton
+                KeyNavigation.backtab: objectModelCombo
+                Accessible.name: qsTr("Интерфейс")
+                Accessible.description: qsTr("Выберите интерфейс для протокола")
                 textRole: "name"
                 model: interfaceModelsConfig
                 height: 32
@@ -2611,7 +2926,12 @@ ApplicationWindow {
 
             Row {
                 Button {
-                    text: "Создать"
+                    id: createProtocolConfirmButton
+                    text: qsTr("Создать")
+                    KeyNavigation.tab: createProtocolCancelButton
+                    KeyNavigation.backtab: interfaceCombo
+                    Accessible.name: text
+                    Accessible.description: qsTr("Открыть настройки и создать протокол")
                     Layout.alignment: Qt.AlignRight
                     Layout.preferredWidth: 120
                     Layout.preferredHeight: 40
@@ -2645,7 +2965,12 @@ ApplicationWindow {
                     }
                 }
                 Button {
-                    text: "Отмена"
+                    id: createProtocolCancelButton
+                    text: qsTr("Отмена")
+                    KeyNavigation.tab: protocolNameField
+                    KeyNavigation.backtab: createProtocolConfirmButton
+                    Accessible.name: text
+                    Accessible.description: qsTr("Закрыть диалог без создания протокола")
                     Layout.alignment: Qt.AlignRight
                     Layout.preferredWidth: 120
                     Layout.preferredHeight: 40
@@ -2677,11 +3002,11 @@ ApplicationWindow {
 
     Dialog {
         id: exitConfirmDialog
-        title: "Есть несохранённые изменения"
+        title: qsTr("Есть несохранённые изменения")
         standardButtons: Dialog.Yes | Dialog.No | Dialog.Cancel
         modal: true
         Label {
-            text: "Сохранить изменения перед выходом?"
+            text: qsTr("Сохранить изменения перед выходом?")
         }
 
         onAccepted: {
@@ -2828,6 +3153,990 @@ ApplicationWindow {
                         ]
                     }
 
+                    delegate: Rectangle {
+                        width: Math.max(listView.width, 1600)
+                        id: rowItem
+                        height: Math.max(180, nameField.height + 20)
+                        color: index % 2 === 0 ? "#ffffff" : "#f8fafc"
+                        property bool hasDuplicateName: itemData.isNameDuplicate || false
+                        property bool hasDuplicateCodeName: itemData.isCodeNameDuplicate || false
+
+                        required property int index
+                        property string ioIndex
+                        property string paramType
+                        property string name
+                        property string codeName
+                        property string type
+                        property string logicuse
+                        property string saving
+                        property string aperture
+                        property string ktt
+                        property string def_value
+                        property string ad
+                        property string oc
+                        property string sector
+                        property string tosp
+                        property string tolp
+
+                        property int originalIndex: {
+                            switch (pageRoot.paramType) {
+                                case "Аналоговые входы":
+                                    return analogInputsModel.get(index).originalIndex
+                                case "Дискретные входы":
+                                    return digitalInputsModel.get(index).originalIndex
+                                case "Аналоговый выход":
+                                    return analogOutputsModel.get(index).originalIndex
+                                case "Дискретный выход":
+                                    return digitalOutputsModel.get(index).originalIndex
+                                case "Признаки":
+                                    return flagsModel.get(index).originalIndex
+                                case "Уставка":
+                                    return settingsModel.get(index).originalIndex
+                                default:
+                                    return -1
+                            }
+                        }
+                        property var itemData: dataModel.get(originalIndex)
+                        RowLayout {
+                            z: 1
+                            anchors.fill: parent
+                            spacing: 0
+
+                            Label {
+                                text: qsTr("IO")
+                                Layout.preferredWidth: 50
+                                Layout.preferredHeight: 32
+                                Layout.minimumWidth: 50
+                                Layout.maximumWidth: 50
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+
+                            Label {
+                                text: qsTr("Наименование")
+                                Layout.preferredWidth: 350
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+
+                            Label {
+                                text: qsTr("Англ.название")
+                                Layout.preferredWidth: 350
+                                color: "#374151"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            Label{
+                                text: qsTr("Индекс ТУ")
+                                Layout.preferredWidth: 150
+                                color: "#374151"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            Label {
+                                text: qsTr("S/D")
+                                Layout.preferredWidth: 44
+                                color: "#374151"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+
+                            Label {
+                                text: qsTr("Логика")
+                                Layout.preferredWidth: 100
+                                color: "#374151"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+
+                            Label {
+                                text: qsTr("Сохранение")
+                                Layout.preferredWidth: 100
+                                color: "#374151"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+
+                            Label {
+                                text: qsTr("Триггер")
+                                Layout.preferredWidth: 140
+                                color: "#374151"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            Label {
+                                text: qsTr("Выход")
+                                Layout.preferredWidth: 140
+                                color: "#374151"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+
+                            Label {
+                                text: qsTr("Короткий импульс")
+                                Layout.preferredWidth: 160
+                                color: "#374151"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+
+                            Label {
+                                text: qsTr("Длинный импульс")
+                                Layout.preferredWidth: 160
+                                color: "#374151"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+
+                            Label {
+                                text: ""
+                                Layout.preferredWidth: 160
+                                Layout.alignment: Qt.AlignHCenter
+                            }
+                        }
+                    }
+
+                    delegate: RowLayout {
+                        z:1
+                        property bool hasDuplicateName: itemData.isNameDuplicate || false
+                        property bool hasDuplicateCodeName: itemData.isCodeNameDuplicate || false
+
+                        required property int index
+                        property string ioIndex
+                        property string paramType
+                        property string name
+                        property string codeName
+                        property string type
+                        property string logicuse
+                        property string saving
+                        property string aperture
+                        property string ktt
+                        property string def_value
+                        property string ad
+                        property string oc
+                        property string tosp
+                        property string tolp
+                        property string sector
+
+                        property int originalIndex: digitalOutputsModel.get(index).originalIndex
+
+                        width: listView1.width
+                        spacing: 0
+                        height: Math.max(180, nameField.height + 20)
+
+                        property var itemData: dataModel.get(originalIndex)
+
+                        TextField {
+                            text: itemData.ioIndex
+                            Layout.preferredWidth: 50
+                            Layout.preferredHeight: 30
+                            color: "#1e293b"
+                            font.pixelSize: 13
+                            font.weight: Font.Normal
+
+                            leftPadding: 8
+                            rightPadding: 8
+                            topPadding: 6
+                            bottomPadding: 6
+
+                            selectByMouse: true
+                            verticalAlignment: TextInput.AlignVCenter
+
+                            background: Rectangle {
+                                color: enabled ? "#ffffff" : "#f8fafc"
+                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                border.width: 1
+                                radius: 4
+                                antialiasing: true
+
+                                // Subtle shadow when focused
+                                Rectangle {
+                                    anchors.fill: parent
+                                    anchors.margins: -1
+                                    color: "transparent"
+                                    border.color: parent.parent.activeFocus ? "#3b82f620" : "transparent"
+                                    border.width: 2
+                                    radius: 5
+                                    visible: parent.parent.activeFocus
+                                }
+
+                                // Modern transition
+                                Behavior on border.color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+                            onTextChanged: dataModel.setProperty(originalIndex, "ioIndex", text)
+                        }
+
+                        TextField {
+                            id: nameField
+                            text: itemData.name
+                            Layout.preferredWidth: 350
+                            Layout.minimumHeight: 32
+                            Layout.preferredHeight: Math.max(32, contentHeight + topPadding + bottomPadding)
+
+                            color: (itemData.isNameDuplicate || false) ? "#dc2626" : "#1e293b"
+                            font.pixelSize: 13
+                            font.weight: Font.Normal
+
+                            leftPadding: 8
+                            rightPadding: 8
+                            topPadding: 6
+                            bottomPadding: 6
+
+                            selectByMouse: true
+                            verticalAlignment: TextInput.AlignTop
+                            wrapMode: TextInput.WordWrap  // Перенос по словам
+
+                            background: Rectangle {
+                                color: enabled ? "#ffffff" : "#f8fafc"
+                                border.color: (itemData.isNameDuplicate || false) ? "#dc2626" :
+                                    (parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0"))
+                                border.width: 1
+                                radius: 4
+                                antialiasing: true
+
+                                Behavior on border.color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+
+                            onTextChanged: {
+                                dataModel.setProperty(originalIndex, "name", text)
+                                Qt.callLater(rootwindow.checkForDuplicates)
+                            }
+                        }
+
+                        TextField {
+                            id: codeNameField
+                            text: itemData.codeName
+                            Layout.preferredWidth: 350
+                            Layout.preferredHeight: 32
+
+                            color: itemData.isCodeNameDuplicate ? "#dc2626" : "#1e293b"
+                            font.pixelSize: 13
+                            font.weight: Font.Normal
+
+                            leftPadding: 8
+                            rightPadding: 8
+                            topPadding: 6
+                            bottomPadding: 6
+
+                            selectByMouse: true
+                            verticalAlignment: TextInput.AlignVCenter
+
+                            background: Rectangle {
+                                color: enabled ? "#ffffff" : "#f8fafc"
+                                border.color: (itemData.isCodeNameDuplicate || false) ? "#dc2626" :
+                                    (parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0"))
+                                border.width: 1
+                                radius: 4
+                                antialiasing: true
+
+                                Behavior on border.color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+
+                            onTextChanged: {
+                                Qt.callLater(rootwindow.checkForDuplicates)
+                            }
+
+                            onEditingFinished: {
+                                if (text === itemData.codeName)
+                                    return
+
+                                let newCodeName = text
+                                let newOc = "VAL_" + newCodeName
+
+                                // Обновляем текущий элемент
+                                dataModel.setProperty(originalIndex, "codeName", newCodeName)
+                                updateFiltered()
+                                updateTrigger()
+                                // Ищем соответствующий уже добавленный innermek-элемент
+                                let existingIndex = -1
+                                for (let i = 0; i < dataModel.count; ++i) {
+                                    let item = dataModel.get(i)
+                                    if (item.paramType === "innermek" && item.oc === newOc) {
+                                        existingIndex = i
+                                        break
+                                    }
+                                }
+
+                                if (existingIndex >= 0) {
+                                    // Уже существует — просто обновим данные
+                                    dataModel.setProperty(existingIndex, "oc", newOc)
+                                    dataModel.setProperty(existingIndex, "codeName", newOc)
+                                    dataModel.setProperty(existingIndex, "name", newOc)
+                                } else {
+                                    // Создаём только если ещё не было
+                                    dataModel.append({
+                                        paramType: "innermek",
+                                        ioIndex: rootwindow.nextIoIndex.toString(),
+                                        name: newOc,
+                                        codeName: newOc,
+                                        oc: newOc,
+                                        type: "bool",
+                                        logicuse: "Да",
+                                        saving: "Нет",
+                                        sod: "",
+                                        aperture: "",
+                                        ktt: "",
+                                        def_value: "",
+                                        ad: "",
+                                        tosp: "",
+                                        tolp: "",
+                                        address: "",
+                                        blockName: "",
+                                        ioa_address: "",
+                                        asdu_address: 1,
+                                        second_class_num: "",
+                                        type_spont: "",
+                                        type_back: "",
+                                        type_percyc: "",
+                                        type_def: "",
+                                        oi_c_sc_na_1: false,
+                                        oi_c_se_na_1: false,
+                                        oi_c_se_nb_1: false,
+                                        oi_c_dc_na_1: false,
+                                        oi_c_bo_na_1: false,
+                                        use_in_spont_101: false,
+                                        use_in_back_101: false,
+                                        use_in_percyc_101: false,
+                                        allow_address_101: false,
+                                        survey_group_101: "",
+                                        use_in_spont_104: false,
+                                        use_in_back_104: false,
+                                        use_in_percyc_104: false,
+                                        allow_address_104: false,
+                                        survey_group_104: ""
+                                    })
+                                }
+
+                                Qt.callLater(rootwindow.checkForDuplicates)
+                            }
+                        }
+
+                        ComboBox {
+                            id: telecommandIndexBox
+                            Layout.preferredWidth: 150
+                            Layout.preferredHeight: 30
+                            model: telecommandModel
+                            textRole: "text"  // показываем имя константы из .h
+                            currentIndex: {
+                                if (!itemData) return 0
+                                return model.indexOf(itemData.TYindex || "bool")
+                            }
+                            onCurrentTextChanged: {
+                                if (itemData) {
+                                    dataModel.setProperty(originalIndex, "TYindex", currentText)
+                                }
+                            }
+                            background: Rectangle {
+                                color: enabled ? "#ffffff" : "#f8fafc"
+                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                border.width: 1
+                                radius: 4
+                                antialiasing: true
+
+                                Behavior on border.color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+                            // удобный аксессор для получения числового enum-значения
+                            function currentValue() {
+                                if (currentIndex < 0 || currentIndex >= count) return -1;
+                                return model.get(currentIndex).value; // size_t из .h
+                            }
+                        }
+                        Switch {
+                            implicitWidth: 44
+                            implicitHeight: 24
+
+                            indicator: Rectangle {
+                                anchors.centerIn: parent
+                                width: 44
+                                height: 24
+                                radius: 12
+
+                                color: parent.checked ? "#3b82f6" : "#f8fafc"
+                                border.color: parent.checked ? "#3b82f6" :
+                                    (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                border.width: 1
+
+                                Behavior on color {
+                                    ColorAnimation { duration: 150 }
+                                }
+
+                                Behavior on border.color {
+                                    ColorAnimation { duration: 150 }
+                                }
+
+                                Rectangle {
+                                    width: 18
+                                    height: 18
+                                    radius: 9
+
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    x: parent.parent.checked ? parent.width - width - 3 : 3
+
+                                    color: "#ffffff"
+                                    border.color: parent.parent.checked ? "#ffffff" : "#94a3b8"
+                                    border.width: 1
+
+                                    Behavior on x {
+                                        NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+                                    }
+
+                                    Behavior on border.color {
+                                        ColorAnimation { duration: 150 }
+                                    }
+                                }
+                            }
+                            checked: itemData.sod || false
+                            onCheckedChanged: {
+                                dataModel.setProperty(originalIndex, "sod", checked)
+
+                                let parentCodeName = itemData.codeName
+                                let childCodeName = "VAL_" + parentCodeName
+
+                                for (let i = 0; i < dataModel.count; i++) {
+                                    let item = dataModel.get(i)
+                                    if (item.paramType === "innermek" && item.codeName === childCodeName) {
+                                        dataModel.setProperty(i, "type", checked ? "unsigned char" : "bool")
+                                        break
+                                    }
+                                }
+                            }
+                        }
+                        ComboBox {
+                            model: ["Да", "Нет"]
+                            currentIndex: {
+                                if (!itemData) return 0
+                                return model.indexOf(itemData.logicuse || "bool")
+                            }
+                            onCurrentTextChanged: {
+                                if (itemData) {
+                                    dataModel.setProperty(originalIndex, "logicuse", currentText)
+                                }
+                            }
+                            Layout.preferredWidth: 100
+                            Layout.preferredHeight: 30
+                            font.pixelSize: 13
+
+                            background: Rectangle {
+                                color: enabled ? "#ffffff" : "#f8fafc"
+                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                border.width: 1
+                                radius: 4
+                                antialiasing: true
+
+                                Behavior on border.color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+                        }
+                        ComboBox {
+                            model: ["Нет", "Да"]
+                            currentIndex: model.indexOf(itemData.saving || "Нет")
+                            onCurrentTextChanged: dataModel.setProperty(originalIndex, "saving", currentText)
+                            Layout.preferredWidth: 100
+                            Layout.preferredHeight: 30
+
+                            font.pixelSize: 13
+
+                            background: Rectangle {
+                                color: enabled ? "#ffffff" : "#f8fafc"
+                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                border.width: 1
+                                radius: 4
+                                antialiasing: true
+
+                                Behavior on border.color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+                        }
+                        ComboBox {
+                            editable: true
+                            model: triggerModel
+                            currentIndex: itemData ? triggerModel.indexOf(itemData.sector) : -1
+                            onCurrentTextChanged: {
+                                if (itemData && dataModel) {
+                                    dataModel.setProperty(originalIndex, "sector", currentText)
+                                }
+                            }
+                            Layout.preferredWidth: 140
+                            Layout.preferredHeight: 32
+
+                            font.pixelSize: 13
+
+                            // Add the search functionality
+                            property string searchText: ""
+
+                            onEditTextChanged: {
+                                searchText = editText.toLowerCase()
+
+                                // Find first matching item
+                                for (let i = 0; i < model.length; i++) {
+                                    if (model[i].toString().toLowerCase().startsWith(searchText)) {
+                                        highlightedIndex = i
+                                        break
+                                    }
+                                }
+                            }
+
+                            background: Rectangle {
+                                color: enabled ? "#ffffff" : "#f8fafc"
+                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                border.width: 1
+                                radius: 4
+                                antialiasing: true
+
+                                Behavior on border.color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+                        }
+
+                        TextField {
+                            text: qsTr("VAL_") + codeNameField.text
+                            Layout.preferredWidth: 140
+                            Layout.preferredHeight: 30
+                            color: "#1e293b"
+                            font.pixelSize: 13
+                            font.weight: Font.Normal
+
+                            leftPadding: 8
+                            rightPadding: 8
+                            topPadding: 6
+                            bottomPadding: 6
+
+                            selectByMouse: true
+                            verticalAlignment: TextInput.AlignVCenter
+
+                            background: Rectangle {
+                                color: enabled ? "#ffffff" : "#f8fafc"
+                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                border.width: 1
+                                radius: 4
+                                antialiasing: true
+
+                                Behavior on border.color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+                            enabled: false
+                        }
+                        ComboBox {
+                            id: tospComboBox
+                            Layout.preferredWidth: 160
+                            Layout.preferredHeight: 30
+                            font.pixelSize: 13
+
+                            background: Rectangle {
+                                color: enabled ? "#ffffff" : "#f8fafc"
+                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                border.width: 1
+                                radius: 4
+                                antialiasing: true
+
+                                Behavior on border.color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+                            editable: true
+                            model: toModel
+
+                            Component.onCompleted: {
+                                const idx = toModel.indexOf(itemData.tosp)
+                                currentIndex = idx >= 0 ? idx : -1
+                            }
+
+                            onActivated: {
+                                if (currentIndex >= 0) {
+                                    dataModel.setProperty(originalIndex, "tosp", toModel[currentIndex])
+                                }
+                            }
+
+                            onCurrentTextChanged: {
+                                if (!toModel.includes(currentText)) {
+                                    dataModel.setProperty(originalIndex, "tosp", currentText)
+                                }
+                            }
+                        }
+
+                        ComboBox {
+                            id: tolpComboBox
+                            Layout.preferredWidth: 160
+                            Layout.preferredHeight: 30
+                            font.pixelSize: 13
+
+                            background: Rectangle {
+                                color: enabled ? "#ffffff" : "#f8fafc"
+                                border.color: parent.activeFocus ? "#3b82f6" : (parent.hovered ? "#94a3b8" : "#e2e8f0")
+                                border.width: 1
+                                radius: 4
+                                antialiasing: true
+
+                                Behavior on border.color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+                            editable: true
+                            model: toModel
+
+                            Component.onCompleted: {
+                                const idx = toModel.indexOf(itemData.tolp)
+                                currentIndex = idx >= 0 ? idx : -1
+                            }
+
+                            onActivated: {
+                                if (currentIndex >= 0) {
+                                    dataModel.setProperty(originalIndex, "tolp", toModel[currentIndex])
+                                }
+                            }
+
+                            onCurrentTextChanged: {
+                                if (!toModel.includes(currentText)) {
+                                    dataModel.setProperty(originalIndex, "tolp", currentText)
+                                }
+                            }
+                        }
+
+                        Button {
+                            text: qsTr("Удалить")
+                            Layout.preferredWidth: 160
+                            Layout.preferredHeight: 32
+
+                            font.pixelSize: 13
+                            font.weight: Font.Medium
+
+                            background: Rectangle {
+                                color: parent.pressed ? "#b91c1c" : (parent.hovered ? "#dc2626" : "#ef4444")
+                                radius: 4
+                                antialiasing: true
+
+                                Behavior on color {
+                                    ColorAnimation { duration: 150 }
+                                }
+                            }
+
+                            contentItem: Text {
+                                text: parent.text
+                                font: parent.font
+                                color: "#ffffff"
+                                verticalAlignment: Text.AlignVCenter
+                            }
+
+                            onClicked: dataModel.remove(originalIndex)
+                        }
+                    }
+                }
+            }
+
+            Button {
+                Layout.alignment: Qt.AlignCenter
+                text: qsTr("Добавить")
+                Layout.preferredWidth: 120
+                Layout.preferredHeight: 40
+
+                font.pixelSize: 14
+                font.weight: Font.Medium
+
+                background: Rectangle {
+                    color: parent.pressed ? "#059669" : (parent.hovered ? "#10b981" : "#22c55e")
+                    radius: 6
+                    antialiasing: true
+
+                    Behavior on color {
+                        ColorAnimation { duration: 150 }
+                    }
+                }
+
+                contentItem: Text {
+                    text: parent.text
+                    font: parent.font
+                    color: "#ffffff"
+                    verticalAlignment: Text.AlignVCenter
+                }
+                onClicked: {
+                    addClicked()
+                    dataModel.append( {
+                        "paramType": "Дискретный выход",
+                        "ioIndex": rootwindow.nextIoIndex.toString(),
+                        "name": "",
+                        "codeName": "",
+                        "sod": false,
+                        "type": "bool",
+                        "logicuse": "Да",
+                        "saving": "Да",
+                        "aperture": "",
+                        "ktt": "",
+                        "def_value": "",
+                        "ad": "",
+                        "oc": "",
+                        "tosp": "",
+                        "tolp": "",
+                        "sector": "",
+                        "TYindex": "",
+                        "address": "",
+                        "blockName": "",
+                        "ioa_address": "",
+                        "asdu_address": 1,
+                        "second_class_num": "",
+                        "type_spont": "",
+                        "type_back": "",
+                        "type_percyc": "",
+                        "type_def": "",
+                        "oi_c_sc_na_1": false,
+                        "oi_c_se_na_1": false,
+                        "oi_c_se_nb_1": false,
+                        "oi_c_dc_na_1": false,
+                        "oi_c_bo_na_1": false,
+                        "use_in_spont_101": false,
+                        "use_in_back_101": false,
+                        "use_in_percyc_101": false,
+                        "allow_address_101": false,
+                        "survey_group_101": "",
+                        "use_in_spont_104": false,
+                        "use_in_back_104": false,
+                        "use_in_percyc_104": false,
+                        "allow_address_104": false,
+                        "survey_group_104": "",
+                        isNameDuplicate: false,
+                        isCodeNameDuplicate: false
+                    });
+                    updateFiltered()
+                    updateTrigger()
+                }
+            }
+        }
+    }
+
+    Component {
+        id: parameterPageComponent
+        ColumnLayout {
+            id: pageRoot
+            property string paramType: "Аналоговые входы"
+            signal addClicked
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                padding: 10
+                ScrollBar.vertical.policy: ScrollBar.AlwaysOn
+                ScrollBar.horizontal.policy: ScrollBar.AsNeeded
+                leftPadding: 15
+                rightPadding: 22
+                contentWidth: Math.max(listView.width, 1600) // Минимальная ширина для всех колонок
+                contentHeight: listView.height
+                ListView {
+                    id: listView
+                    width: parent.width - 30
+                    height: parent.height
+                    cacheBuffer: 200
+                    model: getFilteredModel(pageRoot.paramType, false)
+                    spacing: 0
+                    interactive: true
+                    clip: true
+                    headerPositioning: ListView.OverlayHeader
+                    header: Rectangle {
+                        z: 2
+                        width: Math.max(listView.width, 1600)
+                        height: 32
+                        color: "#f1f5f9"
+                        antialiasing: true
+
+                        Rectangle {
+                            anchors.bottom: parent.bottom
+                            width: parent.width
+                            height: 1
+                            color: "#cbd5e1"
+                        }
+
+                        Rectangle {
+                            anchors.top: parent.top
+                            width: parent.width
+                            height: 1
+                            color: "#e2e8f0"
+                        }
+
+                        gradient: Gradient {
+                            GradientStop { position: 0.0; color: "#f8fafc" }
+                            GradientStop { position: 1.0; color: "#e2e8f0" }
+                        }
+
+                        layer.enabled: false
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 12
+                            anchors.rightMargin: 12
+                            spacing: 0
+
+                            Label { text: qsTr("IO")
+                                Layout.preferredWidth: 50
+                                Layout.minimumWidth: 50
+                                Layout.maximumWidth: 50
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            Label { text: qsTr("Наименование")
+                                Layout.preferredWidth: 350
+                                Layout.minimumWidth: 300
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            Label { text: qsTr("Англ.название")
+                                Layout.preferredWidth: 250
+                                Layout.minimumWidth: 200
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            Item{
+                                Layout.preferredWidth: 120
+                                Layout.minimumWidth: 120
+                                Layout.preferredHeight: 32
+                                Label{
+                                    anchors.fill:parent
+                                    text: qsTr("Индекс")
+                                    color: "#374151"
+                                    font.pixelSize: 13
+                                    font.weight: Font.DemiBold
+                                    verticalAlignment: Text.AlignVCenter
+                                    opacity: rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Дискретные входы"
+                                }
+                            }
+                            Label { text: qsTr("Тип")
+                                Layout.preferredWidth: 100
+                                Layout.minimumWidth: 100
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            Label { text: qsTr("Логика")
+                                Layout.preferredWidth: 80
+                                Layout.minimumWidth: 80
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+
+                            Item{
+                                Layout.preferredWidth: 100
+                                Layout.minimumWidth: 100
+                                Layout.preferredHeight: 32
+                                Label {
+                                    text: qsTr("Сохран.")
+                                    opacity: rootwindow.currentType === "Признаки" || rootwindow.currentType === "Уставка" || paramType === "Уставка"
+                                    Layout.preferredWidth: 100
+                                    color: "#1e293b"
+                                    font.pixelSize: 13
+                                    font.weight: Font.DemiBold
+                                    verticalAlignment: Text.AlignVCenter
+                                    anchors.fill:parent
+                                }
+                            }
+                            Item{
+                                Layout.preferredWidth: 100
+                                Layout.preferredHeight: 32
+
+                                Label {
+                                    text: qsTr("Триггер")
+                                    opacity: rootwindow.currentType === "Признаки"
+                                    color: "#1e293b"
+                                    font.pixelSize: 13
+                                    font.weight: Font.DemiBold
+                                    verticalAlignment: Text.AlignVCenter
+                                    anchors.fill:parent
+                                }
+                            }
+                            Item {
+                                Layout.preferredWidth: 150
+                                Layout.minimumWidth: 150
+                                Layout.preferredHeight: 32
+                                Label {
+                                    text: qsTr("Параметры")
+                                    opacity: rootwindow.currentType === "Аналоговые входы"
+                                    color: "#1e293b"
+                                    font.pixelSize: 13
+                                    font.weight: Font.DemiBold
+                                    verticalAlignment: Text.AlignVCenter
+                                    anchors.fill:parent
+                                }
+                            }
+                            Item{
+                                Layout.preferredHeight: 32
+                                Layout.preferredWidth: 100
+                                Layout.minimumWidth: 100
+                                Label {
+                                    text: qsTr("Знач. по умолч.")
+                                    opacity: !(rootwindow.currentType === "Аналоговые входы" || rootwindow.currentType === "Дискретные входы")
+                                    anchors.fill:parent
+                                    color: "#1e293b"
+                                    font.pixelSize: 13
+                                    font.weight: Font.DemiBold
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                            }
+                            Item{
+                                Layout.preferredWidth: 120
+                                Layout.minimumWidth: 120
+                                Layout.preferredHeight: 32
+                                Label { text: qsTr("Антидребезг")
+                                    anchors.fill:parent
+                                    opacity: rootwindow.currentType === "Дискретные входы"
+                                    color: "#1e293b"
+                                    font.pixelSize: 13
+                                    font.weight: Font.DemiBold
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                            }
+                            Item{
+                                Layout.preferredWidth: 80
+                                Layout.minimumWidth: 80
+                                Layout.preferredHeight: 32
+                                Label { text: qsTr("Значение")
+                                    anchors.fill:parent
+                                    opacity: rootwindow.currentType === "Уставка"
+                                    color: "#1e293b"
+                                    font.pixelSize: 13
+                                    font.weight: Font.DemiBold
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                            }
+                            Label {
+                                text: ""
+                                Layout.preferredWidth: 100
+                                Layout.minimumWidth: 100
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                        }
+                    }
                     delegate: Rectangle {
                         width: Math.max(listView.width, 1600)
                         id: rowItem
@@ -3185,7 +4494,7 @@ ApplicationWindow {
                                                 TextField {
                                                     id: val
                                                     anchors.fill: parent
-                                                    placeholderText: "def_value"
+                                                    placeholderText: qsTr("def_value")
                                                     enabled: cb.checked
                                                     opacity: cb.checked ? 1 : 0
 
@@ -3290,7 +4599,7 @@ ApplicationWindow {
                                     anchors.fill: parent
                                     CheckBox {
                                         id: spCheck
-                                        text: "Значение"
+                                        text: qsTr("Значение")
 
                                         enabled: !isSetpointCommand(itemData)
 
@@ -3336,7 +4645,7 @@ ApplicationWindow {
                                 }
                             }
                             Button {
-                                text: "Удалить"
+                                text: qsTr("Удалить")
                                 Layout.preferredWidth: 100
                                 Layout.preferredHeight: 32
                                 Layout.minimumWidth: 100
@@ -3370,7 +4679,7 @@ ApplicationWindow {
             }
             Button {
                 Layout.alignment: Qt.AlignCenter
-                text: "Добавить"
+                text: qsTr("Добавить")
                 Layout.preferredWidth: 120
                 Layout.preferredHeight: 40
 
@@ -3475,17 +4784,84 @@ ApplicationWindow {
                     clip: true
                     headerPositioning: ListView.OverlayHeader
 
-                    header: TableHeaderRow {
+                    header: Rectangle {
                         z: 2
                         width: listView.width
-                        columns: [
-                            { title: "IO", width: 50 },
-                            { title: "Наименование", width: 200 },
-                            { title: "Тип данных", width: 100 },
-                            { title: "Адрес", width: 100 },
-                            { title: "Блок", width: 150 },
-                            { title: "", width: 160 }
-                        ]
+                        height: 32
+                        color: "#f1f5f9"
+                        antialiasing: true
+
+                        Rectangle {
+                            anchors.bottom: parent.bottom
+                            width: parent.width
+                            height: 1
+                            color: "#cbd5e1"
+                        }
+
+                        Rectangle {
+                            anchors.top: parent.top
+                            width: parent.width
+                            height: 1
+                            color: "#e2e8f0"
+                        }
+
+                        gradient: Gradient {
+                            GradientStop { position: 0.0; color: "#f8fafc" }
+                            GradientStop { position: 1.0; color: "#e2e8f0" }
+                        }
+
+                        layer.enabled: false
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 12
+                            anchors.rightMargin: 12
+                            spacing: 0
+
+                            Label {
+                                text: qsTr("IO")
+                                Layout.preferredWidth: 50
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            Label {
+                                text: qsTr("Наименование")
+                                Layout.preferredWidth: 200
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            Label {
+                                text: qsTr("Тип данных")
+                                Layout.preferredWidth: 100
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            Label {
+                                text: qsTr("Адрес")
+                                Layout.preferredWidth: 100
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            Label {
+                                text: qsTr("Блок")
+                                Layout.preferredWidth: 150
+                                color: "#1e293b"
+                                font.pixelSize: 13
+                                font.weight: Font.DemiBold
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            Item {
+                                Layout.preferredWidth: 160
+                            }
+                        }
                     }
 
                     delegate: Rectangle {
@@ -3714,32 +5090,32 @@ ApplicationWindow {
                         Layout.fillWidth: true
 
                         Text {
-                            text: "Объектная модель: " + getCurrentObjectModelName()
+                            text: qsTr("Объектная модель: ") + getCurrentObjectModelName()
                             font.pixelSize: 14
                             font.weight: Font.DemiBold
                             color: appTheme.textPrimary
                         }
 
                         Text {
-                            text: "Выбрано сигналов: " + getCurrentObjectModelSignalCount()
+                            text: qsTr("Выбрано сигналов: ") + getCurrentObjectModelSignalCount()
                             font.pixelSize: 12
                             color: "#64748b"
                         }
                     }
 
                     Button {
-                        text: "Выбрать модель"
+                        text: qsTr("Выбрать модель")
                         onClicked: objectModelSelectorDialog.open()
                     }
 
                     Button {
-                        text: "Выбрать все"
+                        text: qsTr("Выбрать все")
                         enabled: currentObjectModelId !== ""
                         onClicked: selectAllSignalsForCurrentModel()
                     }
 
                     Button {
-                        text: "Очистить выбор"
+                        text: qsTr("Очистить выбор")
                         enabled: currentObjectModelId !== ""
                         onClicked: clearAllSignalsForCurrentModel()
                     }
@@ -3802,7 +5178,7 @@ ApplicationWindow {
                             anchors.rightMargin: 12
                             spacing: 0
                             Label {
-                                text: "✓"
+                                text: qsTr("✓")
                                 Layout.preferredWidth: 30
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -3811,7 +5187,7 @@ ApplicationWindow {
                                 horizontalAlignment: Text.AlignHCenter
                             }
                             Label {
-                                text: "Наименование"
+                                text: qsTr("Наименование")
                                 Layout.preferredWidth: 200
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -3828,7 +5204,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Тип данных"
+                                text: qsTr("Тип данных")
                                 Layout.preferredWidth: 100
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -3836,7 +5212,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Адрес ОИ"
+                                text: qsTr("Адрес ОИ")
                                 Layout.preferredWidth: 100
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -3844,7 +5220,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Адрес АСДУ"
+                                text: qsTr("Адрес АСДУ")
                                 Layout.preferredWidth: 100
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -3852,7 +5228,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Номер буфера"
+                                text: qsTr("Номер буфера")
                                 Layout.preferredWidth: 130
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -3860,7 +5236,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Тип при спорадике"
+                                text: qsTr("Тип при спорадике")
                                 Layout.preferredWidth: 130
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -3868,7 +5244,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Тип при фоновом"
+                                text: qsTr("Тип при фоновом")
                                 Layout.preferredWidth: 130
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -3876,7 +5252,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Тип при пер/цик"
+                                text: qsTr("Тип при пер/цик")
                                 Layout.preferredWidth: 130
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -3884,7 +5260,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Тип при общем"
+                                text: qsTr("Тип при общем")
                                 Layout.preferredWidth: 130
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -4406,7 +5782,7 @@ ApplicationWindow {
     }
     Dialog {
         id: objectModelSelectorDialog
-        title: "Выбор объектной модели"
+        title: qsTr("Выбор объектной модели")
         width: 400
         height: 300
 
@@ -4415,7 +5791,7 @@ ApplicationWindow {
             spacing: 10
 
             Text {
-                text: "Выберите объектную модель для работы:"
+                text: qsTr("Выберите объектную модель для работы:")
                 font.pixelSize: 14
             }
 
@@ -4477,7 +5853,7 @@ ApplicationWindow {
                 spacing: 10
 
                 Button {
-                    text: "Создать новую модель"
+                    text: qsTr("Создать новую модель")
                     onClicked: {
                         objectModelSelectorDialog.close()
                         createObjectModelDialog.open()
@@ -4485,7 +5861,7 @@ ApplicationWindow {
                 }
 
                 Button {
-                    text: "Отмена"
+                    text: qsTr("Отмена")
                     onClicked: objectModelSelectorDialog.close()
                 }
             }
@@ -4554,7 +5930,7 @@ ApplicationWindow {
                             spacing: 0
 
                             Label {
-                                text: "IO"
+                                text: qsTr("IO")
                                 Layout.preferredWidth: 50
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -4562,7 +5938,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Наименование"
+                                text: qsTr("Наименование")
                                 Layout.preferredWidth: 200
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -4570,7 +5946,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Адрес ОИ"
+                                text: qsTr("Адрес ОИ")
                                 Layout.preferredWidth: 100
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -4578,7 +5954,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Адрес АСДУ"
+                                text: qsTr("Адрес АСДУ")
                                 Layout.preferredWidth: 100
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -4586,7 +5962,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Исп. в спорадике"
+                                text: qsTr("Исп. в спорадике")
                                 Layout.preferredWidth: 100
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -4594,7 +5970,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Исп. в цикл/период"
+                                text: qsTr("Исп. в цикл/период")
                                 Layout.preferredWidth: 100
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -4602,7 +5978,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Исп. в фон. сканир"
+                                text: qsTr("Исп. в фон. сканир")
                                 Layout.preferredWidth: 100
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -4610,7 +5986,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Разрешить адрес"
+                                text: qsTr("Разрешить адрес")
                                 Layout.preferredWidth: 150
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -4618,7 +5994,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Группа опроса"
+                                text: qsTr("Группа опроса")
                                 Layout.preferredWidth: 150
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -5092,7 +6468,7 @@ ApplicationWindow {
                             spacing: 0
 
                             Label {
-                                text: "IO"
+                                text: qsTr("IO")
                                 Layout.preferredWidth: 50
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -5100,7 +6476,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Наименование"
+                                text: qsTr("Наименование")
                                 Layout.preferredWidth: 200
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -5108,7 +6484,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Адрес ОИ"
+                                text: qsTr("Адрес ОИ")
                                 Layout.preferredWidth: 100
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -5116,7 +6492,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Адрес АСДУ"
+                                text: qsTr("Адрес АСДУ")
                                 Layout.preferredWidth: 100
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -5124,7 +6500,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Исп. в спорадике"
+                                text: qsTr("Исп. в спорадике")
                                 Layout.preferredWidth: 100
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -5132,7 +6508,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Исп. в цикл/период"
+                                text: qsTr("Исп. в цикл/период")
                                 Layout.preferredWidth: 100
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -5140,7 +6516,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Исп. в фон. сканир"
+                                text: qsTr("Исп. в фон. сканир")
                                 Layout.preferredWidth: 100
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -5148,7 +6524,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Разрешить адрес"
+                                text: qsTr("Разрешить адрес")
                                 Layout.preferredWidth: 150
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -5156,7 +6532,7 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             Label {
-                                text: "Группа опроса"
+                                text: qsTr("Группа опроса")
                                 Layout.preferredWidth: 150
                                 color: appTheme.textPrimary
                                 font.pixelSize: 13
@@ -5658,15 +7034,18 @@ ApplicationWindow {
                     GradientStop { position: 1.0; color: appTheme.border }
                 }
             }
-            TabButton{
-                text:"Общее"
+            TabButton{text: qsTr("Общее")
+                Accessible.name: text
+                Accessible.description: qsTr("Вкладка общих параметров")
                 background: Rectangle {
                     color: parent.checked ? appTheme.border : "transparent"
                     border.color: parent.checked ? Qt.lighter(appTheme.border, 1.1) : "transparent"
                     border.width: parent.checked ? 1 : 0
                 }
             }
-            TabButton{text:"Modbus"
+            TabButton{text: qsTr("Modbus")
+                Accessible.name: text
+                Accessible.description: qsTr("Вкладка настроек Modbus")
                 visible: modbus
                 background: Rectangle {
                     color: parent.checked ? appTheme.border : "transparent"
@@ -5675,8 +7054,9 @@ ApplicationWindow {
                 }
                 width: visible ? tabBar.tabWidth : 0
             }
-            TabButton{
-                text:"MEK"
+            TabButton{text: qsTr("MEK")
+                Accessible.name: text
+                Accessible.description: qsTr("Вкладка настроек MEK")
                 visible: mek
                 background: Rectangle {
                     color: parent.checked ? appTheme.border : "transparent"
@@ -5686,7 +7066,9 @@ ApplicationWindow {
                 width: visible ? tabBar.tabWidth : 0
 
             }
-            TabButton{text:"MEK101"
+            TabButton{text: qsTr("MEK101")
+                Accessible.name: text
+                Accessible.description: qsTr("Вкладка настроек MEK101")
                 visible: mek_101
                 background: Rectangle {
                     color: parent.checked ? appTheme.border : "transparent"
@@ -5695,8 +7077,9 @@ ApplicationWindow {
                 }
                 width: visible ? tabBar.tabWidth : 0
             }
-            TabButton{
-                text:"MEK104"
+            TabButton{text: qsTr("MEK104")
+                Accessible.name: text
+                Accessible.description: qsTr("Вкладка настроек MEK104")
                 visible: mek_104
                 background: Rectangle {
                     color: parent.checked ? appTheme.border : "transparent"
@@ -5742,7 +7125,9 @@ ApplicationWindow {
             }
 
             TabButton {
-                text: "Аналоговые входы"
+                text: qsTr("Аналоговые входы")
+                Accessible.name: text
+                Accessible.description: qsTr("Вкладка аналоговых входов")
                 background: Rectangle {
                     color: parent.checked ? appTheme.border : "transparent"
                     border.color: parent.checked ? Qt.lighter(appTheme.border, 1.1) : "transparent"
@@ -5750,7 +7135,9 @@ ApplicationWindow {
                 }
             }
             TabButton {
-                text: "Дискретные входы"
+                text: qsTr("Дискретные входы")
+                Accessible.name: text
+                Accessible.description: qsTr("Вкладка дискретных входов")
                 background: Rectangle {
                     color: parent.checked ? appTheme.border : "transparent"
                     border.color: parent.checked ? Qt.lighter(appTheme.border, 1.1) : "transparent"
@@ -5758,7 +7145,9 @@ ApplicationWindow {
                 }
             }
             TabButton {
-                text: "Аналоговый выход"
+                text: qsTr("Аналоговый выход")
+                Accessible.name: text
+                Accessible.description: qsTr("Вкладка аналоговых выходов")
                 background: Rectangle {
                     color: parent.checked ? appTheme.border : "transparent"
                     border.color: parent.checked ? Qt.lighter(appTheme.border, 1.1) : "transparent"
@@ -5766,7 +7155,9 @@ ApplicationWindow {
                 }
             }
             TabButton {
-                text: "Дискретный выход"
+                text: qsTr("Дискретный выход")
+                Accessible.name: text
+                Accessible.description: qsTr("Вкладка дискретных выходов")
                 background: Rectangle {
                     color: parent.checked ? appTheme.border : "transparent"
                     border.color: parent.checked ? Qt.lighter(appTheme.border, 1.1) : "transparent"
@@ -5774,7 +7165,9 @@ ApplicationWindow {
                 }
             }
             TabButton {
-                text: "Признаки"
+                text: qsTr("Признаки")
+                Accessible.name: text
+                Accessible.description: qsTr("Вкладка признаков")
                 background: Rectangle {
                     color: parent.checked ? appTheme.border : "transparent"
                     border.color: parent.checked ? Qt.lighter(appTheme.border, 1.1) : "transparent"
@@ -5782,7 +7175,9 @@ ApplicationWindow {
                 }
             }
             TabButton {
-                text: "Команда уставки"
+                text: qsTr("Команда уставки")
+                Accessible.name: text
+                Accessible.description: qsTr("Вкладка команд уставок")
                 background: Rectangle {
                     color: parent.checked ? appTheme.border : "transparent"
                     border.color: parent.checked ? Qt.lighter(appTheme.border, 1.1) : "transparent"
@@ -6071,9 +7466,7 @@ ApplicationWindow {
                 onClicked: assignIOA
             }
             Button {
-                text: "Debug Full Model"
-                visible: !rootwindow.isCompactMode
-                Layout.preferredWidth: 145
+                text: qsTr("Debug Full Model")
                 onClicked: {
                     if (dataModel.count === 0) {
                         console.log("Model is empty!")
@@ -6092,40 +7485,27 @@ ApplicationWindow {
         }
     }
 
-    Rectangle {
-        id: controlPanel
-        anchors.bottom: parent.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-        height: 70
-        color: "#d0ffffff"
-        Behavior on color { ColorAnimation { duration: 200 } }
-
-
-        Rectangle {
-            anchors.top: parent.top
-            width: parent.width
-            height: 1
-            color: "#e0e0e0"
-        }
-
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: 20
-            anchors.rightMargin: 20
-            spacing: 12
-
-            Label {
-                text: workflowStep === 4 ? "Готово к экспорту" : "Контекстные действия"
-                font.bold: true
-                color: "#334155"
+            Button {
+                text: qsTr("Настроить ETH")
+                onClicked: {
+                    ethcounter = ethcounter + 1
+                    ethConfigDialog.open()
+                }
+            }
+            Button {
+                text: qsTr("Настроить RS")
+                onClicked: {
+                    initializeMekProperties()
+                }
+            }
+            Item {
+                Layout.fillWidth: true
             }
 
             Item { Layout.fillWidth: true }
 
             Button {
-                text: "Сохранить"
-                highlighted: true
+                text: qsTr("Export to JSON")
                 onClicked: {
                     if (rootwindow.currentBldePath !== "") {
                         saveToBlde(rootwindow.currentBldePath)
@@ -6137,23 +7517,25 @@ ApplicationWindow {
             }
 
             Button {
-                text: "Доп. действия"
-                onClicked: actionsMenu.open()
+                text: qsTr("Generate code")
+                onClicked: {
+                    jsonSelectDialog.exportType = "code"
+                    onClicked: jsonSelectDialog.open()
+                }
             }
-
-            Menu {
-                id: actionsMenu
-                y: controlPanel.y - height
-                MenuItem { text: "Экспорт JSON"; onTriggered: saveFileDialog.open() }
-                MenuItem { text: "Генерация кода"; onTriggered: { jsonSelectDialog.exportType = "code"; jsonSelectDialog.open() } }
-                MenuItem { text: "Генерация Excel"; onTriggered: { jsonSelectDialog.exportType = "exel"; jsonSelectDialog.open() } }
-                MenuSeparator { }
-                MenuItem { text: "Расширенные"; onTriggered: advancedDrawer.open() }
+            Button {
+                text: qsTr("Generate exel")
+                onClicked: {
+                    jsonSelectDialog.exportType = "exel"
+                    onClicked: jsonSelectDialog.open()
+                }
             }
 
             Button {
-                text: "Экспорт"
-                onClicked: workflowStep = 4
+                text: qsTr("MEK indexing")
+                onClicked: {
+                    assignIOA
+                }
             }
         }
     }
