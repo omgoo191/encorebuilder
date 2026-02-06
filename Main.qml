@@ -10,6 +10,8 @@ import Qt5Compat.GraphicalEffects
 import "ui/shell"
 import "ui/dialogs"
 import "ui/components"
+import "ui/tables"
+import "ui/theme"
 ApplicationWindow {
     id: rootwindow
     width: 1920
@@ -170,6 +172,9 @@ ApplicationWindow {
         return (idx !== undefined) ? dataModel.setProperty(idx, roleName, value) : false
     }
 
+    Theme {
+        id: appTheme
+    }
 
 //endregion
     menuBar: AppShell {
@@ -2886,42 +2891,27 @@ ApplicationWindow {
             id: pageRoot1
             property string paramType: "Дискретный выход"
             signal addClicked
-            ScrollView {
+            SignalTableView {
+                id: digitalOutputsTable
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                clip: true
-                padding: 10
-                ScrollBar.vertical.policy: ScrollBar.AlwaysOn
-                leftPadding: 15
-                rightPadding: 22
-                contentWidth: listView1.width - 30
-                contentHeight: listView1.height
-                ListView {
-                    id: listView1
-                    width: parent.width - 30
-                    height: parent.height
-                    cacheBuffer: 200
-                    model: digitalOutputsModel
-                    spacing: 0
-                    interactive: true
-                    clip: true
-                    headerPositioning: ListView.OverlayHeader
-                    header: TableHeaderRow {
-                        z: 2
-                        width: listView1.width
-                        columns: [
-                            { title: "IO", width: 50 },
-                            { title: "Наименование", width: 350 },
-                            { title: "Англ.название", width: 350 },
-                            { title: "Индекс ТУ", width: 150 },
-                            { title: "S/D", width: 44 },
-                            { title: "Логика", width: 100 },
-                            { title: "Сохранение", width: 100 },
-                            { title: "Триггер", width: 140 }
-                        ]
-                    }
+                tableModel: digitalOutputsModel
+                headerComponent: TableHeaderRow {
+                    z: 2
+                    width: digitalOutputsTable.listView.width
+                    columns: [
+                        { title: "IO", width: 50 },
+                        { title: "Наименование", width: 350 },
+                        { title: "Англ.название", width: 350 },
+                        { title: "Индекс ТУ", width: 150 },
+                        { title: "S/D", width: 44 },
+                        { title: "Логика", width: 100 },
+                        { title: "Сохранение", width: 100 },
+                        { title: "Триггер", width: 140 }
+                    ]
+                }
 
-                    delegate: RowLayout {
+                rowDelegate: RowLayout {
                         z:1
                         property bool hasDuplicateName: itemData.isNameDuplicate || false
                         property bool hasDuplicateCodeName: itemData.isCodeNameDuplicate || false
@@ -2945,7 +2935,7 @@ ApplicationWindow {
 
                         property int originalIndex: digitalOutputsModel.get(index).originalIndex
 
-                        width: listView1.width
+                        width: digitalOutputsTable.listView.width
                         spacing: 0
                         height: Math.max(180, nameField.height + 20)
 
@@ -6910,7 +6900,6 @@ ApplicationWindow {
                 asynchronous: true
                 onLoaded: {
                     item.paramType = "Дискретный выход"
-                    item.listView = listView1
                     item.addClicked.connect(() => { rootwindow.currentType = "Дискретный выход" })
                 }
             }
